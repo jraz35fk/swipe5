@@ -46,6 +46,10 @@ const Home = () => {
     if (!currentLayer) setCurrentLayer("Select a Category");
   }, []);
 
+  const isFinalOption = (option) => {
+    return typeof categories[currentLayer]?.[option] !== "object" && !Array.isArray(categories[currentLayer]?.[option]);
+  };
+
   const handleSwipe = (direction) => {
     if (currentIndex >= currentOptions.length) return;
 
@@ -55,25 +59,29 @@ const Home = () => {
       const nextLayer = categories[currentLayer]?.[choice];
 
       if (typeof nextLayer === "object") {
+        // Drill deeper
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
-        setCurrentWeight((prevWeight) => prevWeight + 1); // Increase weight
+        setCurrentWeight((prev) => prev + 1);
       } else if (Array.isArray(nextLayer)) {
+        // Final layer reached
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(nextLayer);
         setCurrentIndex(0);
-        setCurrentWeight((prevWeight) => prevWeight + 1); // Increase weight
+        setCurrentWeight((prev) => prev + 1);
       } else {
-        if (currentWeight >= WEIGHT_THRESHOLD) {
+        if (currentWeight >= WEIGHT_THRESHOLD && isFinalOption(choice)) {
           handleFinalMatch(choice);
         } else {
-          setCurrentWeight((prevWeight) => prevWeight + 1); // Keep increasing weight
+          // Keep drilling deeper
+          setCurrentWeight((prev) => prev + 1);
         }
       }
     } else {
+      // Move to next option at same level
       setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
     }
   };
@@ -101,7 +109,7 @@ const Home = () => {
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
       setCurrentIndex(0);
-      setCurrentWeight((prevWeight) => (prevWeight > 0 ? prevWeight - 1 : 0)); // Reduce weight
+      setCurrentWeight((prev) => (prev > 0 ? prev - 1 : 0)); // Reduce weight on back
       setHistory([...history]);
     }
   };
