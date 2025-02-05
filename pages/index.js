@@ -73,8 +73,4 @@ export async function getServerSideProps() {
   return { props: { events } };
 }
 
-
-
-}
-
 export default Home;
