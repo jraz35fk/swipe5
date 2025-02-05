@@ -37,6 +37,7 @@ const Home = () => {
   const [currentOptions, setCurrentOptions] = useState(Object.keys(categories));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matched, setMatched] = useState([]);
+  const [finalMatch, setFinalMatch] = useState(null);
 
   useEffect(() => {
     if (!currentLayer) setCurrentLayer("Select a Category");
@@ -61,11 +62,27 @@ const Home = () => {
         setCurrentOptions(nextLayer);
         setCurrentIndex(0);
       } else {
-        saveToMatched(choice);
+        handleFinalMatch(choice);
       }
     } else {
       setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
     }
+  };
+
+  const handleFinalMatch = (choice) => {
+    setFinalMatch(choice);
+    if (!matched.includes(choice)) {
+      const updatedMatched = [...matched, choice];
+      setMatched(updatedMatched);
+      localStorage.setItem("matched", JSON.stringify(updatedMatched));
+    }
+  };
+
+  const reshuffleDeck = () => {
+    setCurrentLayer("Select a Category");
+    setCurrentOptions(Object.keys(categories));
+    setCurrentIndex(0);
+    setFinalMatch(null);
   };
 
   const goBack = () => {
@@ -78,32 +95,33 @@ const Home = () => {
     }
   };
 
-  const saveToMatched = (choice) => {
-    if (!matched.includes(choice)) {
-      const updatedMatched = [...matched, choice];
-      setMatched(updatedMatched);
-      localStorage.setItem("matched", JSON.stringify(updatedMatched));
-    }
-  };
-
   return (
     <div className="swipe-container">
       <h2>{currentLayer}</h2>
-      <TinderCard
-        className="swipe-card"
-        key={currentOptions[currentIndex]}
-        onSwipe={(dir) => handleSwipe(dir)}
-        preventSwipe={['up', 'down']}
-      >
-        <div className="card-content" style={{ width: '300px', height: '500px', backgroundColor: 'blue', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <h3 style={{ color: 'white' }}>{currentOptions[currentIndex]}</h3>
+      {finalMatch ? (
+        <div className="match-confirmation">
+          <h3>Match Found: {finalMatch}</h3>
+          <button onClick={reshuffleDeck}>Reshuffle Deck</button>
         </div>
-      </TinderCard>
-      <div className="swipe-buttons">
-        <button className="no" onClick={() => handleSwipe('left')}>No</button>
-        <button className="yes" onClick={() => handleSwipe('right')}>Yes</button>
-      </div>
-      {history.length > 0 && <button className="back" onClick={goBack}>Go Back</button>}
+      ) : (
+        <>
+          <TinderCard
+            className="swipe-card"
+            key={currentOptions[currentIndex]}
+            onSwipe={(dir) => handleSwipe(dir)}
+            preventSwipe={['up', 'down']}
+          >
+            <div className="card-content" style={{ width: '300px', height: '500px', backgroundColor: 'blue', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <h3 style={{ color: 'white' }}>{currentOptions[currentIndex]}</h3>
+            </div>
+          </TinderCard>
+          <div className="swipe-buttons">
+            <button className="no" onClick={() => handleSwipe('left')}>Discard</button>
+            <button className="yes" onClick={() => handleSwipe('right')}>Continue</button>
+          </div>
+        </>
+      )}
+      {history.length > 0 && !finalMatch && <button className="back" onClick={goBack}>Go Back</button>}
       {matched.length > 0 && (
         <div className="matches">
           <h3>Matched Activities:</h3>
