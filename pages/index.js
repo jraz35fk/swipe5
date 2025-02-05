@@ -1,66 +1,39 @@
 import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
-const GOOGLE_PLACES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
-
-// CATEGORY TREE STRUCTURE
+// LOCAL ACTIVITY DATABASE
 const categories = {
-  "Culture": {
-    "History": ["Maryland Historical Society", "Fort McHenry"],
-    "Art": {
-      "Art Galleries": ["Walters Art Gallery", "Baltimore Museum of Art"],
-      "Street Art": ["Graffiti Alley", "MICA Public Art"]
-    },
-    "Music": ["Live Jazz", "Baltimore Symphony Orchestra"]
-  },
   "Eating & Drinking": {
     "Seafood": {
-      "Crab Houses": ["LP Steamers", "Thames Street Oyster House"],
-      "Oyster Bars": ["Ryleigh’s Oyster", "The Choptank"]
+      "Crab Houses": ["LP Steamers", "Thames Street Oyster House", "Nick’s Fish House", "The Choptank", "Faidley’s Seafood"],
+      "Oyster Bars": ["Ryleigh’s Oyster", "The Choptank", "Thames Street Oyster House"]
     },
-    "Breweries": ["Heavy Seas Alehouse", "Diamondback Brewing Co."],
-    "Coffee Shops": ["Artifact Coffee", "Ceremony Coffee Roasters"]
+    "Breweries & Distilleries": ["Heavy Seas Alehouse", "Diamondback Brewing Co.", "Union Craft Brewing", "Sagamore Spirit Distillery"],
+    "Speakeasies": ["W.C. Harlan", "The Elk Room", "Dutch Courage", "Sugarvale"]
   },
-  "Nightlife": {
-    "Bars": {
-      "Cocktail Bars": ["The Brewer’s Art", "Sugarvale"],
-      "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On"]
+  "Culture & History": {
+    "Historical Landmarks": ["Fort McHenry", "Edgar Allan Poe House", "B&O Railroad Museum"],
+    "Art": {
+      "Art Galleries": ["Walters Art Gallery", "Baltimore Museum of Art", "American Visionary Art Museum"],
+      "Street Art": ["Graffiti Alley", "MICA Public Art"]
     },
-    "Live Music": {
-      "Concert Venues": ["The Ottobar", "Rams Head Live"]
-    }
+    "Music & Performance": ["Baltimore Symphony Orchestra", "Keystone Korner (Live Jazz)", "Ottobar (Indie/Alt)"]
   },
   "Outdoor Activities": {
-    "Parks & Trails": ["Federal Hill Park", "Patterson Park"],
-    "Water Activities": ["Kayak the Inner Harbor"]
+    "Parks & Green Spaces": ["Federal Hill Park", "Patterson Park", "Cylburn Arboretum"],
+    "Water Activities": ["Kayaking at Inner Harbor", "Waterfront Promenade Walk"],
+    "Hiking & Nature": ["Patapsco Valley State Park Trails"]
+  },
+  "Nightlife": {
+    "Cocktail Bars": ["The Brewer’s Art", "Sugarvale"],
+    "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On Saloon"],
+    "Live Music Venues": ["Rams Head Live", "The 8x10", "Soundstage"]
   }
-};
-
-// DYNAMIC DATA FETCHING FUNCTION
-const fetchPlaces = async (query) => {
-  const location = "39.2904,-76.6122"; // Baltimore, MD
-  const radius = 5000; // 5km search radius
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&keyword=${query}&key=${GOOGLE_PLACES_API_KEY}`;
-
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data.results) {
-      return data.results.map(place => ({
-        name: place.name,
-        address: place.vicinity || "No Address Available",
-        googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
-      }));
-    }
-  } catch (error) {
-    console.error("Error fetching places:", error);
-  }
-  return [];
 };
 
 const Home = () => {
-  const [history, setHistory] = useState([]); // Tracks user path
-  const [currentLayer, setCurrentLayer] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [currentLayer, setCurrentLayer] = useState("Select a Category");
   const [currentOptions, setCurrentOptions] = useState(Object.keys(categories));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matched, setMatched] = useState([]);
@@ -69,7 +42,7 @@ const Home = () => {
     if (!currentLayer) setCurrentLayer("Select a Category");
   }, []);
 
-  const handleSwipe = async (direction) => {
+  const handleSwipe = (direction) => {
     if (currentIndex >= currentOptions.length) return;
 
     const choice = currentOptions[currentIndex];
@@ -78,31 +51,19 @@ const Home = () => {
       const nextLayer = categories[currentLayer]?.[choice];
 
       if (typeof nextLayer === "object") {
-        // Move deeper into the structure
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
       } else if (Array.isArray(nextLayer)) {
-        // Final layer - list actual places or fetch dynamically
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(nextLayer);
         setCurrentIndex(0);
       } else {
-        // Fetch real locations dynamically if no predefined ones exist
-        const places = await fetchPlaces(choice);
-        if (places.length > 0) {
-          setHistory([...history, { layer: currentLayer, options: currentOptions }]);
-          setCurrentLayer(choice);
-          setCurrentOptions(places.map(p => p.name));
-          setCurrentIndex(0);
-        } else {
-          saveToMatched(choice);
-        }
+        saveToMatched(choice);
       }
     } else {
-      // Move to next option in the same category
       setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
     }
   };
@@ -118,14 +79,12 @@ const Home = () => {
   };
 
   const saveToMatched = (choice) => {
-    const updatedMatched = [...matched, choice];
-    setMatched(updatedMatched);
-    localStorage.setItem("matched", JSON.stringify(updatedMatched));
+    if (!matched.includes(choice)) {
+      const updatedMatched = [...matched, choice];
+      setMatched(updatedMatched);
+      localStorage.setItem("matched", JSON.stringify(updatedMatched));
+    }
   };
-
-  if (!currentOptions.length) {
-    return <div className="swipe-container"><p>Loading categories...</p></div>;
-  }
 
   return (
     <div className="swipe-container">
@@ -136,8 +95,8 @@ const Home = () => {
         onSwipe={(dir) => handleSwipe(dir)}
         preventSwipe={['up', 'down']}
       >
-        <div className="card-content">
-          <h3>{currentOptions[currentIndex]}</h3>
+        <div className="card-content" style={{ width: '300px', height: '500px', backgroundColor: 'blue', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <h3 style={{ color: 'white' }}>{currentOptions[currentIndex]}</h3>
         </div>
       </TinderCard>
       <div className="swipe-buttons">
