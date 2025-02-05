@@ -31,6 +31,8 @@ const categories = {
   }
 };
 
+const WEIGHT_THRESHOLD = 3; // Users must drill down 3 layers before a match is possible
+
 const Home = () => {
   const [history, setHistory] = useState([]);
   const [currentLayer, setCurrentLayer] = useState("Select a Category");
@@ -38,6 +40,7 @@ const Home = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matched, setMatched] = useState([]);
   const [finalMatch, setFinalMatch] = useState(null);
+  const [currentWeight, setCurrentWeight] = useState(0);
 
   useEffect(() => {
     if (!currentLayer) setCurrentLayer("Select a Category");
@@ -56,13 +59,19 @@ const Home = () => {
         setCurrentLayer(choice);
         setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
+        setCurrentWeight((prevWeight) => prevWeight + 1); // Increase weight
       } else if (Array.isArray(nextLayer)) {
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(nextLayer);
         setCurrentIndex(0);
+        setCurrentWeight((prevWeight) => prevWeight + 1); // Increase weight
       } else {
-        handleFinalMatch(choice);
+        if (currentWeight >= WEIGHT_THRESHOLD) {
+          handleFinalMatch(choice);
+        } else {
+          setCurrentWeight((prevWeight) => prevWeight + 1); // Keep increasing weight
+        }
       }
     } else {
       setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
@@ -83,6 +92,7 @@ const Home = () => {
     setCurrentOptions(Object.keys(categories));
     setCurrentIndex(0);
     setFinalMatch(null);
+    setCurrentWeight(0);
   };
 
   const goBack = () => {
@@ -91,6 +101,7 @@ const Home = () => {
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
       setCurrentIndex(0);
+      setCurrentWeight((prevWeight) => (prevWeight > 0 ? prevWeight - 1 : 0)); // Reduce weight
       setHistory([...history]);
     }
   };
