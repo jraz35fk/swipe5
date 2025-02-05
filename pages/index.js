@@ -45,20 +45,25 @@ const Home = ({ events }) => {
 
 export async function getServerSideProps() {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY; // Use Google Places API key
-  const query = "activities+in+Baltimore+MD";
-  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&radius=5000&key=${apiKey}`;
+  const location = "39.2904,-76.6122"; // Latitude & Longitude for Baltimore, MD
+  const radius = 5000; // Search radius in meters (5km)
+  const type = "tourist_attraction|restaurant|park|museum"; // Get multiple types of places
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${apiKey}`;
 
   let events = [];
   try {
     const res = await fetch(url);
     const data = await res.json();
+
     if (data.results) {
       events = data.results.map(event => ({
         id: event.place_id,
         name: event.name,
-        images: event.photos ? [`https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${event.photos[0].photo_reference}&key=${apiKey}`] : [],
-        location: event.formatted_address,
-        rating: event.rating || "N/A"
+        images: event.photos && event.photos.length > 0
+          ? [`https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${event.photos[0].photo_reference}&key=${apiKey}`]
+          : ["https://via.placeholder.com/400"], // Default image if no photo
+        location: event.vicinity || "Location not available",
+        rating: event.rating ? `${event.rating} ⭐` : "No rating"
       }));
     }
   } catch (e) {
@@ -67,6 +72,7 @@ export async function getServerSideProps() {
 
   return { props: { events } };
 }
+
 
 }
 
