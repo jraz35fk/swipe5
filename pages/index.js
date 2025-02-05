@@ -1,45 +1,75 @@
 import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
-// EXPANDED CATEGORIES STRUCTURE
+const GOOGLE_PLACES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
+
+// CATEGORY TREE STRUCTURE
 const categories = {
-  "Explore": {
-    "Food & Drinks": {
-      "Seafood": {
-        "Crab Houses": ["LP Steamers", "Thames Street Oyster House"],
-        "Oyster Bars": ["Ryleigh’s Oyster", "The Choptank"]
-      },
-      "Breweries": {
-        "Local Breweries": ["Heavy Seas Alehouse", "Diamondback Brewing Co."]
-      }
+  "Culture": {
+    "History": ["Maryland Historical Society", "Fort McHenry"],
+    "Art": {
+      "Art Galleries": ["Walters Art Gallery", "Baltimore Museum of Art"],
+      "Street Art": ["Graffiti Alley", "MICA Public Art"]
     },
-    "Nightlife": {
-      "Bars": {
-        "Cocktail Bars": ["The Brewer’s Art", "Sugarvale"],
-        "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On"]
-      },
-      "Live Music": {
-        "Concert Venues": ["The Ottobar", "Rams Head Live"]
-      }
+    "Music": ["Live Jazz", "Baltimore Symphony Orchestra"]
+  },
+  "Eating & Drinking": {
+    "Seafood": {
+      "Crab Houses": ["LP Steamers", "Thames Street Oyster House"],
+      "Oyster Bars": ["Ryleigh’s Oyster", "The Choptank"]
+    },
+    "Breweries": ["Heavy Seas Alehouse", "Diamondback Brewing Co."],
+    "Coffee Shops": ["Artifact Coffee", "Ceremony Coffee Roasters"]
+  },
+  "Nightlife": {
+    "Bars": {
+      "Cocktail Bars": ["The Brewer’s Art", "Sugarvale"],
+      "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On"]
+    },
+    "Live Music": {
+      "Concert Venues": ["The Ottobar", "Rams Head Live"]
     }
+  },
+  "Outdoor Activities": {
+    "Parks & Trails": ["Federal Hill Park", "Patterson Park"],
+    "Water Activities": ["Kayak the Inner Harbor"]
   }
+};
+
+// DYNAMIC DATA FETCHING FUNCTION
+const fetchPlaces = async (query) => {
+  const location = "39.2904,-76.6122"; // Baltimore, MD
+  const radius = 5000; // 5km search radius
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&keyword=${query}&key=${GOOGLE_PLACES_API_KEY}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.results) {
+      return data.results.map(place => ({
+        name: place.name,
+        address: place.vicinity || "No Address Available",
+        googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+      }));
+    }
+  } catch (error) {
+    console.error("Error fetching places:", error);
+  }
+  return [];
 };
 
 const Home = () => {
   const [history, setHistory] = useState([]); // Tracks user path
-  const [currentLayer, setCurrentLayer] = useState("Explore");
-  const [currentOptions, setCurrentOptions] = useState(Object.keys(categories["Explore"]));
-  const [selectedPath, setSelectedPath] = useState([]);
+  const [currentLayer, setCurrentLayer] = useState(null);
+  const [currentOptions, setCurrentOptions] = useState(Object.keys(categories));
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [matches, setMatches] = useState([]);
+  const [matched, setMatched] = useState([]);
 
   useEffect(() => {
-    if (!currentOptions.length) {
-      console.error("No categories available. Check your structure.");
-    }
-  }, [currentOptions]);
+    if (!currentLayer) setCurrentLayer("Select a Category");
+  }, []);
 
-  const handleSwipe = (direction) => {
+  const handleSwipe = async (direction) => {
     if (currentIndex >= currentOptions.length) return;
 
     const choice = currentOptions[currentIndex];
@@ -53,9 +83,23 @@ const Home = () => {
         setCurrentLayer(choice);
         setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
+      } else if (Array.isArray(nextLayer)) {
+        // Final layer - list actual places or fetch dynamically
+        setHistory([...history, { layer: currentLayer, options: currentOptions }]);
+        setCurrentLayer(choice);
+        setCurrentOptions(nextLayer);
+        setCurrentIndex(0);
       } else {
-        // Final choice reached, add to matches
-        saveToMatches(choice);
+        // Fetch real locations dynamically if no predefined ones exist
+        const places = await fetchPlaces(choice);
+        if (places.length > 0) {
+          setHistory([...history, { layer: currentLayer, options: currentOptions }]);
+          setCurrentLayer(choice);
+          setCurrentOptions(places.map(p => p.name));
+          setCurrentIndex(0);
+        } else {
+          saveToMatched(choice);
+        }
       }
     } else {
       // Move to next option in the same category
@@ -73,10 +117,10 @@ const Home = () => {
     }
   };
 
-  const saveToMatches = (choice) => {
-    const updatedMatches = [...matches, choice];
-    setMatches(updatedMatches);
-    localStorage.setItem("matches", JSON.stringify(updatedMatches));
+  const saveToMatched = (choice) => {
+    const updatedMatched = [...matched, choice];
+    setMatched(updatedMatched);
+    localStorage.setItem("matched", JSON.stringify(updatedMatched));
   };
 
   if (!currentOptions.length) {
@@ -101,11 +145,11 @@ const Home = () => {
         <button className="yes" onClick={() => handleSwipe('right')}>Yes</button>
       </div>
       {history.length > 0 && <button className="back" onClick={goBack}>Go Back</button>}
-      {matches.length > 0 && (
+      {matched.length > 0 && (
         <div className="matches">
           <h3>Matched Activities:</h3>
           <ul>
-            {matches.map((match, index) => <li key={index}>{match}</li>)}
+            {matched.map((match, index) => <li key={index}>{match}</li>)}
           </ul>
         </div>
       )}
