@@ -47,7 +47,7 @@ export async function getServerSideProps() {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY; // Use Google Places API key
   const location = "39.2904,-76.6122"; // Latitude & Longitude for Baltimore, MD
   const radius = 5000; // Search radius in meters (5km)
-  const type = "tourist_attraction|restaurant|park|museum"; // Get multiple types of places
+  const type = "tourist_attraction"; // Use only ONE type per request
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${apiKey}`;
 
   let events = [];
@@ -72,6 +72,7 @@ export async function getServerSideProps() {
 
   return { props: { events } };
 }
+
 
 
 }
