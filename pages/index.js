@@ -51,7 +51,7 @@ const Home = ({ events }) => {
 
 export async function getServerSideProps() {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
-  
+
   if (!apiKey) {
     console.error("Google Places API Key is missing!");
     return { props: { events: [] } };
