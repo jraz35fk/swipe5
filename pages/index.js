@@ -8,18 +8,24 @@ const Home = ({ events }) => {
 
   useEffect(() => {
     if (!eventsList.length) {
-      console.error("No events found. Check your API key or query.");
+      console.error("No events found. Check API key or query.");
     }
   }, [eventsList]);
 
   const handleSwipe = (direction) => {
-    if (!eventsList[currentIndex]) return;
+    if (currentIndex >= eventsList.length) return; // Prevent out-of-bounds access
+
     if (direction === 'right') {
-      const existing = JSON.parse(localStorage.getItem('likedEvents') || '[]');
-      existing.push(eventsList[currentIndex]);
-      localStorage.setItem('likedEvents', JSON.stringify(existing));
+      try {
+        const existing = JSON.parse(localStorage.getItem('likedEvents') || '[]');
+        existing.push(eventsList[currentIndex]);
+        localStorage.setItem('likedEvents', JSON.stringify(existing));
+      } catch (error) {
+        console.error("Error saving to localStorage:", error);
+      }
     }
-    setCurrentIndex((prev) => prev + 1);
+
+    setCurrentIndex((prev) => (prev < eventsList.length - 1 ? prev + 1 : prev));
   };
 
   const swipeYes = () => handleSwipe('right');
@@ -36,7 +42,8 @@ const Home = ({ events }) => {
     <div className="swipe-container">
       <TinderCard
         className="swipe-card"
-        onSwipe={(dir) => handleSwipe(dir)}
+        key={eventsList[currentIndex].id}
+        onSwipe={handleSwipe}
         preventSwipe={['up', 'down']}
       >
         <EventCard event={eventsList[currentIndex]} />
@@ -72,23 +79,11 @@ export async function getServerSideProps() {
       return { props: { events: [] } };
     }
 
-    if (data.results) {
+    if (data.results && data.results.length > 0) {
       events = data.results.map(event => ({
         id: event.place_id,
         name: event.name,
-        images: event.photos && event.photos.length > 0
+        images: event.photos?.length
           ? [`https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${event.photos[0].photo_reference}&key=${apiKey}`]
           : ["https://via.placeholder.com/400"], // Default image if no photo
-        location: event.vicinity || "Location not available",
-        rating: event.rating ? `${event.rating} ⭐` : "No rating",
-        googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${event.place_id}`
-      }));
-    }
-  } catch (error) {
-    console.error("Error fetching events from Google Places API:", error);
-  }
-
-  return { props: { events } };
-}
-
-export default Home;
+        location: event.vicinity
