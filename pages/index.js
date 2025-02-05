@@ -1,15 +1,26 @@
 import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
+// EXPANDED CATEGORIES STRUCTURE
 const categories = {
   "Explore": {
     "Food & Drinks": {
-      "Seafood": ["Thames Street Oyster House", "LP Steamers"],
-      "Breweries": ["Heavy Seas Alehouse", "Diamondback Brewing Co."]
+      "Seafood": {
+        "Crab Houses": ["LP Steamers", "Thames Street Oyster House"],
+        "Oyster Bars": ["Ryleigh’s Oyster", "The Choptank"]
+      },
+      "Breweries": {
+        "Local Breweries": ["Heavy Seas Alehouse", "Diamondback Brewing Co."]
+      }
     },
     "Nightlife": {
-      "Bars": ["The Brewer’s Art", "Max’s Taphouse"],
-      "Live Music": ["The Ottobar", "Rams Head Live"]
+      "Bars": {
+        "Cocktail Bars": ["The Brewer’s Art", "Sugarvale"],
+        "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On"]
+      },
+      "Live Music": {
+        "Concert Venues": ["The Ottobar", "Rams Head Live"]
+      }
     }
   }
 };
@@ -20,6 +31,7 @@ const Home = () => {
   const [currentOptions, setCurrentOptions] = useState(Object.keys(categories["Explore"]));
   const [selectedPath, setSelectedPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [matches, setMatches] = useState([]);
 
   useEffect(() => {
     if (!currentOptions.length) {
@@ -28,18 +40,21 @@ const Home = () => {
   }, [currentOptions]);
 
   const handleSwipe = (direction) => {
+    if (currentIndex >= currentOptions.length) return;
+
     const choice = currentOptions[currentIndex];
 
     if (direction === "right") {
-      if (typeof categories[currentLayer][choice] === "object") {
+      const nextLayer = categories[currentLayer]?.[choice];
+
+      if (typeof nextLayer === "object") {
         // Move deeper into the structure
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
-        setCurrentOptions(Object.keys(categories[currentLayer][choice]));
+        setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
       } else {
-        // Final choice reached
-        setSelectedPath([...selectedPath, choice]);
+        // Final choice reached, add to matches
         saveToMatches(choice);
       }
     } else {
@@ -59,9 +74,9 @@ const Home = () => {
   };
 
   const saveToMatches = (choice) => {
-    let matches = JSON.parse(localStorage.getItem("matches")) || [];
-    matches.push(choice);
-    localStorage.setItem("matches", JSON.stringify(matches));
+    const updatedMatches = [...matches, choice];
+    setMatches(updatedMatches);
+    localStorage.setItem("matches", JSON.stringify(updatedMatches));
   };
 
   if (!currentOptions.length) {
@@ -86,6 +101,14 @@ const Home = () => {
         <button className="yes" onClick={() => handleSwipe('right')}>Yes</button>
       </div>
       {history.length > 0 && <button className="back" onClick={goBack}>Go Back</button>}
+      {matches.length > 0 && (
+        <div className="matches">
+          <h3>Matched Activities:</h3>
+          <ul>
+            {matches.map((match, index) => <li key={index}>{match}</li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };
