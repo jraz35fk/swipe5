@@ -56,9 +56,9 @@ export async function getServerSideProps() {
     return { props: { events: [] } };
   }
 
-  const location = "39.2904,-76.6122"; // Baltimore, MD (Latitude & Longitude)
-  const radius = 5000; // 5km radius
-  const type = "tourist_attraction"; // Searching for attractions
+  const location = "39.2904,-76.6122"; // Baltimore, MD
+  const radius = 5000; // 5km search radius
+  const type = "tourist_attraction"; // Only one type at a time
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${apiKey}`;
 
   let events = [];
@@ -77,7 +77,7 @@ export async function getServerSideProps() {
         name: event.name,
         images: event.photos && event.photos.length > 0
           ? [`https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${event.photos[0].photo_reference}&key=${apiKey}`]
-          : ["https://via.placeholder.com/400"], // Default placeholder image
+          : ["https://via.placeholder.com/400"], // Default image if no photo
         location: event.vicinity || "Location not available",
         rating: event.rating ? `${event.rating} ⭐` : "No rating",
         googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${event.place_id}`
@@ -90,5 +90,4 @@ export async function getServerSideProps() {
   return { props: { events } };
 }
 
-export default Home;
-
+export default Home; // ✅ FIXED: Corrected export placement
