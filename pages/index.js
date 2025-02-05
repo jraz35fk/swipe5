@@ -44,16 +44,30 @@ const Home = ({ events }) => {
 };
 
 export async function getServerSideProps() {
-  const apiKey = process.env.TICKETMASTER_API_KEY;
-  const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?postalCode=21230&apikey=${apiKey}`);
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY; // Use Google Places API key
+  const query = "activities+in+Baltimore+MD";
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&radius=5000&key=${apiKey}`;
+
   let events = [];
   try {
+    const res = await fetch(url);
     const data = await res.json();
-    events = data._embedded ? data._embedded.events : [];
+    if (data.results) {
+      events = data.results.map(event => ({
+        id: event.place_id,
+        name: event.name,
+        images: event.photos ? [`https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${event.photos[0].photo_reference}&key=${apiKey}`] : [],
+        location: event.formatted_address,
+        rating: event.rating || "N/A"
+      }));
+    }
   } catch (e) {
-    console.error('Failed to fetch events', e);
+    console.error("Failed to fetch events", e);
   }
+
   return { props: { events } };
+}
+
 }
 
 export default Home;
