@@ -53,7 +53,7 @@ const Home = () => {
 
   const isFinalOption = (choice) => {
     return (
-      !categories[currentLayer]?.[choice] || 
+      !categories[currentLayer]?.[choice] ||
       (Array.isArray(categories[currentLayer]?.[choice]) && categories[currentLayer]?.[choice].length > 0)
     );
   };
@@ -75,13 +75,13 @@ const Home = () => {
 
     if (nextLayer && typeof nextLayer === "object") {
       // Move deeper into categories
-      setHistory([...history, { layer: currentLayer, options: currentOptions }]);
+      setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
       setCurrentLayer(choice);
       setCurrentOptions(Object.keys(nextLayer));
       setCurrentIndex(0);
     } else if (Array.isArray(nextLayer)) {
       // Move to specific activity layer
-      setHistory([...history, { layer: currentLayer, options: currentOptions }]);
+      setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
       setCurrentLayer(choice);
       setCurrentOptions(nextLayer);
       setCurrentIndex(0);
@@ -91,7 +91,8 @@ const Home = () => {
       console.warn("Unexpected case: No valid next layer detected.");
     }
 
-    // Grant reward AFTER transition is completed
+    // Force React re-render by resetting state
+    setCurrentOptions([...currentOptions]);
     setTimeout(() => {
       setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     }, 100);
