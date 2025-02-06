@@ -53,10 +53,7 @@ const Home = () => {
   }, [currentLayer]);
 
   const isFinalOption = (choice) => {
-    return (
-      !categories[currentLayer]?.[choice] ||
-      (Array.isArray(categories[currentLayer]?.[choice]) && categories[currentLayer]?.[choice].length > 0)
-    );
+    return !categories[currentLayer]?.[choice] || Array.isArray(categories[currentLayer]?.[choice]);
   };
 
   const handleSwipe = (direction) => {
@@ -75,13 +72,17 @@ const Home = () => {
     const nextLayer = categories[currentLayer]?.[choice];
 
     if (nextLayer && typeof nextLayer === "object") {
-      // Move deeper and show child categories below parent
+      // Move deeper and show child categories
       setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
-      setChildOptions(Object.keys(nextLayer));
+      setCurrentLayer(choice);
+      setCurrentOptions(Object.keys(nextLayer));
+      setCurrentIndex(0);
     } else if (Array.isArray(nextLayer)) {
       // Move to specific activity layer
       setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
-      setChildOptions(nextLayer);
+      setCurrentLayer(choice);
+      setCurrentOptions(nextLayer);
+      setCurrentIndex(0);
     } else if (isFinalOption(choice)) {
       handleFinalMatch(choice);
     } else {
@@ -150,7 +151,7 @@ const Home = () => {
             onSwipe={(dir) => handleSwipe(dir)}
             preventSwipe={['up', 'down']}
           >
-            <div className="card-content" style={{ width: '300px', height: '500px', backgroundColor: 'blue', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div className="card-content" style={{ width: '300px', height: '500px', backgroundColor: 'red', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <h3 style={{ color: 'white' }}>{currentOptions[currentIndex]}</h3>
             </div>
           </TinderCard>
@@ -159,17 +160,6 @@ const Home = () => {
             <button className="yes" onClick={() => handleSwipe('right')}>Continue</button>
           </div>
         </>
-      )}
-      {history.length > 0 && !finalMatch && <button className="back" onClick={goBack}>Go Back</button>}
-      {childOptions.length > 0 && (
-        <div className="child-cards">
-          <h3>Subcategories:</h3>
-          {childOptions.map((option, index) => (
-            <div key={index} className="child-card" style={{ width: '250px', height: '400px', backgroundColor: 'lightblue', margin: '10px', padding: '10px', textAlign: 'center' }}>
-              <h4>{option}</h4>
-            </div>
-          ))}
-        </div>
       )}
     </div>
   );
