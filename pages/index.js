@@ -31,19 +31,13 @@ const categories = {
   }
 };
 
-const MAX_REWARD_POINTS = 100;
-const REWARD_DISCARD = 1;
-const REWARD_CONTINUE = 10;
-
 const Home = () => {
   const [history, setHistory] = useState([]);
   const [currentLayer, setCurrentLayer] = useState("Select a Category");
   const [currentOptions, setCurrentOptions] = useState(Object.keys(categories));
-  const [childOptions, setChildOptions] = useState([]); // Stores child categories
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matched, setMatched] = useState([]);
   const [finalMatch, setFinalMatch] = useState(null);
-  const [rewardPoints, setRewardPoints] = useState(0);
 
   useEffect(() => {
     if (!categories[currentLayer]) {
@@ -52,8 +46,8 @@ const Home = () => {
     }
   }, [currentLayer]);
 
-  const isFinalOption = (choice) => {
-    return !categories[currentLayer]?.[choice] || Array.isArray(categories[currentLayer]?.[choice]);
+  const hasChildCategories = (choice) => {
+    return typeof categories[currentLayer]?.[choice] === "object";
   };
 
   const handleSwipe = (direction) => {
@@ -71,56 +65,42 @@ const Home = () => {
   const processContinue = (choice) => {
     const nextLayer = categories[currentLayer]?.[choice];
 
-    if (nextLayer && typeof nextLayer === "object") {
-      // Move deeper and show child categories
-      setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
+    if (hasChildCategories(choice)) {
+      // Move to child category
+      setHistory([...history, { layer: currentLayer, options: currentOptions }]);
       setCurrentLayer(choice);
       setCurrentOptions(Object.keys(nextLayer));
       setCurrentIndex(0);
     } else if (Array.isArray(nextLayer)) {
-      // Move to specific activity layer
-      setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
+      // Move to final options
+      setHistory([...history, { layer: currentLayer, options: currentOptions }]);
       setCurrentLayer(choice);
       setCurrentOptions(nextLayer);
       setCurrentIndex(0);
-    } else if (isFinalOption(choice)) {
-      handleFinalMatch(choice);
     } else {
-      console.warn("Unexpected case: No valid next layer detected.");
+      // Final match reached
+      handleFinalMatch(choice);
     }
-
-    // Force React re-render
-    setTimeout(() => {
-      setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
-    }, 100);
   };
 
   const processDiscard = () => {
     // Move to next option at the same level
     setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
-
-    // Grant reward AFTER card is disposed of
-    setTimeout(() => {
-      setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
-    }, 100);
   };
 
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
-      const updatedMatched = [...matched, choice];
-      setMatched(updatedMatched);
-      localStorage.setItem("matched", JSON.stringify(updatedMatched));
+      setMatched([...matched, choice]);
+      localStorage.setItem("matched", JSON.stringify([...matched, choice]));
     }
   };
 
   const reshuffleDeck = () => {
     setCurrentLayer("Select a Category");
     setCurrentOptions(Object.keys(categories));
-    setChildOptions([]);
     setCurrentIndex(0);
     setFinalMatch(null);
-    setRewardPoints(0);
   };
 
   const goBack = () => {
@@ -128,7 +108,6 @@ const Home = () => {
       const prevState = history.pop();
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
-      setChildOptions([]);
       setCurrentIndex(0);
       setHistory([...history]);
     }
@@ -137,7 +116,6 @@ const Home = () => {
   return (
     <div className="swipe-container">
       <h2>{currentLayer}</h2>
-      <p>Reward Points: {rewardPoints}</p>
       {finalMatch ? (
         <div className="match-confirmation">
           <h3>Match Found: {finalMatch}</h3>
@@ -161,6 +139,7 @@ const Home = () => {
           </div>
         </>
       )}
+      {history.length > 0 && !finalMatch && <button className="back" onClick={goBack}>Go Back</button>}
     </div>
   );
 };
