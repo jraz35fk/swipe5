@@ -1,147 +1,159 @@
-import { useState, useEffect, useRef } from 'react';
-import TinderCard from 'react-tinder-card';
+"use client"; // Important for Next 13 client components
+
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+// Dynamically import react-tinder-card with SSR disabled
+const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
 
 /**
- * 1) BROAD TOP-LEVEL CATEGORIES: Eat, Drink, Party, Explore,
+ * 1) REAL ACTIVITIES DATA
+ *    Organized under 7 top-level categories: Eat, Drink, Party, Explore,
  *    Culture & History, Seasonal & Special, Shop & Leisure.
- *    Each has multiple sub-layers, plus final items or placeholders.
+ *    Each subcategory is an array of final "match cards."
+ *
+ *    All items below correspond to your #80–#168 list.
  */
+
 const rawActivities = {
   "Eat": {
-    "Seafood": [
-      "Blue Crab & Old Bay",
-      "Fresh Oysters",
-      "Shrimp Po' Boys",
-      "Lobster Rolls",
-      "This could be your seafood house!"
+    "Markets & Food Halls": [
+      "#148 Lexington Market – Historic market with fresh seafood and local eats",
+      "#149 Broadway Market – Revamped Fells Point food hall with seafood vendors",
+      "#150 Cross Street Market – Trendy indoor market in Federal Hill",
+      "#152 Belvedere Square Market – Upscale food hall with local gourmet shops",
+      "#153 Baltimore Farmers’ Market & Bazaar – Sunday market with produce & artisan goods"
     ],
-    "Pizza & Italian": [
-      "Classic Neapolitan Pizza",
-      "Chicago Deep Dish",
-      "NY-Style Pizza",
-      "Fine Italian Dining",
-      "This could be your pizza shop!"
-    ],
-    "Burgers & Sandwiches": [
-      "Gourmet Burger Bars",
-      "Local Deli Sandwiches",
-      "BBQ Pulled Pork",
-      "Philly Cheesesteaks",
-      "This could be your burger joint!"
+    "Unique Restaurants": [
+      "#144 Medieval Times Dinner & Tournament – Jousting and feast at Arundel Mills",
+      "#162 Papermoon Diner – Toy-filled diner with amazing milkshakes"
     ]
   },
 
   "Drink": {
-    "Beer & Breweries": [
-      "IPA Taprooms",
-      "Seasonal Beer Gardens",
-      "Microbreweries",
-      "Stout & Porter Specialists",
-      "This could be your brewery!"
-    ],
-    "Cocktails": [
-      "Craft Cocktail Lounges",
-      "Tiki Bars",
-      "Martini Bars",
-      "Mimosa Brunch Spots",
-      "This could be your speakeasy!"
-    ],
-    "Coffee & Tea": [
-      "Specialty Espresso Cafés",
-      "Loose Leaf Tea Houses",
-      "Bubble Tea Shops",
-      "Afternoon Tea Service",
-      "This could be your coffee shop!"
+    "Breweries & Distilleries": [
+      "#80 Sagamore Spirit Distillery – Award-winning rye whiskey tours",
+      "#81 Union Craft Brewing – Popular brewery & beer garden in Hampden",
+      "#82 Checkerspot Brewing Co. – Female-owned brewery near M&T Bank Stadium",
+      "#83 Diamondback Brewing Co. – Brewery with wood-fired pizza in Locust Point",
+      "#84 Mobtown Brewing Co. – First brewery in modern Canton",
+      "#85 Heavy Seas Beer – Nautical-themed brewery known for Loose Cannon IPA",
+      "#86 The Brewer’s Art – Brewpub in a historic townhouse, famous for Resurrection Ale",
+      "#87 Baltimore Spirits Company – Distillery known for Shot Tower Gin",
+      "#88 Old Line Spirits – Veteran-owned whiskey & rum distillery",
+      "#89 Charm City Meadworks – Baltimore’s only meadery",
+      "#90 Guinness Open Gate Brewery – U.S. Guinness brewery in Halethorpe",
+      "#91 City Brew Tours – Guided brewery-hopping tours"
     ]
   },
 
   "Party": {
-    "Dance Clubs": [
-      "High-Energy EDM Clubs",
-      "Retro 80s/90s Clubs",
-      "Latin Dance Nights",
-      "Hip-Hop & R&B Lounges",
-      "This could be your dance floor!"
-    ],
     "Night Bars & Live Music": [
-      "Rock & Indie Bars",
-      "Jazz & Blues Lounges",
-      "Acoustic Café Sets",
-      "Reggae & Dancehall Spots",
-      "This could be your nightlife venue!"
+      "#131 Horseshoe Casino – Large casino with table games, slots, & dining",
+      "#161 The Horse You Came In On Saloon – America’s oldest continually operating bar"
+    ],
+    "Other Nightlife Activities": [
+      "#130 Urban Axes – Axe-throwing bar for group fun",
+      "#134 Baltimore Bike Party – Massive monthly themed group bike ride"
     ]
   },
 
   "Explore": {
     "Outdoor Adventures": [
-      "Hiking & Nature Trails",
-      "Kayaking & Paddleboarding",
-      "Overnight Camping Sites",
-      "Mountain Biking",
-      "This could be your outdoor retreat!"
+      "#123 Inner Harbor Kayaking – Paddle for unique city views",
+      "#124 Urban Pirates Cruise – Family-friendly & adult-only pirate-themed rides",
+      "#125 Baltimore Waterfront Bike Route – Scenic cycling along the harbor",
+      "#134 Baltimore Bike Party – (Also nightlife, but an outdoor group ride!)",
+      "#136 Route 40 Paintball – Outdoor paintball fields in White Marsh"
     ],
-    "Urban Sightseeing": [
-      "Self-Guided Walking Tours",
-      "Historic Neighborhood Strolls",
-      "Skyline Overlooks",
-      "Rooftop Views",
-      "This could be your city tour!"
+    "Recreation & Sports": [
+      "#126 Oriole Park at Camden Yards – Iconic MLB stadium",
+      "#127 M&T Bank Stadium – Home of the Ravens",
+      "#128 Ice Skating at Inner Harbor – Seasonal rink with skyline views",
+      "#129 Topgolf Baltimore – High-tech driving range with food & drinks",
+      "#132 Earth Treks Timonium – Rock climbing gym for all skill levels",
+      "#133 Leakin Park Miniature Steam Trains – Free rides on second Sundays",
+      "#135 Duckpin Bowling – Classic Baltimore bowling variation"
     ]
   },
 
   "Culture & History": {
-    "Museums & Art": [
-      "Art Museums & Galleries",
-      "Interactive Science Centers",
-      "Pop-Up Exhibitions",
-      "Modern Art Collectives",
-      "This could be your museum!"
+    "Museums & Attractions": [
+      "#137 National Aquarium – World-class aquatic exhibits",
+      "#138 Port Discovery Children’s Museum – Interactive fun for young kids",
+      "#139 Maryland Science Center – Hands-on exhibits & planetarium",
+      "#140 Maryland Zoo – African animals & penguin habitat",
+      "#142 American Visionary Art Museum – Quirky, colorful exhibits",
+      "#159 Bromo Seltzer Arts Tower – Climb inside a working clock tower",
+      "#160 Great Blacks in Wax Museum – Life-size wax figures of Black history",
+      "#164 BUZZ Lab – DIY biohacking lab for science enthusiasts"
     ],
-    "Historic Sites": [
-      "Forts & Battlefields",
-      "Colonial-Era Mansions",
-      "Heritage Walking Tours",
-      "Civil War Landmarks",
-      "This could be your historic estate!"
+    "Tours & Historic Places": [
+      "#141 B&O Railroad Museum – Historic trains & kids’ ride",
+      "#165 Lexington Market Catacombs Tour – Explore underground burial sites",
+      "#167 Baltimore Heritage Walk – Self-guided walking tour of historic sites"
     ]
   },
 
   "Seasonal & Special": {
     "Spring-Summer": [
-      "Flower Bloom Events",
-      "Outdoor Concert Series",
-      "Farmers’ Markets",
-      "Seaside Carnivals",
-      "This could be your summer fest!"
+      "#92 Opening Day at Camden Yards – Orioles’ first home game celebration",
+      "#93 Charm City Bluegrass Festival – Folk & bluegrass music fest",
+      "#94 Maryland Film Festival – Annual indie film fest in Station North",
+      "#95 Flower Mart – Spring fest with lemon sticks & garden vendors",
+      "#96 Kinetic Sculpture Race – Wacky amphibious human-powered race",
+      "#97 Preakness Stakes – Maryland’s biggest horse race",
+      "#98 Wine Village at Inner Harbor – Outdoor European-style wine market",
+      "#99 HonFest – Hampden’s iconic festival celebrating “Bawlmer” culture",
+      "#100 Baltimore Pride – LGBTQ+ parade & festival in Mount Vernon",
+      "#101 AFRAM – Major African American heritage festival",
+      "#102 Artscape – America’s largest free arts festival",
+      "#103 Fourth of July Fireworks – Over the Inner Harbor",
+      "#104 Baltimore Caribbean Carnival – Parade & festival of Caribbean culture",
+      "#105 Arts & Drafts at the Zoo – Craft beer fest at Maryland Zoo",
+      "#106 Waterfront Wellness – Free outdoor fitness classes",
+      "#168 SoWeBo Arts & Music Festival – Neighborhood festival of local art & music"
     ],
     "Fall-Winter": [
-      "Leaf-Peeping Trails",
-      "Holiday Light Shows",
-      "Indoor Ice Skating",
-      "Hot Chocolate Crawl",
-      "This could be your winter wonderland!"
+      "#107 Baltimore Book Festival – Literary event with signings",
+      "#108 Fell’s Point Fun Festival – Street fest with music & vendors",
+      "#109 Baltimore Running Festival – Marathon & running events",
+      "#110 Defenders Day at Fort McHenry – Reenactments & fireworks",
+      "#111 Edgar Allan Poe Festival – Celebrating Poe’s legacy",
+      "#112 Pigtown Festival – Quirky fest with pig races & local food",
+      "#113 Great Halloween Lantern Parade – Nighttime lantern parade",
+      "#114 Fells Point Ghost Tours – Spooky tours of haunted pubs",
+      "#115 Miracle on 34th Street – Famous Christmas lights in Hampden",
+      "#116 German Christmas Village – Traditional European holiday market",
+      "#117 Lighting of the Washington Monument – Holiday kickoff & fireworks",
+      "#118 Dollar or Free Museum Days – Winter discounts to top attractions",
+      "#119 MLK Parade – Annual Martin Luther King Jr. Day march",
+      "#120 Restaurant Week – Special prix-fixe menus across the city",
+      "#121 Frozen Harbor Music Festival – Multi-venue winter music fest",
+      "#122 Chinese New Year Celebrations – Lion dances & festivities"
     ]
   },
 
   "Shop & Leisure": {
-    "Markets & Bazaars": [
-      "Sunday Flea Markets",
-      "Antique Fairs",
-      "Artisan Pop-Up Bazaars",
-      "Local Craft Fairs",
-      "This could be your market!"
+    "Unique Shops": [
+      "#145 The Bazaar – Oddities, taxidermy & antique medical tools",
+      "#146 Atomic Books – Indie bookstore & mail stop for John Waters",
+      "#147 The Sound Garden – Baltimore’s best record store",
+      "#151 Hampden’s “The Avenue” – Quirky local boutiques & vintage shops",
+      "#154 The Book Thing – Free book warehouse, everything is $0",
+      "#155 Fells Point Antiques & Shops – Vintage & unique boutiques",
+      "#156 Village Thrift – Bargain second-hand store",
+      "#157 Keepers Vintage – Curated retro fashion in Mount Vernon"
     ],
-    "Neighborhood Shopping": [
-      "Main Street Boutiques",
-      "Downtown Retail Spots",
-      "Local Fashion Designers",
-      "Vintage Thrift Emporiums",
-      "This could be your shop!"
+    "Volunteer & Community": [
+      "#166 BARCS Animal Shelter – Walk dogs or help with adoptions"
     ]
   }
 };
 
-/** 2) Flatten single-child sublayers to avoid lonely categories. */
+/**
+ * 2) Flatten single-child sublayers to avoid lonely categories.
+ */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
@@ -161,40 +173,40 @@ function flattenSingleChildLayers(obj) {
 }
 const categories = flattenSingleChildLayers(rawActivities);
 
-// 3) Scoreboard for user
+// 3) Scoreboard constants
 const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// 4) Code preference
+// 4) Code preference weighting
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
-/** 
- * 5) "Card frames" to style each card 
- *    (Use a stable method so SSR and client choose the same frame each time.)
+/**
+ * 5) Trading card frames (renamed to remove “Pokémon” flavor)
+ *    We'll pick one randomly in an effect on the client only.
  */
 const cardFrames = [
   {
-    name: "Pokémon Classic",
+    name: "Vibrant Stripes",
     border: "4px solid #F8C859",
     borderRadius: "12px",
     background: "linear-gradient(135deg, #7EC0EE 0%, #F8C859 100%)"
   },
   {
-    name: "Team Baseball",
+    name: "Bold Red",
     border: "4px solid #C0392B",
     borderRadius: "0px",
     background: "linear-gradient(135deg, #BDC3C7 0%, #ECF0F1 100%)"
   },
   {
-    name: "Retro 90s",
+    name: "Retro Purple",
     border: "4px dashed #9B59B6",
     borderRadius: "20px",
     background: "linear-gradient(135deg, #D2B4DE 0%, #F5EEF8 100%)"
   },
   {
-    name: "Neon Cyber",
+    name: "Neon Green",
     border: "3px solid #2ECC71",
     borderRadius: "8px",
     background: "radial-gradient(circle, #1ABC9C 0%, #16A085 100%)"
@@ -206,29 +218,21 @@ const cardFrames = [
     background: "linear-gradient(120deg, #BEBADA 0%, #E7E7E7 100%)"
   },
   {
-    name: "Futuristic Minimal",
+    name: "Minimal Gray",
     border: "2px solid #666",
     borderRadius: "5px",
     background: "linear-gradient(135deg, #f0f0f0 0%, #fafafa 100%)"
   }
 ];
 
-/** 
- * Stable approach to pick a frame for each item
- * so SSR & client produce the same result. 
- * We'll hash the item name + path to pick a frame index consistently.
- */
-function getStableFrameForItem(item) {
-  // Simple "hash": sum char codes
-  let sum = 0;
-  for (let i = 0; i < item.length; i++) {
-    sum += item.charCodeAt(i);
-  }
-  const idx = sum % cardFrames.length;
-  return cardFrames[idx];
+// Defer picking a random frame to avoid SSR mismatch
+function getRandomFrameIndex() {
+  return Math.floor(Math.random() * cardFrames.length);
 }
 
-/** 6) Also top-level color map */
+/**
+ * 6) Simple color map for top-level categories
+ */
 const topLevelColors = {
   "Eat": "#E74C3C",
   "Drink": "#8E44AD",
@@ -239,7 +243,6 @@ const topLevelColors = {
   "Shop & Leisure": "#16A085"
 };
 
-// Darken color
 function darkenColor(hex, amount) {
   const h = hex.replace("#", "");
   let r = parseInt(h.substring(0, 2), 16);
@@ -259,6 +262,7 @@ function darkenColor(hex, amount) {
   const bb = ("0" + b.toString(16)).slice(-2);
   return `#${rr}${gg}${bb}`;
 }
+
 function getColorForPath(path) {
   if (path.length === 0) return "#BDC3C7";
   const topCat = path[0];
@@ -267,6 +271,7 @@ function getColorForPath(path) {
   return darkenColor(base, depth * 0.1);
 }
 
+// Safely walk object for next node
 function getNodeAtPath(obj, path) {
   let current = obj;
   for (const seg of path) {
@@ -279,82 +284,86 @@ function getNodeAtPath(obj, path) {
   return current;
 }
 
-/** 
- * MAIN COMPONENT
- */
 export default function Home() {
-  // PATH + INDEX
+  // Path + index in the current array
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // FINAL MATCH
+  // Final match (leaf choice)
   const [finalMatch, setFinalMatch] = useState(null);
 
-  // MATCHES
+  // Matched items (the user "collected" these)
   const [matched, setMatched] = useState([]);
   const [completed, setCompleted] = useState({});
   const [ratings, setRatings] = useState({});
 
-  // SHOW MATCHES
+  // Show matches modal
   const [showMatches, setShowMatches] = useState(false);
 
-  // USER scoreboard
+  // Scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // NAV HISTORY
+  // Nav history (to go back)
   const [history, setHistory] = useState([]);
 
-  // LOADING
+  // Loading splash
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
+    // Fake 2s loading
     const t = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(t);
   }, []);
 
-  // "No more" overlay
+  // "No more" top-level overlay
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // CODE preference
-  const [weights, setWeights] = useState(() => {
+  // Category preference weighting (loaded from localStorage)
+  const [weights, setWeights] = useState({});
+
+  useEffect(() => {
+    // Load from localStorage after mount
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
-      return stored ? JSON.parse(stored) : {};
+      if (stored) {
+        setWeights(JSON.parse(stored));
+      }
     }
-    return {};
-  });
+  }, []);
+
   useEffect(() => {
+    // Save whenever weights changes
     if (typeof window !== "undefined") {
       localStorage.setItem("categoryWeights", JSON.stringify(weights));
     }
   }, [weights]);
 
+  // Build the array of options for this layer
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
+
   if (!node && currentPath.length === 0) {
     // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // sub-layers
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // final items
     thisLayerOptions = node;
   }
 
-  // sort by preference
+  // Sort by preference
   function sortByPreference(arr) {
     const copy = [...arr];
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA;
+      return wB - wA; // higher weight first
     });
     return copy;
   }
   const sortedOptions = sortByPreference(thisLayerOptions);
-
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
+  // Increase or decrease preference
   const incPreference = (item) => {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) + PREFERENCE_INC }));
   };
@@ -362,18 +371,7 @@ export default function Home() {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) - PREFERENCE_DEC }));
   };
 
-  // Bigger Go Back button
-  const goBackButtonStyle = {
-    position: "absolute",
-    left: "1rem",
-    border: "2px solid #333",
-    background: "#eee",
-    fontSize: "1rem",
-    color: "#333",
-    cursor: "pointer",
-    padding: "0.3rem 0.7rem",
-    borderRadius: "8px"
-  };
+  // Go back
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
@@ -385,6 +383,7 @@ export default function Home() {
     }
   };
 
+  // Reshuffle everything
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -393,6 +392,7 @@ export default function Home() {
     setHistory([]);
   };
 
+  // Final match found
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -400,6 +400,7 @@ export default function Home() {
     }
   };
 
+  // Check if a choice is "final" (no deeper branches)
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -408,7 +409,7 @@ export default function Home() {
     return true;
   }
 
-  // swipe logic
+  // Handle swipes
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -419,6 +420,7 @@ export default function Home() {
     }
   };
 
+  // "Like"/Continue => user +10, inc pref
   const processContinue = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     incPreference(choice);
@@ -426,13 +428,14 @@ export default function Home() {
     if (isFinalOption(currentPath, choice)) {
       handleFinalMatch(choice);
     } else {
-      // deeper
+      // go deeper
       setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
   };
 
+  // "Nope"/Discard => user +1, dec pref
   const processDiscard = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
     decPreference(choice);
@@ -441,36 +444,46 @@ export default function Home() {
     if (nextIndex < sortedOptions.length) {
       setCurrentIndex(nextIndex);
     } else {
-      // out of cards in this layer
+      // no more at this layer
       if (currentPath.length === 0) {
-        // top-level => user has discarded all top-level categories
+        // top-level => discard all categories => show overlay, reshuffle
         setNoMoreMessage(true);
         setTimeout(() => {
           setNoMoreMessage(false);
           reshuffleDeck();
         }, 2000);
       } else {
-        // second layer or deeper => recycle
-        setCurrentIndex(0); 
+        // deeper => infinite cycle
+        setCurrentIndex(0);
       }
     }
   };
 
-  // Mark completed
+  // Mark item as completed & rating
   const markCompleted = (item) => {
     setCompleted((prev) => ({ ...prev, [item]: true }));
   };
-
-  // Rate item
   const setItemRating = (item, stars) => {
     setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
-  const currentLayerName = currentPath.length === 0
-    ? "Shuffling..."
-    : currentPath[currentPath.length - 1];
+  // Show current "layer" name
+  const currentLayerName =
+    currentPath.length === 0 ? "Shuffling..." : currentPath[currentPath.length - 1];
 
-  // STYLES
+  // Pick a random frame index in an effect so SSR doesn't mismatch
+  const [cardFrameIndex, setCardFrameIndex] = useState(0);
+  useEffect(() => {
+    if (hasOptions) {
+      setCardFrameIndex(getRandomFrameIndex());
+    }
+  }, [currentIndex, currentPath, hasOptions]);
+
+  // Current card frame + color
+  const cardFrame = cardFrames[cardFrameIndex];
+  const cardColor = getColorForPath(currentPath);
+
+  /* ---------- STYLES ---------- */
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -549,12 +562,21 @@ export default function Home() {
     borderBottom: "1px solid #ccc",
     position: "relative"
   };
-
   const phoneScreenTitleStyle = {
     margin: 0,
     fontWeight: "bold"
   };
-
+  const goBackButtonStyle = {
+    position: "absolute",
+    left: "1rem",
+    border: "2px solid #333",
+    background: "#eee",
+    fontSize: "1rem",
+    color: "#333",
+    cursor: "pointer",
+    padding: "0.3rem 0.7rem",
+    borderRadius: "8px"
+  };
   const matchesButtonStyle = {
     position: "absolute",
     right: "1rem",
@@ -567,7 +589,7 @@ export default function Home() {
     borderRadius: "8px"
   };
 
-  // main content
+  // Main area
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -575,27 +597,11 @@ export default function Home() {
     alignItems: "center",
     justifyContent: "center"
   };
-
   const cardContainerStyle = {
     width: "300px",
     height: "420px",
     position: "relative"
   };
-
-  // pick a stable frame based on the item name
-  let currentItem = null;
-  let stableFrame = null;
-  if (hasOptions) {
-    currentItem = sortedOptions[currentIndex];
-    stableFrame = getStableFrameForItem(currentItem);
-  } else {
-    stableFrame = cardFrames[0]; // fallback
-  }
-
-  // also top-level color
-  const cardColor = getColorForPath(currentPath);
-
-  // combine frame style
   const cardStyle = {
     width: "100%",
     height: "100%",
@@ -604,9 +610,8 @@ export default function Home() {
     position: "relative",
     overflow: "hidden",
     justifyContent: "space-between",
-    ...stableFrame
+    ...cardFrame
   };
-
   const cardTopStyle = {
     padding: "0.5rem",
     textAlign: "center",
@@ -614,7 +619,6 @@ export default function Home() {
     color: "#fff",
     backgroundColor: "#00000044"
   };
-
   const cardTitleStyle = {
     color: cardColor,
     backgroundColor: "#ffffffcc",
@@ -622,7 +626,7 @@ export default function Home() {
     padding: "0.5rem 1rem"
   };
 
-  // bottom bar
+  // Bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -630,7 +634,6 @@ export default function Home() {
     justifyContent: "center",
     gap: "2rem"
   };
-
   const circleButtonStyle = (bgColor) => ({
     width: "60px",
     height: "60px",
@@ -645,7 +648,6 @@ export default function Home() {
     cursor: "pointer",
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
-
   const starStyle = {
     cursor: "pointer",
     marginRight: "0.25rem"
@@ -653,7 +655,7 @@ export default function Home() {
 
   return (
     <div style={appContainerStyle}>
-      {/* final match overlay */}
+      {/* FINAL MATCH OVERLAY */}
       {finalMatch && (
         <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
@@ -674,12 +676,14 @@ export default function Home() {
         </div>
       )}
 
+      {/* "No more" overlay */}
       {noMoreMessage && (
         <div style={noMoreOverlay}>
           No more top-level options! Reshuffling...
         </div>
       )}
 
+      {/* MATCHES MODAL */}
       {showMatches && (
         <div style={matchesModalStyle}>
           <h2>My Collection</h2>
@@ -797,10 +801,7 @@ export default function Home() {
           ← Back
         </button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
-        <button
-          onClick={() => setShowMatches(true)}
-          style={matchesButtonStyle}
-        >
+        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
           ♡ Matches
         </button>
       </div>
@@ -816,12 +817,11 @@ export default function Home() {
             <TinderCard
               key={sortedOptions[currentIndex]}
               onSwipe={(dir) => handleSwipe(dir)}
-              preventSwipe={["up", "down"]}
+              preventSwipe={["up", "down"]} // we only allow left/right swipes
             >
-              {/* STABLE FRAME for this item (no random) */}
               <div style={cardStyle}>
                 <div style={cardTopStyle}>
-                  {stableFrame.name} | {currentLayerName}
+                  {cardFrame.name} | {currentLayerName}
                 </div>
                 <div
                   style={{
@@ -831,7 +831,9 @@ export default function Home() {
                     justifyContent: "center"
                   }}
                 >
-                  <h2 style={cardTitleStyle}>{sortedOptions[currentIndex]}</h2>
+                  <h2 style={cardTitleStyle}>
+                    {sortedOptions[currentIndex]}
+                  </h2>
                 </div>
               </div>
             </TinderCard>
@@ -842,15 +844,7 @@ export default function Home() {
       </div>
 
       {/* BOTTOM BAR */}
-      <div
-        style={{
-          borderTop: "1px solid #ccc",
-          padding: "0.5rem",
-          display: "flex",
-          justifyContent: "center",
-          gap: "2rem"
-        }}
-      >
+      <div style={bottomBarStyle}>
         {hasOptions ? (
           <>
             <button
