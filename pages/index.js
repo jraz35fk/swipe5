@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
 /**
- * MASTER CATEGORIES OBJECT
- * Incorporates old + new categories, each with nested layers.
- * Feel free to adjust subcategory groupings to your liking!
+ * 1) MASTER CATEGORIES OBJECT
+ *    Includes all your top-level + nested subcategories + final items.
+ *    (Combined from your “Eating & Drinking,” “Culture & History,” etc.)
  */
 const categories = {
   "Eating & Drinking": {
@@ -72,10 +72,6 @@ const categories = {
     "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On Saloon"],
     "Live Music Venues": ["Rams Head Live", "The 8x10", "Soundstage"]
   },
-
-  // ------------------------------------------------------
-  // NEW TOP-LEVEL CATEGORIES (With Nested Layers)
-  // ------------------------------------------------------
   "Breweries, Wineries & Distilleries": {
     "Distilleries": [
       "Sagamore Spirit Distillery",
@@ -98,7 +94,6 @@ const categories = {
       "City Brew Tours"
     ]
   },
-
   "Seasonal Events & Festivals": {
     "Spring": [
       "Opening Day at Camden Yards",
@@ -142,7 +137,6 @@ const categories = {
       "Restaurant Week"
     ]
   },
-
   "Recreation & Sports": {
     "Professional Sports": [
       "Oriole Park at Camden Yards",
@@ -165,7 +159,6 @@ const categories = {
       "Horseshoe Casino"
     ]
   },
-
   "Family-Friendly Attractions": {
     "Museums & Indoor": [
       "National Aquarium",
@@ -182,7 +175,6 @@ const categories = {
       "Medieval Times Dinner & Tournament"
     ]
   },
-
   "Shopping & Markets": {
     "Indoor Markets": [
       "Lexington Market",
@@ -206,7 +198,6 @@ const categories = {
       "Fells Point Antiques & Shops"
     ]
   },
-
   "Hidden Gems & Offbeat Attractions": {
     "Quirky Museums & Landmarks": [
       "Bromo Seltzer Arts Tower",
@@ -231,13 +222,42 @@ const categories = {
 // REWARD CONSTANTS
 // ----------------------
 const MAX_REWARD_POINTS = 100;
-const REWARD_DISCARD = 1;   // user gets 1 point for discarding
-const REWARD_CONTINUE = 10; // user gets 10 points for continuing
+const REWARD_DISCARD = 1;
+const REWARD_CONTINUE = 10;
 
-/**
- * Safely traverse nested data by "path" array
- * e.g. path = ["Breweries, Wineries & Distilleries", "Breweries"] => categories["Breweries, Wineries & Distilleries"]["Breweries"]
- */
+// ----------------------
+// IMAGE MAP - Provide custom images for certain items
+// Everything else uses a fallback from Unsplash
+// (Replace with your real images or an API in production)
+// ----------------------
+const imageMap = {
+  "Nick’s Fish House":
+    "https://images.unsplash.com/photo-1562799183-9ccda1b69721?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
+  "Union Craft Brewing":
+    "https://images.unsplash.com/photo-1591396034575-428db5cecc92?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
+  "Sagamore Spirit Distillery":
+    "https://images.unsplash.com/photo-1580502308389-011787fe5f14?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
+  "Fort McHenry":
+    "https://images.unsplash.com/photo-1604582139894-55cbf1dacb8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
+  "Miracle on 34th Street":
+    "https://images.unsplash.com/photo-1607881772611-c43e056576cc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
+  "The Horse You Came In On Saloon":
+    "https://images.unsplash.com/photo-1582066830726-74ab48747d8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
+};
+
+/** Return an image URL for the given item name. If not found, use fallback. */
+function getImageUrl(itemName) {
+  if (imageMap[itemName]) {
+    return imageMap[itemName];
+  }
+  // Fallback from Unsplash (random city photo or random scenic)
+  return "https://source.unsplash.com/collection/190727/600x800"; 
+  // You could also do: `https://picsum.photos/600/800` or a static placeholder
+}
+
+// ----------------------
+// HELPER: SAFELY TRAVERSE NESTED DATA
+// ----------------------
 function getNodeAtPath(data, path) {
   let current = data;
   for (const segment of path) {
@@ -251,19 +271,18 @@ function getNodeAtPath(data, path) {
 }
 
 export default function Home() {
-  // Track the current "path" into the nested object
+  // PATH + INDEX
   const [currentPath, setCurrentPath] = useState([]);
-  // Index of the card we're currently viewing at this layer
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Final selection + matched items
+  // FINAL MATCH
   const [finalMatch, setFinalMatch] = useState(null);
   const [matched, setMatched] = useState([]);
 
-  // Reward points for the user, per session
+  // REWARDS
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // Weighted preference system (saved in localStorage)
+  // WEIGHTS (FOR PREFERENCE)
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -271,72 +290,64 @@ export default function Home() {
     }
     return {};
   });
-
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("categoryWeights", JSON.stringify(weights));
     }
   }, [weights]);
 
-  // Our "history" stack so we can go back up one level
+  // HISTORY (FOR "GO BACK")
   const [history, setHistory] = useState([]);
 
-  // ---------------
-  // GET CURRENT NODE + OPTIONS
-  // ---------------
+  // GET CURRENT NODE
   const node = getNodeAtPath(categories, currentPath);
 
-  // If path is empty, we are at top-level: show the top-level keys
-  // If node is an object (not array), show its keys
-  // If node is an array, show those items
+  // BUILD THIS LAYER'S OPTIONS
   let thisLayerOptions = [];
   if (currentPath.length === 0 && !node) {
-    // Top-level
+    // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // Subcategories
+    // subcategories
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // Final list of items
+    // final items
     thisLayerOptions = node;
   }
 
-  // Sort them by descending "weight" so liked items appear first
+  // SORT BY WEIGHT (DESC)
   const sortByWeight = (arr) => {
     const copy = [...arr];
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA;
+      return wB - wA; 
     });
     return copy;
   };
   const sortedOptions = sortByWeight(thisLayerOptions);
 
-  // Do we have more cards at this layer?
-  const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
+  const hasOptions =
+    sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // Determine if a choice is final by seeing what the next node would be
-  // If it's undefined or not an object/array, it's final
-  // If current node is an array, those are final items
+  // DETERMINE IF AN OPTION IS FINAL
   const isFinalOption = (choice) => {
     if (Array.isArray(node)) {
-      return true; // we are already at final items
+      return true; // we're already looking at final items
     }
     const nextNode = getNodeAtPath(categories, [...currentPath, choice]);
     if (!nextNode) return true;
     if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false;
-    if (Array.isArray(nextNode)) return false; // means there's a final list there
+    if (Array.isArray(nextNode)) return false;
     return true;
   };
 
-  // ---------------
+  // -----------------------
   // SWIPE HANDLERS
-  // ---------------
+  // -----------------------
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
-
     if (direction === "right") {
       processContinue(choice);
     } else {
@@ -347,27 +358,25 @@ export default function Home() {
   const processContinue = (choice) => {
     incrementWeight(choice);
 
-    // If it's final, we match immediately
     if (isFinalOption(choice)) {
       handleFinalMatch(choice);
     } else {
-      // Not final => go deeper
-      setHistory(prev => [...prev, { path: [...currentPath], index: currentIndex }]);
-      setCurrentPath(prev => [...prev, choice]);
+      // go deeper
+      setHistory((prev) => [
+        ...prev,
+        { path: [...currentPath], index: currentIndex }
+      ]);
+      setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
 
-    // Give user reward for continuing
-    setRewardPoints(prev => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
+    setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
   };
 
   const processDiscard = (choice) => {
     decrementWeight(choice);
-    // Move to next card in the same layer
-    setCurrentIndex(prev => prev + 1);
-
-    // Give user a smaller reward
-    setRewardPoints(prev => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
+    setCurrentIndex((prev) => prev + 1);
+    setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
   };
 
   const handleFinalMatch = (choice) => {
@@ -381,17 +390,13 @@ export default function Home() {
     }
   };
 
-  // ---------------
-  // GO BACK & RESHUFFLE
-  // ---------------
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
-      const newHist = history.slice(0, -1);
-
+      const newHistory = history.slice(0, -1);
       setCurrentPath(prev.path);
       setCurrentIndex(prev.index);
-      setHistory(newHist);
+      setHistory(newHistory);
     }
   };
 
@@ -402,83 +407,159 @@ export default function Home() {
     setRewardPoints(0);
   };
 
-  // ---------------
-  // WEIGHTS
-  // ---------------
+  // WEIGHT UTILS
   const incrementWeight = (item) => {
-    setWeights(prev => ({
+    setWeights((prev) => ({
       ...prev,
       [item]: (prev[item] || 0) + 1
     }));
   };
   const decrementWeight = (item) => {
-    setWeights(prev => ({
+    setWeights((prev) => ({
       ...prev,
       [item]: (prev[item] || 0) - 1
     }));
   };
 
-  // ---------------
-  // RENDER
-  // ---------------
+  // UI LABEL FOR THE CURRENT LAYER
   const currentLayerName =
     currentPath.length === 0
       ? "Select a Category"
       : currentPath[currentPath.length - 1];
 
+  // STYLES: container, card, overlay, buttons, etc.
+  const appContainerStyle = {
+    minHeight: "100vh",
+    background: "#fafafa",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "1rem",
+    fontFamily: "sans-serif"
+  };
+
+  const cardContainerStyle = {
+    position: "relative",
+    width: "320px",
+    height: "480px",
+    marginTop: "2rem"
+  };
+
+  const cardStyle = {
+    width: "100%",
+    height: "100%",
+    borderRadius: "12px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end"
+  };
+
+  const cardOverlayStyle = {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    padding: "1rem",
+    background:
+      "linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(255,255,255,0) 100%)",
+    color: "#fff"
+  };
+
+  const buttonRowStyle = {
+    marginTop: "1rem",
+    display: "flex",
+    justifyContent: "center",
+    gap: "2rem"
+  };
+
+  const circleButtonStyle = (bgColor) => ({
+    width: "50px",
+    height: "50px",
+    borderRadius: "50%",
+    background: bgColor,
+    color: "#fff",
+    border: "none",
+    fontSize: "1.2rem",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+    transition: "transform 0.2s"
+  });
+
   return (
-    <div style={{ padding: "2rem", textAlign: "center" }}>
-      <h2>{currentLayerName}</h2>
+    <div style={appContainerStyle}>
+      <div style={{ width: "100%", display: "flex", justifyContent: "space-between" }}>
+        {/* "Go Back" and "Reshuffle" at top */}
+        <button onClick={goBack} style={{ marginRight: "auto", border: "none", background: "none", color: "#333", cursor: "pointer" }}>
+          ← Go Back
+        </button>
+        <p style={{ margin: 0, fontWeight: "bold" }}>{currentLayerName}</p>
+        <button onClick={reshuffleDeck} style={{ marginLeft: "auto", border: "none", background: "none", color: "#333", cursor: "pointer" }}>
+          Reshuffle
+        </button>
+      </div>
+
       <p>Reward Points: {rewardPoints}</p>
 
       {finalMatch ? (
         <div>
           <h3>Match Found: {finalMatch}</h3>
-          <button onClick={reshuffleDeck}>Reshuffle Deck</button>
+          <button onClick={reshuffleDeck}>Start Over</button>
         </div>
       ) : (
         <>
-          {hasOptions ? (
-            <TinderCard
-              key={sortedOptions[currentIndex]}
-              onSwipe={(dir) => handleSwipe(dir)}
-              preventSwipe={["up", "down"]}
-            >
-              <div
-                style={{
-                  width: "300px",
-                  height: "400px",
-                  backgroundColor: "tomato",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  margin: "0 auto"
-                }}
+          <div style={cardContainerStyle}>
+            {hasOptions ? (
+              <TinderCard
+                key={sortedOptions[currentIndex]}
+                onSwipe={(dir) => handleSwipe(dir)}
+                preventSwipe={["up", "down"]}
               >
-                <h3 style={{ color: "#fff", padding: "1rem" }}>
-                  {sortedOptions[currentIndex]}
-                </h3>
-              </div>
-            </TinderCard>
-          ) : (
-            <p>No more options at this level.</p>
-          )}
+                {/* Card with Background Image */}
+                <div
+                  style={{
+                    ...cardStyle,
+                    backgroundImage: `url(${getImageUrl(
+                      sortedOptions[currentIndex]
+                    )})`
+                  }}
+                >
+                  <div style={cardOverlayStyle}>
+                    <h2 style={{ margin: 0 }}>
+                      {sortedOptions[currentIndex]}
+                    </h2>
+                  </div>
+                </div>
+              </TinderCard>
+            ) : (
+              <p style={{ textAlign: "center", marginTop: "2rem" }}>
+                No more options at this level.
+              </p>
+            )}
+          </div>
 
           {hasOptions && (
-            <div style={{ marginTop: "1rem" }}>
+            <div style={buttonRowStyle}>
               <button
-                style={{ marginRight: "1rem" }}
+                style={circleButtonStyle("#F75D59")}
                 onClick={() => handleSwipe("left")}
+                onMouseDown={(e) => e.preventDefault()}
               >
-                Discard
+                ✕
               </button>
-              <button onClick={() => handleSwipe("right")}>Continue</button>
-            </div>
-          )}
-
-          {history.length > 0 && (
-            <div style={{ marginTop: "1rem" }}>
-              <button onClick={goBack}>Go Back</button>
+              <button
+                style={circleButtonStyle("#2ECC71")}
+                onClick={() => handleSwipe("right")}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                ♥
+              </button>
             </div>
           )}
         </>
