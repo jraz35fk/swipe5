@@ -1,12 +1,7 @@
 import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
-/** 
- * 1) NEW, BROADER DATA STRUCTURE:
- *    7 major top-level categories => multiple sub-layers => final arrays.
- *    This ensures the first layer has multiple branches, 
- *    matching your "branching from the start" goal.
- */
+/** STEP 1: BROADER STRUCTURE (7 big categories) */
 const rawActivities = {
   "Food & Drink": {
     "Seafood & Oyster Bars": [
@@ -231,7 +226,7 @@ const rawActivities = {
   }
 };
 
-// 2) Flatten single-child sublayers 
+/** 2) Flatten single-child sublayers */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
@@ -249,38 +244,29 @@ function flattenSingleChildLayers(obj) {
   }
   return obj;
 }
-
 const categories = flattenSingleChildLayers(rawActivities);
 
-// USER POINTS
+// 3) Points for user scoreboard
 const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// CODE PREFERENCES
-const PREFERENCE_INC = 5;
-const PREFERENCE_DEC = 1;
+// 4) Code Preference weighting
+const PREFERENCE_INC = 5; // continue
+const PREFERENCE_DEC = 1; // discard
 
-// Color coding
+// 5) Simple color map for top-level categories
 const topLevelColors = {
-  "Food & Drink": "#E74C3C",          // red
-  "Nightlife & Music": "#8E44AD",     // purple
-  "Events & Festivals": "#D35400",    // dark orange
-  "Outdoors & Recreation": "#27AE60", // green
-  "Shopping & Markets": "#F39C12",    // orange
-  "Historic & Culture": "#2980B9",    // blue
-  "Unusual & Quirky": "#16A085"       // teal
+  "Food & Drink": "#E74C3C", 
+  "Nightlife & Music": "#8E44AD",
+  "Events & Festivals": "#D35400",
+  "Outdoors & Recreation": "#27AE60",
+  "Shopping & Markets": "#F39C12",
+  "Historic & Culture": "#2980B9",
+  "Unusual & Quirky": "#16A085"
 };
 
-function getColorForPath(path) {
-  if (path.length === 0) return "#BDC3C7"; // fallback
-  const topCategory = path[0];
-  const base = topLevelColors[topCategory] || "#7f8c8d";
-  const depth = path.length - 1;
-  return darkenColor(base, depth * 0.1);
-}
-
-// Darken color by amount (0..1)
+// Helper to darken color
 function darkenColor(hex, amount) {
   const h = hex.replace("#", "");
   let r = parseInt(h.substring(0, 2), 16);
@@ -301,7 +287,16 @@ function darkenColor(hex, amount) {
   return `#${rr}${gg}${bb}`;
 }
 
-// get node by path
+// For coloring the card by path
+function getColorForPath(path) {
+  if (path.length === 0) return "#BDC3C7";
+  const topCat = path[0];
+  const base = topLevelColors[topCat] || "#7f8c8d";
+  const depth = path.length - 1;
+  return darkenColor(base, depth * 0.1);
+}
+
+// Safe retrieval
 function getNodeAtPath(obj, path) {
   let current = obj;
   for (const seg of path) {
@@ -314,33 +309,43 @@ function getNodeAtPath(obj, path) {
   return current;
 }
 
+/** 
+ * PRIMARY COMPONENT 
+ */
 export default function Home() {
   // PATH + INDEX
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // FINAL MATCH
+  // Final match
   const [finalMatch, setFinalMatch] = useState(null);
+
+  // Matched items (like a "prized collection")
   const [matched, setMatched] = useState([]);
+  // We'll store item "completed" and "rating" in separate states
+  const [completed, setCompleted] = useState({}); // { itemName: boolean }
+  const [ratings, setRatings] = useState({});   // { itemName: number (1..5) }
+
+  // Show matches overlay?
   const [showMatches, setShowMatches] = useState(false);
 
-  // USER SCORE
+  // user scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // HISTORY
+  // navigation history
   const [history, setHistory] = useState([]);
 
-  // LOADING SCREEN
+  // loading splash
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(t);
   }, []);
 
-  // "No more" message
+  // "No more" overlay
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // CODE PREFERENCES (weights)
+  // code preference (weights)
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -354,18 +359,14 @@ export default function Home() {
     }
   }, [weights]);
 
-  // Current node 
+  // GET CURRENT NODE
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
-
   if (!node && currentPath.length === 0) {
-    // top-level
-    thisLayerOptions = Object.keys(categories);
+    thisLayerOptions = Object.keys(categories); // top-level
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // sub-layers
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // final items
     thisLayerOptions = node;
   }
 
@@ -384,7 +385,7 @@ export default function Home() {
   const hasOptions =
     sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // Preference inc/dec
+  // PREFERENCE UTILS
   const incPreference = (item) => {
     setWeights((prev) => ({
       ...prev,
@@ -419,7 +420,7 @@ export default function Home() {
     setHistory([]);
   };
 
-  // FINAL MATCH
+  // MATCH
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -427,7 +428,7 @@ export default function Home() {
     }
   };
 
-  // Check final
+  // Check if final
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -453,7 +454,6 @@ export default function Home() {
     incPreference(choice);
 
     if (isFinalOption(currentPath, choice)) {
-      // final => match
       handleFinalMatch(choice);
     } else {
       // deeper
@@ -472,19 +472,27 @@ export default function Home() {
     if (nextIndex < sortedOptions.length) {
       setCurrentIndex(nextIndex);
     } else {
-      // out of cards in this layer
+      // no more cards
       setNoMoreMessage(true);
       setTimeout(() => {
         setNoMoreMessage(false);
-        // If there's a parent layer, go back
         if (history.length > 0) {
           goBack();
         } else {
-          // top-level => reshuffle
           reshuffleDeck();
         }
       }, 2000);
     }
+  };
+
+  // Mark an item as completed
+  const markCompleted = (item) => {
+    setCompleted((prev) => ({ ...prev, [item]: true }));
+  };
+
+  // Rate an item (1..5)
+  const setItemRating = (item, stars) => {
+    setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
   // LAYER NAME
@@ -493,7 +501,7 @@ export default function Home() {
       ? "Shuffling..."
       : currentPath[currentPath.length - 1];
 
-  // PHONE-SCREEN STYLES
+  // STYLES
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -550,13 +558,14 @@ export default function Home() {
     zIndex: 998
   };
 
+  // Matches overlay => "prized collection"
   const matchesModalStyle = {
     position: "absolute",
     top: 0,
     left: 0,
     width: "100%",
     height: "100%",
-    background: "rgba(255,255,255,0.9)",
+    background: "#fafafa",
     zIndex: 997,
     display: "flex",
     flexDirection: "column",
@@ -598,7 +607,7 @@ export default function Home() {
     cursor: "pointer"
   };
 
-  // Main content
+  // Main card area => "Pokémon card" style
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -613,29 +622,39 @@ export default function Home() {
     position: "relative"
   };
 
+  // "Pokémon card" style: border, gradient top, etc.
   const cardColor = getColorForPath(currentPath);
 
   const cardStyle = {
     width: "100%",
     height: "100%",
     borderRadius: "12px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-    backgroundColor: cardColor,
-    overflow: "hidden",
+    border: "4px solid #333", // thick border
+    backgroundColor: "#fff",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "flex-end"
+    overflow: "hidden",
+    position: "relative"
   };
 
-  const cardOverlayStyle = {
-    background: "linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 100%)",
+  // top bar gradient within card
+  const cardTopStyle = {
+    background: `linear-gradient(90deg, ${cardColor} 0%, #fff 100%)`,
+    padding: "0.5rem",
+    textAlign: "center",
     color: "#fff",
-    padding: "1rem",
-    display: "flex",
-    alignItems: "flex-end",
-    height: "100%"
+    fontWeight: "bold"
   };
 
+  // main "description" area
+  const cardBodyStyle = {
+    flex: 1,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  };
+
+  // bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -659,9 +678,16 @@ export default function Home() {
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
 
+  // For rating stars
+  const starStyle = {
+    cursor: "pointer",
+    marginRight: "0.25rem"
+  };
+
+  // RENDER
   return (
     <div style={appContainerStyle}>
-      {/* FINAL MATCH OVERLAY */}
+      {/* Final match overlay */}
       {finalMatch && (
         <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
@@ -682,36 +708,76 @@ export default function Home() {
         </div>
       )}
 
-      {/* NO MORE CARDS OVERLAY */}
+      {/* No more overlay */}
       {noMoreMessage && (
         <div style={noMoreOverlay}>
           No more options at this layer! Going back one level…
         </div>
       )}
 
-      {/* MATCHES MODAL */}
+      {/* Matches overlay => your "prized collection" */}
       {showMatches && (
         <div style={matchesModalStyle}>
-          <h2>My Matches</h2>
+          <h2>My Collection</h2>
+          <p style={{ color: "#666" }}>
+            (Matched cards. Mark them as completed or rate them!)
+          </p>
           {matched.length === 0 ? (
             <p>No matches yet.</p>
           ) : (
-            matched.map((m, i) => (
+            matched.map((item, i) => (
               <div
                 key={i}
                 style={{
-                  marginBottom: "0.5rem",
-                  borderBottom: "1px solid #ccc",
-                  paddingBottom: "0.5rem"
+                  border: "1px solid #ccc",
+                  borderRadius: "8px",
+                  padding: "0.5rem",
+                  marginBottom: "1rem",
+                  background: "#fff"
                 }}
               >
-                {m}
+                <strong>{item}</strong>
+                <div style={{ marginTop: "0.25rem" }}>
+                  Completed?{" "}
+                  {completed[item] ? "Yes" : "No"}{" "}
+                  {!completed[item] && (
+                    <button
+                      style={{
+                        marginLeft: "0.5rem",
+                        background: "#27AE60",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        padding: "0.25rem 0.5rem"
+                      }}
+                      onClick={() => markCompleted(item)}
+                    >
+                      Mark Completed
+                    </button>
+                  )}
+                </div>
+                <div style={{ marginTop: "0.5rem" }}>
+                  Rate:
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span
+                      key={star}
+                      style={{
+                        ...starStyle,
+                        color: ratings[item] >= star ? "#f1c40f" : "#ccc"
+                      }}
+                      onClick={() => setItemRating(item, star)}
+                    >
+                      ★
+                    </span>
+                  ))}
+                  {ratings[item] ? ` (${ratings[item]} stars)` : ""}
+                </div>
               </div>
             ))
           )}
 
           <div style={{ marginTop: "auto", display: "flex", gap: "1rem" }}>
-            {/* Go Back from matches overlay */}
             <button
               style={{
                 padding: "0.5rem 1rem",
@@ -729,7 +795,6 @@ export default function Home() {
               Go Back
             </button>
 
-            {/* Reshuffle from matches overlay */}
             <button
               style={{
                 padding: "0.5rem 1rem",
@@ -747,7 +812,6 @@ export default function Home() {
               Reshuffle
             </button>
 
-            {/* Or simply close the overlay */}
             <button
               style={{
                 marginLeft: "auto",
@@ -770,17 +834,19 @@ export default function Home() {
       <div style={headerStyle}>
         <button onClick={goBack} style={backButtonStyle}>←</button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
-        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
+        <button
+          onClick={() => setShowMatches(true)}
+          style={matchesButtonStyle}
+        >
           ♡
         </button>
       </div>
 
-      {/* USER SCORE */}
       <div style={{ textAlign: "center", padding: "0.5rem" }}>
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* CARD */}
+      {/* MAIN CARD => "Pokémon-like" card design */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -790,8 +856,21 @@ export default function Home() {
               preventSwipe={["up", "down"]}
             >
               <div style={cardStyle}>
-                <div style={cardOverlayStyle}>
-                  <h2 style={{ margin: 0 }}>{sortedOptions[currentIndex]}</h2>
+                {/* top gradient area */}
+                <div style={cardTopStyle}>{currentLayerName}</div>
+
+                {/* body area => show the item name in the center */}
+                <div style={cardBodyStyle}>
+                  <h2
+                    style={{
+                      backgroundColor: cardColor,
+                      color: "#fff",
+                      padding: "0.5rem 1rem",
+                      borderRadius: "8px"
+                    }}
+                  >
+                    {sortedOptions[currentIndex]}
+                  </h2>
                 </div>
               </div>
             </TinderCard>
@@ -823,7 +902,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* RESHUFFLE AT VERY BOTTOM */}
       <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
         <button
           onClick={reshuffleDeck}
