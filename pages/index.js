@@ -241,13 +241,11 @@ const rawBaltimoreActivities = {
 //    layers remain, ensuring no "one-option sub-layers" exist.
 // ------------------------------------------------------------------
 function flattenSingleChildLayers(obj) {
-  // Base case: if it's not an object or it's an array, return as is
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
     return obj;
   }
 
   let keys = Object.keys(obj);
-  // If there's exactly 1 child and that child is also an object, merge them
   while (keys.length === 1) {
     const onlyKey = keys[0];
     const child = obj[onlyKey];
@@ -256,74 +254,72 @@ function flattenSingleChildLayers(obj) {
       obj = { ...child };
       keys = Object.keys(obj);
     } else {
-      // no more merging possible
       break;
     }
   }
 
-  // Now recursively flatten each child
   for (const k of Object.keys(obj)) {
     obj[k] = flattenSingleChildLayers(obj[k]);
   }
-
   return obj;
 }
 
 const categories = flattenSingleChildLayers(rawBaltimoreActivities);
 
 // ----------------------
-// REWARD CONSTANTS
+// USER REWARD CONSTANTS
+// (For user scoreboard only)
 // ----------------------
 const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
+// ----------------------
+// CODE "PREFERENCE" CONSTANTS
+// (For "algorithm" weighting the items to appear earlier)
+// Increase a final item by +5 if user continues,
+// Decrease by -1 if user discards
+// ----------------------
+const PREFERENCE_INC = 5;
+const PREFERENCE_DEC = 1;
+
 // ------------------------------------------------------------------
 // 3) Color Map & Helper: color-coding by top-level and sub-layer depth
 // ------------------------------------------------------------------
 const topLevelColors = {
-  "Eating & Drinking": "#E74C3C",        // a red
-  "Nightlife & Entertainment": "#8E44AD",// purple
-  "Outdoors & Nature": "#27AE60",        // green
+  "Eating & Drinking": "#E74C3C",         // red
+  "Nightlife & Entertainment": "#8E44AD", // purple
+  "Outdoors & Nature": "#27AE60",         // green
   "Historic & Cultural Landmarks": "#2980B9", // blue
-  "Shopping & Markets": "#F39C12",       // orange
-  "Events & Festivals": "#D35400",       // darker orange
+  "Shopping & Markets": "#F39C12",        // orange
+  "Events & Festivals": "#D35400",        // dark orange
   "Unusual & Quirky Experiences": "#16A085" // teal
 };
 
 function getColorForPath(path) {
   if (path.length === 0) {
-    // default gray if for some reason at root
     return "#BDC3C7";
   }
-  // top-level category
   const topCategory = path[0];
-  const baseColor = topLevelColors[topCategory] || "#7f8c8d"; // fallback gray
-  // If we go deeper, we darken the base color by 10% for each extra layer
+  const baseColor = topLevelColors[topCategory] || "#7f8c8d"; // fallback
   const depth = path.length - 1;
   return darkenColor(baseColor, depth * 0.1);
 }
 
-// A simple function to darken a hex color by a given factor 0..1
 function darkenColor(hexColor, amount = 0.1) {
-  // Remove '#'
   const hex = hexColor.replace("#", "");
-  // parse
   let r = parseInt(hex.substring(0, 2), 16);
   let g = parseInt(hex.substring(2, 4), 16);
   let b = parseInt(hex.substring(4, 6), 16);
 
-  // apply darkening
   r = Math.floor(r * (1 - amount));
   g = Math.floor(g * (1 - amount));
   b = Math.floor(b * (1 - amount));
 
-  // clamp
   r = Math.max(Math.min(r, 255), 0);
   g = Math.max(Math.min(g, 255), 0);
   b = Math.max(Math.min(b, 255), 0);
 
-  // convert back
   const rr = ("0" + r.toString(16)).slice(-2);
   const gg = ("0" + g.toString(16)).slice(-2);
   const bb = ("0" + b.toString(16)).slice(-2);
@@ -331,7 +327,7 @@ function darkenColor(hexColor, amount = 0.1) {
 }
 
 // ------------------------------------------------------------------
-// 4) SAFE GET NODE BY PATH
+// 4) GET NODE BY PATH SAFELY
 // ------------------------------------------------------------------
 function getNodeAtPath(obj, path) {
   let current = obj;
@@ -355,13 +351,13 @@ export default function Home() {
   const [matched, setMatched] = useState([]);
   const [showMatches, setShowMatches] = useState(false);
 
-  // REWARDS
+  // USER REWARD POINTS (scoreboard)
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // HISTORY (goBack)
+  // HISTORY (for goBack)
   const [history, setHistory] = useState([]);
 
-  // LOADING SCREEN
+  // LOADING SPLASH
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
     const timer = setTimeout(() => setIsShuffling(false), 2000);
@@ -371,7 +367,7 @@ export default function Home() {
   // NO MORE message
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // WEIGHTS for preference
+  // CODE PREFERENCE WEIGHTS
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -400,28 +396,32 @@ export default function Home() {
     thisLayerOptions = node;
   }
 
-  // sort by preference
-  const sortByWeight = (arr) => {
+  // Sort by code preference weights
+  const sortByPreference = (arr) => {
     const copy = [...arr];
-    copy.sort((a, b) => ( (weights[b] || 0) - (weights[a] || 0) ));
+    copy.sort((a, b) => {
+      const wA = weights[a] || 0;
+      const wB = weights[b] || 0;
+      return wB - wA; // higher weight first
+    });
     return copy;
   };
-  const sortedOptions = sortByWeight(thisLayerOptions);
+  const sortedOptions = sortByPreference(thisLayerOptions);
 
   const hasOptions =
     sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // UTILS for weighting
-  const incrementWeight = (item) => {
+  // LEVELING UP: increment/decrement code preference
+  const incPreference = (item) => {
     setWeights((prev) => ({
       ...prev,
-      [item]: (prev[item] || 0) + 1
+      [item]: (prev[item] || 0) + PREFERENCE_INC
     }));
   };
-  const decrementWeight = (item) => {
+  const decPreference = (item) => {
     setWeights((prev) => ({
       ...prev,
-      [item]: (prev[item] || 0) - 1
+      [item]: (prev[item] || 0) - PREFERENCE_DEC
     }));
   };
 
@@ -458,7 +458,7 @@ export default function Home() {
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
-    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // sub-layers exist
+    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // sub-layers
     if (Array.isArray(nextNode)) return false; // final array next
     return true;
   }
@@ -474,9 +474,12 @@ export default function Home() {
     }
   };
 
-  // CONTINUE => +10
+  // CONTINUE => user scoreboard +10, code preference +5
   const processContinue = (choice) => {
-    incrementWeight(choice);
+    // user scoreboard
+    setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
+    // code preference
+    incPreference(choice);
 
     if (isFinalOption(currentPath, choice)) {
       // final => match
@@ -487,20 +490,19 @@ export default function Home() {
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
-    setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
   };
 
-  // DISCARD => +1, next card or go back if none left
+  // DISCARD => user scoreboard +1, code preference -1
   const processDiscard = (choice) => {
-    decrementWeight(choice);
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
+    decPreference(choice);
 
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedOptions.length) {
-      // more siblings in this layer
+      // more items in this layer
       setCurrentIndex(nextIndex);
     } else {
-      // no more cards at this level
+      // no more => go back or reshuffle
       setNoMoreMessage(true);
       setTimeout(() => {
         setNoMoreMessage(false);
@@ -513,7 +515,7 @@ export default function Home() {
     }
   };
 
-  // UI LABEL
+  // LAYER NAME
   const currentLayerName =
     currentPath.length === 0
       ? "Shuffling..."
@@ -762,7 +764,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Reward Points */}
+      {/* Reward Points (user scoreboard) */}
       <div style={{ textAlign: "center", padding: "0.5rem" }}>
         <strong>Points:</strong> {rewardPoints}
       </div>
