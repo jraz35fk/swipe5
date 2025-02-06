@@ -1,13 +1,10 @@
-"use client"; // <-- Important for Next 13 to force client-side rendering
+import { useState, useEffect, useRef } from 'react';
+import TinderCard from 'react-tinder-card';
 
-import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
-
-// Dynamically import react-tinder-card with SSR disabled
-const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
-
-/** 
- * 1) BROADER TOP-LEVEL CATEGORIES
+/**
+ * 1) BROAD TOP-LEVEL CATEGORIES: Eat, Drink, Party, Explore,
+ *    Culture & History, Seasonal & Special, Shop & Leisure.
+ *    Each has multiple sub-layers, plus final items or placeholders.
  */
 const rawActivities = {
   "Eat": {
@@ -144,9 +141,7 @@ const rawActivities = {
   }
 };
 
-/** 
- * 2) Flatten single-child sublayers (avoid lonely categories)
- */
+/** 2) Flatten single-child sublayers to avoid lonely categories. */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
@@ -171,13 +166,13 @@ const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// 4) Code preference weighting
+// 4) Code preference
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
 /** 
- * 5) Some "trading card" frames for variety
- *    We'll pick them randomly on the client side only.
+ * 5) "Card frames" to style each card 
+ *    (Use a stable method so SSR and client choose the same frame each time.)
  */
 const cardFrames = [
   {
@@ -218,14 +213,22 @@ const cardFrames = [
   }
 ];
 
-// We will choose a random frame index in an effect so it never mismatches SSR -> client
-function getRandomFrameIndex() {
-  return Math.floor(Math.random() * cardFrames.length);
+/** 
+ * Stable approach to pick a frame for each item
+ * so SSR & client produce the same result. 
+ * We'll hash the item name + path to pick a frame index consistently.
+ */
+function getStableFrameForItem(item) {
+  // Simple "hash": sum char codes
+  let sum = 0;
+  for (let i = 0; i < item.length; i++) {
+    sum += item.charCodeAt(i);
+  }
+  const idx = sum % cardFrames.length;
+  return cardFrames[idx];
 }
 
-/** 
- * 6) Simple color map for top-level categories
- */
+/** 6) Also top-level color map */
 const topLevelColors = {
   "Eat": "#E74C3C",
   "Drink": "#8E44AD",
@@ -236,7 +239,7 @@ const topLevelColors = {
   "Shop & Leisure": "#16A085"
 };
 
-// Utility to darken color as we go deeper
+// Darken color
 function darkenColor(hex, amount) {
   const h = hex.replace("#", "");
   let r = parseInt(h.substring(0, 2), 16);
@@ -256,7 +259,6 @@ function darkenColor(hex, amount) {
   const bb = ("0" + b.toString(16)).slice(-2);
   return `#${rr}${gg}${bb}`;
 }
-
 function getColorForPath(path) {
   if (path.length === 0) return "#BDC3C7";
   const topCat = path[0];
@@ -265,7 +267,6 @@ function getColorForPath(path) {
   return darkenColor(base, depth * 0.1);
 }
 
-// Safe retrieval of node at path
 function getNodeAtPath(obj, path) {
   let current = obj;
   for (const seg of path) {
@@ -278,91 +279,82 @@ function getNodeAtPath(obj, path) {
   return current;
 }
 
-/**
+/** 
  * MAIN COMPONENT
  */
 export default function Home() {
-  // Path + index in the current array
+  // PATH + INDEX
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Final match (leaf choice)
+  // FINAL MATCH
   const [finalMatch, setFinalMatch] = useState(null);
 
-  // Matched items (the user "collected" these)
+  // MATCHES
   const [matched, setMatched] = useState([]);
   const [completed, setCompleted] = useState({});
   const [ratings, setRatings] = useState({});
 
-  // Modal for matches
+  // SHOW MATCHES
   const [showMatches, setShowMatches] = useState(false);
 
-  // Scoreboard
+  // USER scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // Nav history (to go back)
+  // NAV HISTORY
   const [history, setHistory] = useState([]);
 
-  // Loading splash
+  // LOADING
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
-    // Fake 2s loading
     const t = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(t);
   }, []);
 
-  // "No more" top-level overlay
+  // "No more" overlay
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // Category preference weighting (loaded from localStorage)
-  const [weights, setWeights] = useState({});
-
-  useEffect(() => {
-    // Load from localStorage after mount
+  // CODE preference
+  const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
-      if (stored) {
-        setWeights(JSON.parse(stored));
-      }
+      return stored ? JSON.parse(stored) : {};
     }
-  }, []);
-
+    return {};
+  });
   useEffect(() => {
-    // Save whenever weights changes
     if (typeof window !== "undefined") {
       localStorage.setItem("categoryWeights", JSON.stringify(weights));
     }
   }, [weights]);
 
-  // Build the array of options for this layer
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
-
   if (!node && currentPath.length === 0) {
     // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // sub-categories
+    // sub-layers
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // final array
+    // final items
     thisLayerOptions = node;
   }
 
-  // Sort by preference
+  // sort by preference
   function sortByPreference(arr) {
     const copy = [...arr];
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA; // higher weight first
+      return wB - wA;
     });
     return copy;
   }
   const sortedOptions = sortByPreference(thisLayerOptions);
+
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // Increase or decrease preference
   const incPreference = (item) => {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) + PREFERENCE_INC }));
   };
@@ -370,7 +362,18 @@ export default function Home() {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) - PREFERENCE_DEC }));
   };
 
-  // Go back
+  // Bigger Go Back button
+  const goBackButtonStyle = {
+    position: "absolute",
+    left: "1rem",
+    border: "2px solid #333",
+    background: "#eee",
+    fontSize: "1rem",
+    color: "#333",
+    cursor: "pointer",
+    padding: "0.3rem 0.7rem",
+    borderRadius: "8px"
+  };
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
@@ -382,7 +385,6 @@ export default function Home() {
     }
   };
 
-  // Reshuffle everything
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -391,7 +393,6 @@ export default function Home() {
     setHistory([]);
   };
 
-  // Final match found
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -399,7 +400,6 @@ export default function Home() {
     }
   };
 
-  // Check if a choice is "final" (no deeper branches)
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -408,7 +408,7 @@ export default function Home() {
     return true;
   }
 
-  // Handle swipes
+  // swipe logic
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -419,7 +419,6 @@ export default function Home() {
     }
   };
 
-  // "Like"/Continue => user +10, inc pref
   const processContinue = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     incPreference(choice);
@@ -427,14 +426,13 @@ export default function Home() {
     if (isFinalOption(currentPath, choice)) {
       handleFinalMatch(choice);
     } else {
-      // go deeper
+      // deeper
       setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
   };
 
-  // "Nope"/Discard => user +1, dec pref
   const processDiscard = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
     decPreference(choice);
@@ -443,46 +441,36 @@ export default function Home() {
     if (nextIndex < sortedOptions.length) {
       setCurrentIndex(nextIndex);
     } else {
-      // no more at this layer
+      // out of cards in this layer
       if (currentPath.length === 0) {
-        // top-level => discard all categories => show overlay, reshuffle
+        // top-level => user has discarded all top-level categories
         setNoMoreMessage(true);
         setTimeout(() => {
           setNoMoreMessage(false);
           reshuffleDeck();
         }, 2000);
       } else {
-        // deeper => infinite cycle
-        setCurrentIndex(0);
+        // second layer or deeper => recycle
+        setCurrentIndex(0); 
       }
     }
   };
 
-  // Mark item as completed & rating
+  // Mark completed
   const markCompleted = (item) => {
     setCompleted((prev) => ({ ...prev, [item]: true }));
   };
+
+  // Rate item
   const setItemRating = (item, stars) => {
     setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
-  // Show current "layer" name
-  const currentLayerName =
-    currentPath.length === 0 ? "Shuffling..." : currentPath[currentPath.length - 1];
+  const currentLayerName = currentPath.length === 0
+    ? "Shuffling..."
+    : currentPath[currentPath.length - 1];
 
-  // Pick a random frame index in an effect so SSR doesn't mismatch
-  const [cardFrameIndex, setCardFrameIndex] = useState(0);
-  useEffect(() => {
-    if (hasOptions) {
-      setCardFrameIndex(getRandomFrameIndex());
-    }
-  }, [currentIndex, currentPath, hasOptions]);
-
-  // Current card frame + color
-  const cardFrame = cardFrames[cardFrameIndex];
-  const cardColor = getColorForPath(currentPath);
-
-  /* ------------------ STYLES ------------------ */
+  // STYLES
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -561,21 +549,12 @@ export default function Home() {
     borderBottom: "1px solid #ccc",
     position: "relative"
   };
+
   const phoneScreenTitleStyle = {
     margin: 0,
     fontWeight: "bold"
   };
-  const goBackButtonStyle = {
-    position: "absolute",
-    left: "1rem",
-    border: "2px solid #333",
-    background: "#eee",
-    fontSize: "1rem",
-    color: "#333",
-    cursor: "pointer",
-    padding: "0.3rem 0.7rem",
-    borderRadius: "8px"
-  };
+
   const matchesButtonStyle = {
     position: "absolute",
     right: "1rem",
@@ -588,7 +567,7 @@ export default function Home() {
     borderRadius: "8px"
   };
 
-  // Main area
+  // main content
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -596,11 +575,27 @@ export default function Home() {
     alignItems: "center",
     justifyContent: "center"
   };
+
   const cardContainerStyle = {
     width: "300px",
     height: "420px",
     position: "relative"
   };
+
+  // pick a stable frame based on the item name
+  let currentItem = null;
+  let stableFrame = null;
+  if (hasOptions) {
+    currentItem = sortedOptions[currentIndex];
+    stableFrame = getStableFrameForItem(currentItem);
+  } else {
+    stableFrame = cardFrames[0]; // fallback
+  }
+
+  // also top-level color
+  const cardColor = getColorForPath(currentPath);
+
+  // combine frame style
   const cardStyle = {
     width: "100%",
     height: "100%",
@@ -609,8 +604,9 @@ export default function Home() {
     position: "relative",
     overflow: "hidden",
     justifyContent: "space-between",
-    ...cardFrame
+    ...stableFrame
   };
+
   const cardTopStyle = {
     padding: "0.5rem",
     textAlign: "center",
@@ -618,6 +614,7 @@ export default function Home() {
     color: "#fff",
     backgroundColor: "#00000044"
   };
+
   const cardTitleStyle = {
     color: cardColor,
     backgroundColor: "#ffffffcc",
@@ -625,7 +622,7 @@ export default function Home() {
     padding: "0.5rem 1rem"
   };
 
-  // Bottom bar
+  // bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -633,6 +630,7 @@ export default function Home() {
     justifyContent: "center",
     gap: "2rem"
   };
+
   const circleButtonStyle = (bgColor) => ({
     width: "60px",
     height: "60px",
@@ -647,6 +645,7 @@ export default function Home() {
     cursor: "pointer",
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
+
   const starStyle = {
     cursor: "pointer",
     marginRight: "0.25rem"
@@ -654,7 +653,7 @@ export default function Home() {
 
   return (
     <div style={appContainerStyle}>
-      {/* FINAL MATCH OVERLAY */}
+      {/* final match overlay */}
       {finalMatch && (
         <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
@@ -675,14 +674,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* "No more" overlay */}
       {noMoreMessage && (
         <div style={noMoreOverlay}>
           No more top-level options! Reshuffling...
         </div>
       )}
 
-      {/* MATCHES MODAL */}
       {showMatches && (
         <div style={matchesModalStyle}>
           <h2>My Collection</h2>
@@ -800,7 +797,10 @@ export default function Home() {
           ← Back
         </button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
-        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
+        <button
+          onClick={() => setShowMatches(true)}
+          style={matchesButtonStyle}
+        >
           ♡ Matches
         </button>
       </div>
@@ -818,9 +818,10 @@ export default function Home() {
               onSwipe={(dir) => handleSwipe(dir)}
               preventSwipe={["up", "down"]}
             >
+              {/* STABLE FRAME for this item (no random) */}
               <div style={cardStyle}>
                 <div style={cardTopStyle}>
-                  {cardFrame.name} | {currentLayerName}
+                  {stableFrame.name} | {currentLayerName}
                 </div>
                 <div
                   style={{
@@ -841,7 +842,15 @@ export default function Home() {
       </div>
 
       {/* BOTTOM BAR */}
-      <div style={bottomBarStyle}>
+      <div
+        style={{
+          borderTop: "1px solid #ccc",
+          padding: "0.5rem",
+          display: "flex",
+          justifyContent: "center",
+          gap: "2rem"
+        }}
+      >
         {hasOptions ? (
           <>
             <button
