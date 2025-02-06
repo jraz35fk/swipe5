@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
-import TinderCard from 'react-tinder-card';
+"use client"; // <-- Important for Next 13 to force client-side rendering
+
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+// Dynamically import react-tinder-card with SSR disabled
+const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
 
 /** 
- * 1) BROADER TOP-LEVEL CATEGORIES: Eat, Drink, Party, Explore,
- *    Culture & History, Seasonal & Special, Shop & Leisure.
- *    With multiple sub-layers and final placeholders.
+ * 1) BROADER TOP-LEVEL CATEGORIES
  */
 const rawActivities = {
   "Eat": {
@@ -141,7 +144,9 @@ const rawActivities = {
   }
 };
 
-/** 2) Flatten single-child sublayers to avoid lonely categories. */
+/** 
+ * 2) Flatten single-child sublayers (avoid lonely categories)
+ */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
@@ -170,7 +175,10 @@ const REWARD_CONTINUE = 10;
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
-/** 5) Some "trading card" frames for variety. */
+/** 
+ * 5) Some "trading card" frames for variety
+ *    We'll pick them randomly on the client side only.
+ */
 const cardFrames = [
   {
     name: "Pokémon Classic",
@@ -209,12 +217,15 @@ const cardFrames = [
     background: "linear-gradient(135deg, #f0f0f0 0%, #fafafa 100%)"
   }
 ];
-function getRandomCardFrame() {
-  const idx = Math.floor(Math.random() * cardFrames.length);
-  return cardFrames[idx];
+
+// We will choose a random frame index in an effect so it never mismatches SSR -> client
+function getRandomFrameIndex() {
+  return Math.floor(Math.random() * cardFrames.length);
 }
 
-/** 6) Simple color map for top-level categories. */
+/** 
+ * 6) Simple color map for top-level categories
+ */
 const topLevelColors = {
   "Eat": "#E74C3C",
   "Drink": "#8E44AD",
@@ -225,7 +236,7 @@ const topLevelColors = {
   "Shop & Leisure": "#16A085"
 };
 
-// Darken color
+// Utility to darken color as we go deeper
 function darkenColor(hex, amount) {
   const h = hex.replace("#", "");
   let r = parseInt(h.substring(0, 2), 16);
@@ -245,6 +256,7 @@ function darkenColor(hex, amount) {
   const bb = ("0" + b.toString(16)).slice(-2);
   return `#${rr}${gg}${bb}`;
 }
+
 function getColorForPath(path) {
   if (path.length === 0) return "#BDC3C7";
   const topCat = path[0];
@@ -253,7 +265,7 @@ function getColorForPath(path) {
   return darkenColor(base, depth * 0.1);
 }
 
-// Safe retrieval
+// Safe retrieval of node at path
 function getNodeAtPath(obj, path) {
   let current = obj;
   for (const seg of path) {
@@ -266,64 +278,74 @@ function getNodeAtPath(obj, path) {
   return current;
 }
 
-/** 
+/**
  * MAIN COMPONENT
  */
 export default function Home() {
-  // PATH + INDEX
+  // Path + index in the current array
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // FINAL MATCH
+  // Final match (leaf choice)
   const [finalMatch, setFinalMatch] = useState(null);
 
-  // MATCHES
+  // Matched items (the user "collected" these)
   const [matched, setMatched] = useState([]);
   const [completed, setCompleted] = useState({});
   const [ratings, setRatings] = useState({});
 
-  // SHOW MATCHES
+  // Modal for matches
   const [showMatches, setShowMatches] = useState(false);
 
-  // USER scoreboard
+  // Scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // NAV HISTORY
+  // Nav history (to go back)
   const [history, setHistory] = useState([]);
 
-  // LOADING SPLASH
+  // Loading splash
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
+    // Fake 2s loading
     const t = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(t);
   }, []);
 
-  // "No more" overlay
+  // "No more" top-level overlay
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // CODE preference
-  const [weights, setWeights] = useState(() => {
+  // Category preference weighting (loaded from localStorage)
+  const [weights, setWeights] = useState({});
+
+  useEffect(() => {
+    // Load from localStorage after mount
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
-      return stored ? JSON.parse(stored) : {};
+      if (stored) {
+        setWeights(JSON.parse(stored));
+      }
     }
-    return {};
-  });
+  }, []);
+
   useEffect(() => {
+    // Save whenever weights changes
     if (typeof window !== "undefined") {
       localStorage.setItem("categoryWeights", JSON.stringify(weights));
     }
   }, [weights]);
 
-  // Build this layer
+  // Build the array of options for this layer
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
+
   if (!node && currentPath.length === 0) {
-    // top-level categories
+    // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
+    // sub-categories
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
+    // final array
     thisLayerOptions = node;
   }
 
@@ -338,11 +360,9 @@ export default function Home() {
     return copy;
   }
   const sortedOptions = sortByPreference(thisLayerOptions);
-
-  // Do we have more cards at this layer?
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // Preference inc/dec
+  // Increase or decrease preference
   const incPreference = (item) => {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) + PREFERENCE_INC }));
   };
@@ -350,18 +370,7 @@ export default function Home() {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) - PREFERENCE_DEC }));
   };
 
-  // GO BACK => Make it bigger
-  const goBackButtonStyle = {
-    position: "absolute",
-    left: "1rem",
-    border: "2px solid #333",
-    background: "#eee",
-    fontSize: "1rem",
-    color: "#333",
-    cursor: "pointer",
-    padding: "0.3rem 0.7rem",
-    borderRadius: "8px"
-  };
+  // Go back
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
@@ -373,7 +382,7 @@ export default function Home() {
     }
   };
 
-  // RESHUFFLE
+  // Reshuffle everything
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -382,7 +391,7 @@ export default function Home() {
     setHistory([]);
   };
 
-  // FINAL MATCH
+  // Final match found
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -390,7 +399,7 @@ export default function Home() {
     }
   };
 
-  // Check if final
+  // Check if a choice is "final" (no deeper branches)
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -399,7 +408,7 @@ export default function Home() {
     return true;
   }
 
-  // SWIPE
+  // Handle swipes
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -410,7 +419,7 @@ export default function Home() {
     }
   };
 
-  // CONTINUE => user +10, code +5
+  // "Like"/Continue => user +10, inc pref
   const processContinue = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     incPreference(choice);
@@ -425,49 +434,55 @@ export default function Home() {
     }
   };
 
-  // DISCARD => user +1, code -1
+  // "Nope"/Discard => user +1, dec pref
   const processDiscard = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
     decPreference(choice);
 
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedOptions.length) {
-      // we have more siblings
       setCurrentIndex(nextIndex);
     } else {
-      // we've used up everything at this layer
+      // no more at this layer
       if (currentPath.length === 0) {
-        // top-level => if user discards all top-level categories,
-        // only then do we show "no more" overlay & reshuffle
+        // top-level => discard all categories => show overlay, reshuffle
         setNoMoreMessage(true);
         setTimeout(() => {
           setNoMoreMessage(false);
           reshuffleDeck();
         }, 2000);
       } else {
-        // second layer or deeper => "never go back to top layer if categories are exhausted,
-        // just keep recycling options indefinitely"
-        setCurrentIndex(0); // reset index => infinite cycle
+        // deeper => infinite cycle
+        setCurrentIndex(0);
       }
     }
   };
 
-  // Mark item as completed
+  // Mark item as completed & rating
   const markCompleted = (item) => {
     setCompleted((prev) => ({ ...prev, [item]: true }));
   };
-
-  // Rate item
   const setItemRating = (item, stars) => {
     setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
-  // LAYER NAME
-  const currentLayerName = currentPath.length === 0
-    ? "Shuffling..."
-    : currentPath[currentPath.length - 1];
+  // Show current "layer" name
+  const currentLayerName =
+    currentPath.length === 0 ? "Shuffling..." : currentPath[currentPath.length - 1];
 
-  // 7) UI STYLES: phone-screen layout
+  // Pick a random frame index in an effect so SSR doesn't mismatch
+  const [cardFrameIndex, setCardFrameIndex] = useState(0);
+  useEffect(() => {
+    if (hasOptions) {
+      setCardFrameIndex(getRandomFrameIndex());
+    }
+  }, [currentIndex, currentPath, hasOptions]);
+
+  // Current card frame + color
+  const cardFrame = cardFrames[cardFrameIndex];
+  const cardColor = getColorForPath(currentPath);
+
+  /* ------------------ STYLES ------------------ */
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -480,7 +495,6 @@ export default function Home() {
     position: "relative"
   };
 
-  // LOADING SPLASH
   if (isShuffling) {
     return (
       <div
@@ -538,7 +552,7 @@ export default function Home() {
     padding: "1rem"
   };
 
-  // header
+  // Header
   const headerStyle = {
     display: "flex",
     justifyContent: "center",
@@ -547,12 +561,21 @@ export default function Home() {
     borderBottom: "1px solid #ccc",
     position: "relative"
   };
-
   const phoneScreenTitleStyle = {
     margin: 0,
     fontWeight: "bold"
   };
-
+  const goBackButtonStyle = {
+    position: "absolute",
+    left: "1rem",
+    border: "2px solid #333",
+    background: "#eee",
+    fontSize: "1rem",
+    color: "#333",
+    cursor: "pointer",
+    padding: "0.3rem 0.7rem",
+    borderRadius: "8px"
+  };
   const matchesButtonStyle = {
     position: "absolute",
     right: "1rem",
@@ -565,7 +588,7 @@ export default function Home() {
     borderRadius: "8px"
   };
 
-  // main content
+  // Main area
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -573,25 +596,11 @@ export default function Home() {
     alignItems: "center",
     justifyContent: "center"
   };
-
   const cardContainerStyle = {
     width: "300px",
     height: "420px",
     position: "relative"
   };
-
-  // random card frame
-  const [cardFrame, setCardFrame] = useState(cardFrames[0]);
-  useEffect(() => {
-    if (hasOptions) {
-      setCardFrame(getRandomCardFrame());
-    }
-  }, [currentIndex, currentPath, hasOptions]);
-
-  // also top-level color
-  const cardColor = getColorForPath(currentPath);
-
-  // combine frame style
   const cardStyle = {
     width: "100%",
     height: "100%",
@@ -602,7 +611,6 @@ export default function Home() {
     justifyContent: "space-between",
     ...cardFrame
   };
-
   const cardTopStyle = {
     padding: "0.5rem",
     textAlign: "center",
@@ -610,7 +618,6 @@ export default function Home() {
     color: "#fff",
     backgroundColor: "#00000044"
   };
-
   const cardTitleStyle = {
     color: cardColor,
     backgroundColor: "#ffffffcc",
@@ -618,7 +625,7 @@ export default function Home() {
     padding: "0.5rem 1rem"
   };
 
-  // bottom bar
+  // Bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -626,7 +633,6 @@ export default function Home() {
     justifyContent: "center",
     gap: "2rem"
   };
-
   const circleButtonStyle = (bgColor) => ({
     width: "60px",
     height: "60px",
@@ -641,7 +647,6 @@ export default function Home() {
     cursor: "pointer",
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
-
   const starStyle = {
     cursor: "pointer",
     marginRight: "0.25rem"
@@ -649,7 +654,7 @@ export default function Home() {
 
   return (
     <div style={appContainerStyle}>
-      {/* final match overlay */}
+      {/* FINAL MATCH OVERLAY */}
       {finalMatch && (
         <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
@@ -670,12 +675,14 @@ export default function Home() {
         </div>
       )}
 
+      {/* "No more" overlay */}
       {noMoreMessage && (
         <div style={noMoreOverlay}>
           No more top-level options! Reshuffling...
         </div>
       )}
 
+      {/* MATCHES MODAL */}
       {showMatches && (
         <div style={matchesModalStyle}>
           <h2>My Collection</h2>
