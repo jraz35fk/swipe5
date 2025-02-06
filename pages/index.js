@@ -43,11 +43,17 @@ const Home = () => {
   const [currentWeight, setCurrentWeight] = useState(0);
 
   useEffect(() => {
-    if (!currentLayer) setCurrentLayer("Select a Category");
-  }, []);
+    if (!categories[currentLayer]) {
+      setCurrentLayer("Select a Category");
+      setCurrentOptions(Object.keys(categories));
+    }
+  }, [currentLayer]);
 
-  const isFinalOption = (option) => {
-    return typeof categories[currentLayer]?.[option] !== "object" && !Array.isArray(categories[currentLayer]?.[option]);
+  const isFinalOption = (choice) => {
+    return (
+      !categories[currentLayer]?.[choice] || 
+      (Array.isArray(categories[currentLayer]?.[choice]) && categories[currentLayer]?.[choice].length > 0)
+    );
   };
 
   const handleSwipe = (direction) => {
@@ -58,15 +64,15 @@ const Home = () => {
     if (direction === "right") {
       const nextLayer = categories[currentLayer]?.[choice];
 
-      if (typeof nextLayer === "object") {
-        // Drill deeper
+      if (nextLayer && typeof nextLayer === "object") {
+        // Move deeper
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
         setCurrentWeight((prev) => prev + 1);
       } else if (Array.isArray(nextLayer)) {
-        // Final layer reached
+        // Move to specific activity layer
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(nextLayer);
@@ -76,12 +82,12 @@ const Home = () => {
         if (currentWeight >= WEIGHT_THRESHOLD && isFinalOption(choice)) {
           handleFinalMatch(choice);
         } else {
-          // Keep drilling deeper
+          // Keep drilling down
           setCurrentWeight((prev) => prev + 1);
         }
       }
     } else {
-      // Move to next option at same level
+      // Move to next option at the same level
       setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
     }
   };
@@ -109,7 +115,7 @@ const Home = () => {
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
       setCurrentIndex(0);
-      setCurrentWeight((prev) => (prev > 0 ? prev - 1 : 0)); // Reduce weight on back
+      setCurrentWeight((prev) => (prev > 0 ? prev - 1 : 0));
       setHistory([...history]);
     }
   };
