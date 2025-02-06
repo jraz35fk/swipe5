@@ -2,218 +2,185 @@ import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
 /**
- * 1) MASTER CATEGORIES OBJECT
- *    Includes all your top-level + nested subcategories + final items.
- *    (Combined from your “Eating & Drinking,” “Culture & History,” etc.)
+ * MASTER CATEGORIES OBJECT
+ * 
+ * We have fewer TOP-level categories, each with multiple SUB-layers,
+ * then deeper THIRD-layers, and finally ARRAYS of final items.
+ * 
+ * Feel free to reorganize or add more layers if you like!
  */
 const categories = {
   "Eating & Drinking": {
-    "Seafood": {
-      "Crab Houses": [
-        "LP Steamers",
-        "Thames Street Oyster House",
-        "Nick’s Fish House",
-        "The Choptank",
-        "Faidley’s Seafood"
-      ],
-      "Oyster Bars": [
-        "Ryleigh’s Oyster",
-        "The Choptank",
-        "Thames Street Oyster House"
+    "Restaurants": {
+      "Seafood": {
+        "Crab Houses": [
+          "LP Steamers",
+          "Thames Street Oyster House",
+          "Nick’s Fish House",
+          "The Choptank",
+          "Faidley’s Seafood"
+        ],
+        "Oyster Bars": [
+          "Ryleigh’s Oyster",
+          "The Choptank",
+          "Thames Street Oyster House"
+        ]
+      },
+      "International Cuisine": [
+        "Ekiben",
+        "Little Italy Restaurants",
+        "The Helmand",
+        "Peter’s Pour House",
+        "La Cuchara"
       ]
     },
-    "Breweries & Distilleries": [
-      "Heavy Seas Alehouse",
-      "Diamondback Brewing Co.",
-      "Union Craft Brewing",
-      "Sagamore Spirit Distillery"
-    ],
-    "Speakeasies": [
+    "Breweries & Distilleries": {
+      "Craft Breweries": [
+        "Union Craft Brewing",
+        "Checkerspot Brewing Co.",
+        "Diamondback Brewing Co.",
+        "Mobtown Brewing Co.",
+        "Heavy Seas Beer",
+        "Brewer’s Art"
+      ],
+      "Distilleries & Mead": [
+        "Sagamore Spirit Distillery",
+        "Baltimore Spirits Company",
+        "Old Line Spirits",
+        "Charm City Meadworks"
+      ],
+      "Tours": [
+        "Guinness Open Gate Brewery",
+        "City Brew Tours"
+      ]
+    },
+    "Nightlife": [
       "W.C. Harlan",
       "The Elk Room",
       "Dutch Courage",
-      "Sugarvale"
+      "Sugarvale",
+      "Max’s Taphouse",
+      "The Horse You Came In On Saloon",
+      "Rams Head Live",
+      "The 8x10",
+      "Soundstage"
     ]
   },
-  "Culture & History": {
-    "Historical Landmarks": [
-      "Fort McHenry",
-      "Edgar Allan Poe House",
-      "B&O Railroad Museum"
-    ],
-    "Art": {
-      "Art Galleries": [
-        "Walters Art Gallery",
+
+  "Arts, Culture & Entertainment": {
+    "Museums & Landmarks": {
+      "Museums": [
         "Baltimore Museum of Art",
-        "American Visionary Art Museum"
+        "Walters Art Gallery",
+        "American Visionary Art Museum",
+        "Maryland Science Center",
+        "Port Discovery Children’s Museum"
       ],
-      "Street Art": ["Graffiti Alley", "MICA Public Art"]
+      "Historic Sites": [
+        "Fort McHenry",
+        "Edgar Allan Poe House",
+        "B&O Railroad Museum",
+        "Bromo Seltzer Arts Tower",
+        "Great Blacks in Wax Museum"
+      ]
     },
-    "Music & Performance": [
+    "Performing Arts": [
       "Baltimore Symphony Orchestra",
-      "Keystone Korner (Live Jazz)",
-      "Ottobar (Indie/Alt)"
-    ]
+      "Hippodrome Theatre",
+      "Ottobar",
+      "Keystone Korner"
+    ],
+    "Festivals & Seasonal": {
+      "Spring & Summer": [
+        "Opening Day at Camden Yards",
+        "Charm City Bluegrass Festival",
+        "Maryland Film Festival",
+        "HonFest",
+        "Baltimore Pride",
+        "Artscape"
+      ],
+      "Fall & Winter": [
+        "Fell’s Point Fun Festival",
+        "Great Halloween Lantern Parade",
+        "Miracle on 34th Street",
+        "German Christmas Village",
+        "Frozen Harbor Music Festival"
+      ]
+    }
   },
-  "Outdoor Activities": {
-    "Parks & Green Spaces": [
+
+  "Outdoors & Recreation": {
+    "Parks & Hiking": [
       "Federal Hill Park",
       "Patterson Park",
-      "Cylburn Arboretum"
+      "Cylburn Arboretum",
+      "Patapsco Valley State Park Trails"
     ],
     "Water Activities": [
       "Kayaking at Inner Harbor",
-      "Waterfront Promenade Walk"
+      "Waterfront Promenade Walk",
+      "Urban Pirates Cruise"
     ],
-    "Hiking & Nature": ["Patapsco Valley State Park Trails"]
-  },
-  "Nightlife": {
-    "Cocktail Bars": ["The Brewer’s Art", "Sugarvale"],
-    "Dive Bars": ["Max’s Taphouse", "The Horse You Came In On Saloon"],
-    "Live Music Venues": ["Rams Head Live", "The 8x10", "Soundstage"]
-  },
-  "Breweries, Wineries & Distilleries": {
-    "Distilleries": [
-      "Sagamore Spirit Distillery",
-      "Baltimore Spirits Company",
-      "Old Line Spirits"
-    ],
-    "Breweries": [
-      "Union Craft Brewing",
-      "Checkerspot Brewing Co.",
-      "Diamondback Brewing Co.",
-      "Mobtown Brewing Co.",
-      "Heavy Seas Beer",
-      "Brewer’s Art"
-    ],
-    "Mead & Wine": [
-      "Charm City Meadworks"
-    ],
-    "Experiences & Tours": [
-      "Guinness Open Gate Brewery",
-      "City Brew Tours"
-    ]
-  },
-  "Seasonal Events & Festivals": {
-    "Spring": [
-      "Opening Day at Camden Yards",
-      "Charm City Bluegrass Festival",
-      "Maryland Film Festival",
-      "Flower Mart",
-      "Kinetic Sculpture Race",
-      "Wine Village at Inner Harbor"
-    ],
-    "Summer": [
-      "Preakness Stakes",
-      "HonFest",
-      "Baltimore Pride",
-      "AFRAM",
-      "Artscape",
-      "Fourth of July Fireworks",
-      "Baltimore Caribbean Carnival",
-      "Arts & Drafts at the Zoo",
-      "Waterfront Wellness"
-    ],
-    "Fall": [
-      "Fell’s Point Fun Festival",
-      "Baltimore Running Festival",
-      "Defenders Day at Fort McHenry",
-      "Edgar Allan Poe Festival",
-      "Pigtown Festival",
-      "Great Halloween Lantern Parade",
-      "Fells Point Ghost Tours"
-    ],
-    "Winter": [
-      "Miracle on 34th Street",
-      "German Christmas Village",
-      "Lighting of the Washington Monument",
-      "Dollar or Free Museum Days",
-      "MLK Parade",
-      "Frozen Harbor Music Festival",
-      "Chinese New Year Celebrations"
-    ],
-    "All Year": [
-      "Baltimore Book Festival",
-      "Restaurant Week"
-    ]
-  },
-  "Recreation & Sports": {
-    "Professional Sports": [
+    "Sports & Adventures": [
       "Oriole Park at Camden Yards",
-      "M&T Bank Stadium"
-    ],
-    "Active Adventures": [
-      "Inner Harbor Kayaking",
-      "Urban Pirates Cruise",
-      "Baltimore Waterfront Bike Route",
-      "Ice Skating at Inner Harbor",
+      "M&T Bank Stadium",
       "Topgolf Baltimore",
       "Urban Axes",
-      "Earth Treks Timonium",
-      "Leakin Park Miniature Steam Trains",
-      "Baltimore Bike Party",
-      "Duckpin Bowling",
-      "Route 40 Paintball"
-    ],
-    "Casino & Gaming": [
-      "Horseshoe Casino"
+      "Leakin Park Miniature Steam Trains"
     ]
   },
-  "Family-Friendly Attractions": {
-    "Museums & Indoor": [
-      "National Aquarium",
-      "Port Discovery Children’s Museum",
-      "Maryland Science Center",
-      "B&O Railroad Museum",
-      "American Visionary Art Museum"
+
+  "Events & Festivals": {
+    "Major Annual Events": [
+      "Preakness Stakes",
+      "AFRAM",
+      "Baltimore Caribbean Carnival",
+      "Baltimore Book Festival",
+      "Restaurant Week"
     ],
-    "Outdoor & Animals": [
-      "Maryland Zoo",
-      "Lake Montebello"
+    "Neighborhood Festivals": [
+      "Pigtown Festival",
+      "Fells Point Ghost Tours",
+      "Edgar Allan Poe Festival",
+      "Baltimore Running Festival",
+      "Kinetic Sculpture Race"
     ],
-    "Unique Experiences": [
-      "Medieval Times Dinner & Tournament"
+    "Holiday Celebrations": [
+      "Fourth of July Fireworks",
+      "Lighting of the Washington Monument",
+      "Chinese New Year Celebrations",
+      "MLK Parade"
     ]
   },
-  "Shopping & Markets": {
-    "Indoor Markets": [
+
+  "Shopping & Hidden Gems": {
+    "Markets & Bazaars": [
       "Lexington Market",
       "Broadway Market",
       "Cross Street Market",
+      "Baltimore Farmers’ Market & Bazaar",
       "Belvedere Square Market"
     ],
-    "Outdoor Markets": [
-      "Baltimore Farmers’ Market & Bazaar"
-    ],
-    "Unique Shops & Thrift": [
-      "Atomic Books",
-      "The Sound Garden",
-      "The Bazaar",
-      "Village Thrift",
-      "Keepers Vintage",
-      "The Book Thing"
-    ],
-    "Neighborhood Shopping": [
+    "Quirky & Offbeat": {
+      "Shops & Oddities": [
+        "Atomic Books",
+        "The Sound Garden",
+        "The Bazaar",
+        "Village Thrift",
+        "Keepers Vintage",
+        "The Book Thing"
+      ],
+      "Attractions": [
+        "Papermoon Diner",
+        "Lexington Market Catacombs Tour",
+        "Graffiti Alley",
+        "Volunteer for a Day"
+      ]
+    },
+    "Neighborhood Strolls": [
       "Hampden’s “The Avenue”",
-      "Fells Point Antiques & Shops"
-    ]
-  },
-  "Hidden Gems & Offbeat Attractions": {
-    "Quirky Museums & Landmarks": [
-      "Bromo Seltzer Arts Tower",
-      "Great Blacks in Wax Museum",
-      "The Horse You Came In On Saloon"
-    ],
-    "Odd & Offbeat": [
-      "Papermoon Diner",
-      "Self-Guided Mural Tour",
-      "BUZZ Lab (DIY biohacking)",
-      "Lexington Market Catacombs Tour"
-    ],
-    "Local Volunteering & Tours": [
-      "Volunteer for a Day",
-      "Baltimore Heritage Walk",
-      "Attend a Neighborhood Festival"
+      "Fells Point Antiques & Shops",
+      "Baltimore Heritage Walk"
     ]
   }
 };
@@ -225,38 +192,51 @@ const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// ----------------------
-// IMAGE MAP - Provide custom images for certain items
-// Everything else uses a fallback from Unsplash
-// (Replace with your real images or an API in production)
-// ----------------------
-const imageMap = {
-  "Nick’s Fish House":
-    "https://images.unsplash.com/photo-1562799183-9ccda1b69721?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
-  "Union Craft Brewing":
-    "https://images.unsplash.com/photo-1591396034575-428db5cecc92?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
-  "Sagamore Spirit Distillery":
-    "https://images.unsplash.com/photo-1580502308389-011787fe5f14?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
-  "Fort McHenry":
-    "https://images.unsplash.com/photo-1604582139894-55cbf1dacb8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
-  "Miracle on 34th Street":
-    "https://images.unsplash.com/photo-1607881772611-c43e056576cc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
-  "The Horse You Came In On Saloon":
-    "https://images.unsplash.com/photo-1582066830726-74ab48747d8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80",
-};
-
-/** Return an image URL for the given item name. If not found, use fallback. */
-function getImageUrl(itemName) {
-  if (imageMap[itemName]) {
-    return imageMap[itemName];
+// ---------------------------------------
+// GOOGLE PLACES IMAGE FETCH (for final items)
+// ---------------------------------------
+async function fetchGooglePlacesImage(placeName) {
+  // Make sure you have NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env.local
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    // If no API key is found, fallback to a random placeholder
+    return "https://source.unsplash.com/collection/190727/600x800";
   }
-  // Fallback from Unsplash (random city photo or random scenic)
-  return "https://source.unsplash.com/collection/190727/600x800"; 
-  // You could also do: `https://picsum.photos/600/800` or a static placeholder
+
+  try {
+    // 1) Find the place by name
+    const findUrl = new URL("https://maps.googleapis.com/maps/api/place/findplacefromtext/json");
+    findUrl.searchParams.set("key", apiKey);
+    findUrl.searchParams.set("input", placeName);
+    findUrl.searchParams.set("inputtype", "textquery");
+    // we request 'photos' field so we can get photo_reference
+    findUrl.searchParams.set("fields", "photos,formatted_address,name,place_id");
+
+    const findRes = await fetch(findUrl.toString());
+    const findData = await findRes.json();
+    if (
+      !findData.candidates ||
+      findData.candidates.length === 0 ||
+      !findData.candidates[0].photos
+    ) {
+      // fallback
+      return "https://source.unsplash.com/collection/190727/600x800";
+    }
+
+    const photoRef = findData.candidates[0].photos[0].photo_reference;
+    // 2) Construct the photo URL (we don't actually fetch the binary; we let the <img> do that)
+    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photoRef}&key=${apiKey}`;
+
+    return photoUrl;
+  } catch (err) {
+    console.error("Failed to fetch Google Places image:", err);
+    // fallback
+    return "https://source.unsplash.com/collection/190727/600x800";
+  }
 }
 
 // ----------------------
-// HELPER: SAFELY TRAVERSE NESTED DATA
+// HELPER: Safely traverse nested data by "path" array
 // ----------------------
 function getNodeAtPath(data, path) {
   let current = data;
@@ -271,18 +251,23 @@ function getNodeAtPath(data, path) {
 }
 
 export default function Home() {
-  // PATH + INDEX
+  // PATH + INDEX for multi-layer navigation
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // FINAL MATCH
+  // If final item is chosen
   const [finalMatch, setFinalMatch] = useState(null);
+
+  // Keep a list of matched items, stored in memory (clears on refresh)
   const [matched, setMatched] = useState([]);
 
-  // REWARDS
+  // Show/hide the "My Matches" panel
+  const [showMatches, setShowMatches] = useState(false);
+
+  // Basic "Reward points" for the user
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // WEIGHTS (FOR PREFERENCE)
+  // Weighted preference system (like our "learning" for the code)
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -296,51 +281,80 @@ export default function Home() {
     }
   }, [weights]);
 
-  // HISTORY (FOR "GO BACK")
+  // For "Go Back" functionality
   const [history, setHistory] = useState([]);
+
+  // The image for the current card if it's final
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
 
   // GET CURRENT NODE
   const node = getNodeAtPath(categories, currentPath);
 
-  // BUILD THIS LAYER'S OPTIONS
+  // DETERMINE THIS LAYER'S OPTIONS
   let thisLayerOptions = [];
   if (currentPath.length === 0 && !node) {
-    // top-level
+    // Top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // subcategories
+    // Subcategories (object keys)
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // final items
+    // Final items
     thisLayerOptions = node;
   }
 
-  // SORT BY WEIGHT (DESC)
+  // SORT OPTIONS BY DESCENDING WEIGHT
   const sortByWeight = (arr) => {
     const copy = [...arr];
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA; 
+      return wB - wA;
     });
     return copy;
   };
   const sortedOptions = sortByWeight(thisLayerOptions);
 
-  const hasOptions =
-    sortedOptions.length > 0 && currentIndex < sortedOptions.length;
+  // Check if we still have cards at this layer
+  const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // DETERMINE IF AN OPTION IS FINAL
+  // DETERMINE IF CHOICE IS FINAL
   const isFinalOption = (choice) => {
     if (Array.isArray(node)) {
-      return true; // we're already looking at final items
+      // We're already looking at a final array
+      return true;
     }
     const nextNode = getNodeAtPath(categories, [...currentPath, choice]);
     if (!nextNode) return true;
-    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false;
-    if (Array.isArray(nextNode)) return false;
+    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // more sub-layers
+    if (Array.isArray(nextNode)) return false; // final array is next
     return true;
   };
+
+  // Whenever the "currentIndex" changes (or the user navigates deeper),
+  // if the new item is final, fetch a real image from Google. Otherwise, fallback.
+  useEffect(() => {
+    if (!hasOptions) {
+      setCurrentImageUrl("");
+      return;
+    }
+
+    const currentChoice = sortedOptions[currentIndex];
+    if (!currentChoice) {
+      setCurrentImageUrl("");
+      return;
+    }
+
+    // If it's final, fetch from Google Places. Otherwise, set a placeholder.
+    if (isFinalOption(currentChoice)) {
+      fetchGooglePlacesImage(currentChoice).then((url) => {
+        setCurrentImageUrl(url || "");
+      });
+    } else {
+      // Middle-layer category
+      setCurrentImageUrl("https://source.unsplash.com/collection/190727/600x800");
+    }
+  }, [currentIndex, currentPath, hasOptions]);
 
   // -----------------------
   // SWIPE HANDLERS
@@ -362,10 +376,7 @@ export default function Home() {
       handleFinalMatch(choice);
     } else {
       // go deeper
-      setHistory((prev) => [
-        ...prev,
-        { path: [...currentPath], index: currentIndex }
-      ]);
+      setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
@@ -381,25 +392,27 @@ export default function Home() {
 
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
+    // Add to matched array in memory
     if (!matched.includes(choice)) {
       const updated = [...matched, choice];
       setMatched(updated);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("matched", JSON.stringify(updated));
-      }
     }
   };
 
+  // GO BACK
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
-      const newHistory = history.slice(0, -1);
+      const newHist = history.slice(0, -1);
+
       setCurrentPath(prev.path);
       setCurrentIndex(prev.index);
-      setHistory(newHistory);
+      setHistory(newHist);
+      setFinalMatch(null); // clear final match if we had one
     }
   };
 
+  // RESHUFFLE: Reset to top-level
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -421,28 +434,47 @@ export default function Home() {
     }));
   };
 
-  // UI LABEL FOR THE CURRENT LAYER
+  // Get a display string for the current layer
   const currentLayerName =
     currentPath.length === 0
       ? "Select a Category"
       : currentPath[currentPath.length - 1];
 
-  // STYLES: container, card, overlay, buttons, etc.
+  // -----------------------
+  // UI STYLING
+  // -----------------------
   const appContainerStyle = {
     minHeight: "100vh",
-    background: "#fafafa",
+    background: "#f0f0f0",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    padding: "1rem",
-    fontFamily: "sans-serif"
+    position: "relative",
+    fontFamily: "sans-serif",
+    padding: "1rem"
+  };
+
+  const headerStyle = {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: "0.5rem",
+    alignItems: "center"
+  };
+
+  const buttonLinkStyle = {
+    border: "none",
+    background: "none",
+    color: "#333",
+    cursor: "pointer",
+    fontSize: "1rem"
   };
 
   const cardContainerStyle = {
     position: "relative",
     width: "320px",
     height: "480px",
-    marginTop: "2rem"
+    marginTop: "1rem"
   };
 
   const cardStyle = {
@@ -464,8 +496,7 @@ export default function Home() {
     bottom: 0,
     width: "100%",
     padding: "1rem",
-    background:
-      "linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(255,255,255,0) 100%)",
+    background: "linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(255,255,255,0) 100%)",
     color: "#fff"
   };
 
@@ -492,77 +523,163 @@ export default function Home() {
     transition: "transform 0.2s"
   });
 
+  // -----------
+  // SPLASH SCREEN FOR FINAL MATCH
+  // -----------
+  const splashStyle = {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    zIndex: 999
+  };
+
+  // -----------
+  // MATCHES SIDEBAR/MODAL
+  // -----------
+  const matchesModalStyle = {
+    position: "fixed",
+    top: 0,
+    right: 0,
+    width: "300px",
+    height: "100%",
+    backgroundColor: "#fff",
+    boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+    zIndex: 998,
+    padding: "1rem",
+    overflowY: "auto"
+  };
+
   return (
     <div style={appContainerStyle}>
-      <div style={{ width: "100%", display: "flex", justifyContent: "space-between" }}>
-        {/* "Go Back" and "Reshuffle" at top */}
-        <button onClick={goBack} style={{ marginRight: "auto", border: "none", background: "none", color: "#333", cursor: "pointer" }}>
+      {/* HEADER */}
+      <div style={headerStyle}>
+        <button onClick={goBack} style={buttonLinkStyle}>
           ← Go Back
         </button>
-        <p style={{ margin: 0, fontWeight: "bold" }}>{currentLayerName}</p>
-        <button onClick={reshuffleDeck} style={{ marginLeft: "auto", border: "none", background: "none", color: "#333", cursor: "pointer" }}>
-          Reshuffle
-        </button>
+        <h3 style={{ margin: 0 }}>{currentLayerName}</h3>
+        <div>
+          <button onClick={() => setShowMatches(true)} style={{ ...buttonLinkStyle, marginRight: "1rem" }}>
+            View My Matches
+          </button>
+          <button onClick={reshuffleDeck} style={buttonLinkStyle}>
+            Reshuffle
+          </button>
+        </div>
       </div>
 
       <p>Reward Points: {rewardPoints}</p>
 
-      {finalMatch ? (
-        <div>
-          <h3>Match Found: {finalMatch}</h3>
-          <button onClick={reshuffleDeck}>Start Over</button>
+      {/* If we found a final match, show a "Splash Screen" */}
+      {finalMatch && (
+        <div style={splashStyle}>
+          <h1>Match Found!</h1>
+          <h2>{finalMatch}</h2>
+          <button
+            onClick={() => setFinalMatch(null)}
+            style={{
+              padding: "0.5rem 1rem",
+              fontSize: "1rem",
+              background: "#2ECC71",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "1rem"
+            }}
+          >
+            Continue Browsing
+          </button>
         </div>
-      ) : (
-        <>
-          <div style={cardContainerStyle}>
-            {hasOptions ? (
-              <TinderCard
-                key={sortedOptions[currentIndex]}
-                onSwipe={(dir) => handleSwipe(dir)}
-                preventSwipe={["up", "down"]}
-              >
-                {/* Card with Background Image */}
-                <div
-                  style={{
-                    ...cardStyle,
-                    backgroundImage: `url(${getImageUrl(
-                      sortedOptions[currentIndex]
-                    )})`
-                  }}
-                >
-                  <div style={cardOverlayStyle}>
-                    <h2 style={{ margin: 0 }}>
-                      {sortedOptions[currentIndex]}
-                    </h2>
-                  </div>
-                </div>
-              </TinderCard>
-            ) : (
-              <p style={{ textAlign: "center", marginTop: "2rem" }}>
-                No more options at this level.
-              </p>
-            )}
-          </div>
+      )}
 
-          {hasOptions && (
-            <div style={buttonRowStyle}>
-              <button
-                style={circleButtonStyle("#F75D59")}
-                onClick={() => handleSwipe("left")}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                ✕
-              </button>
-              <button
-                style={circleButtonStyle("#2ECC71")}
-                onClick={() => handleSwipe("right")}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                ♥
-              </button>
+      {/* Card Container */}
+      <div style={cardContainerStyle}>
+        {hasOptions ? (
+          <TinderCard
+            key={sortedOptions[currentIndex]}
+            onSwipe={(dir) => handleSwipe(dir)}
+            preventSwipe={["up", "down"]}
+          >
+            <div
+              style={{
+                ...cardStyle,
+                backgroundImage: `url(${currentImageUrl})`
+              }}
+            >
+              <div style={cardOverlayStyle}>
+                <h2 style={{ margin: 0 }}>{sortedOptions[currentIndex]}</h2>
+              </div>
             </div>
+          </TinderCard>
+        ) : (
+          <p style={{ textAlign: "center", marginTop: "2rem" }}>
+            No more options at this level.
+          </p>
+        )}
+      </div>
+
+      {/* Swipe Buttons */}
+      {hasOptions && (
+        <div style={buttonRowStyle}>
+          <button
+            style={circleButtonStyle("#F75D59")}
+            onClick={() => handleSwipe("left")}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            ✕
+          </button>
+          <button
+            style={circleButtonStyle("#2ECC71")}
+            onClick={() => handleSwipe("right")}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            ♥
+          </button>
+        </div>
+      )}
+
+      {/* MATCHES SIDEBAR */}
+      {showMatches && (
+        <div style={matchesModalStyle}>
+          <h2>My Matches</h2>
+          {matched.length === 0 ? (
+            <p>No matches yet.</p>
+          ) : (
+            matched.map((m, idx) => (
+              <div
+                key={idx}
+                style={{
+                  marginBottom: "0.5rem",
+                  padding: "0.5rem",
+                  borderBottom: "1px solid #ccc"
+                }}
+              >
+                {m}
+              </div>
+            ))
           )}
-        </>
+          <button
+            onClick={() => setShowMatches(false)}
+            style={{
+              marginTop: "1rem",
+              padding: "0.5rem 1rem",
+              border: "none",
+              background: "#333",
+              color: "#fff",
+              borderRadius: "4px",
+              cursor: "pointer"
+            }}
+          >
+            Close
+          </button>
+        </div>
       )}
     </div>
   );
