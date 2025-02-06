@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
 /**
- * FULL BALTIMORE ACTIVITIES DATA (from your provided list).
- * We'll store it in `categories` to use in the swipe logic.
+ * ------------------------------------------------------------------
+ * 1) Original BALTIMORE ACTIVITIES data from your message
+ * ------------------------------------------------------------------
  */
-const categories = {
+const rawBaltimoreActivities = {
   "Eating & Drinking": {
     "Hidden Gems & Highly-Rated Restaurants": [
       "Puerto 511",
@@ -233,6 +234,43 @@ const categories = {
   }
 };
 
+// ------------------------------------------------------------------
+// 2) Flatten Single-Child Layers
+//    If an object has exactly 1 key and that key is also an object,
+//    we merge them into the parent. This repeats until no single-child
+//    layers remain, ensuring no "one-option sub-layers" exist.
+// ------------------------------------------------------------------
+function flattenSingleChildLayers(obj) {
+  // Base case: if it's not an object or it's an array, return as is
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    return obj;
+  }
+
+  let keys = Object.keys(obj);
+  // If there's exactly 1 child and that child is also an object, merge them
+  while (keys.length === 1) {
+    const onlyKey = keys[0];
+    const child = obj[onlyKey];
+    if (child && typeof child === "object" && !Array.isArray(child)) {
+      // Merge child into the parent
+      obj = { ...child };
+      keys = Object.keys(obj);
+    } else {
+      // no more merging possible
+      break;
+    }
+  }
+
+  // Now recursively flatten each child
+  for (const k of Object.keys(obj)) {
+    obj[k] = flattenSingleChildLayers(obj[k]);
+  }
+
+  return obj;
+}
+
+const categories = flattenSingleChildLayers(rawBaltimoreActivities);
+
 // ----------------------
 // REWARD CONSTANTS
 // ----------------------
@@ -240,9 +278,63 @@ const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// Safe helper to get nested object/array by path
-function getNodeAtPath(data, path) {
-  let current = data;
+// ------------------------------------------------------------------
+// 3) Color Map & Helper: color-coding by top-level and sub-layer depth
+// ------------------------------------------------------------------
+const topLevelColors = {
+  "Eating & Drinking": "#E74C3C",        // a red
+  "Nightlife & Entertainment": "#8E44AD",// purple
+  "Outdoors & Nature": "#27AE60",        // green
+  "Historic & Cultural Landmarks": "#2980B9", // blue
+  "Shopping & Markets": "#F39C12",       // orange
+  "Events & Festivals": "#D35400",       // darker orange
+  "Unusual & Quirky Experiences": "#16A085" // teal
+};
+
+function getColorForPath(path) {
+  if (path.length === 0) {
+    // default gray if for some reason at root
+    return "#BDC3C7";
+  }
+  // top-level category
+  const topCategory = path[0];
+  const baseColor = topLevelColors[topCategory] || "#7f8c8d"; // fallback gray
+  // If we go deeper, we darken the base color by 10% for each extra layer
+  const depth = path.length - 1;
+  return darkenColor(baseColor, depth * 0.1);
+}
+
+// A simple function to darken a hex color by a given factor 0..1
+function darkenColor(hexColor, amount = 0.1) {
+  // Remove '#'
+  const hex = hexColor.replace("#", "");
+  // parse
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  // apply darkening
+  r = Math.floor(r * (1 - amount));
+  g = Math.floor(g * (1 - amount));
+  b = Math.floor(b * (1 - amount));
+
+  // clamp
+  r = Math.max(Math.min(r, 255), 0);
+  g = Math.max(Math.min(g, 255), 0);
+  b = Math.max(Math.min(b, 255), 0);
+
+  // convert back
+  const rr = ("0" + r.toString(16)).slice(-2);
+  const gg = ("0" + g.toString(16)).slice(-2);
+  const bb = ("0" + b.toString(16)).slice(-2);
+  return `#${rr}${gg}${bb}`;
+}
+
+// ------------------------------------------------------------------
+// 4) SAFE GET NODE BY PATH
+// ------------------------------------------------------------------
+function getNodeAtPath(obj, path) {
+  let current = obj;
   for (const segment of path) {
     if (current && typeof current === "object" && segment in current) {
       current = current[segment];
@@ -258,7 +350,7 @@ export default function Home() {
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // FINAL MATCH & MATCHES
+  // FINAL MATCH
   const [finalMatch, setFinalMatch] = useState(null);
   const [matched, setMatched] = useState([]);
   const [showMatches, setShowMatches] = useState(false);
@@ -266,20 +358,20 @@ export default function Home() {
   // REWARDS
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // HISTORY for "goBack"
+  // HISTORY (goBack)
   const [history, setHistory] = useState([]);
 
-  // LOADING SPLASH
+  // LOADING SCREEN
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
     const timer = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(timer);
   }, []);
 
-  // NO MORE CARDS message
+  // NO MORE message
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // WEIGHTS (for preference learning)
+  // WEIGHTS for preference
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -297,7 +389,7 @@ export default function Home() {
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
 
-  if (currentPath.length === 0 && !node) {
+  if (!node && currentPath.length === 0) {
     // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
@@ -308,7 +400,7 @@ export default function Home() {
     thisLayerOptions = node;
   }
 
-  // SORT BY WEIGHT
+  // sort by preference
   const sortByWeight = (arr) => {
     const copy = [...arr];
     copy.sort((a, b) => ( (weights[b] || 0) - (weights[a] || 0) ));
@@ -319,7 +411,7 @@ export default function Home() {
   const hasOptions =
     sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // UTILS: increment/decrement
+  // UTILS for weighting
   const incrementWeight = (item) => {
     setWeights((prev) => ({
       ...prev,
@@ -354,7 +446,7 @@ export default function Home() {
     setHistory([]);
   };
 
-  // MATCH
+  // FINAL MATCH
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -362,10 +454,10 @@ export default function Home() {
     }
   };
 
-  // DETERMINE IF IT'S A FINAL OPTION
+  // DETERMINE IF FINAL
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
-    if (!nextNode) return true; // no sub-layer
+    if (!nextNode) return true;
     if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // sub-layers exist
     if (Array.isArray(nextNode)) return false; // final array next
     return true;
@@ -387,7 +479,7 @@ export default function Home() {
     incrementWeight(choice);
 
     if (isFinalOption(currentPath, choice)) {
-      // final
+      // final => match
       handleFinalMatch(choice);
     } else {
       // deeper
@@ -398,16 +490,17 @@ export default function Home() {
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
   };
 
-  // DISCARD => +1, next card if any, else back/reshuffle
+  // DISCARD => +1, next card or go back if none left
   const processDiscard = (choice) => {
     decrementWeight(choice);
-    const nextIndex = currentIndex + 1;
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
 
+    const nextIndex = currentIndex + 1;
     if (nextIndex < sortedOptions.length) {
+      // more siblings in this layer
       setCurrentIndex(nextIndex);
     } else {
-      // no more cards at this layer
+      // no more cards at this level
       setNoMoreMessage(true);
       setTimeout(() => {
         setNoMoreMessage(false);
@@ -420,7 +513,7 @@ export default function Home() {
     }
   };
 
-  // UI
+  // UI LABEL
   const currentLayerName =
     currentPath.length === 0
       ? "Shuffling..."
@@ -439,7 +532,6 @@ export default function Home() {
     position: "relative"
   };
 
-  // LOADING
   if (isShuffling) {
     return (
       <div
@@ -541,20 +633,21 @@ export default function Home() {
     justifyContent: "center"
   };
 
-  // Card container
   const cardContainerStyle = {
     width: "300px",
     height: "420px",
     position: "relative"
   };
 
+  // Card color
+  const cardBackgroundColor = getColorForPath(currentPath);
+
   const cardStyle = {
     width: "100%",
     height: "100%",
     borderRadius: "12px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
+    backgroundColor: cardBackgroundColor,
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
@@ -564,10 +657,12 @@ export default function Home() {
   const cardOverlayStyle = {
     background: "linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 100%)",
     color: "#fff",
-    padding: "1rem"
+    padding: "1rem",
+    display: "flex",
+    alignItems: "flex-end",
+    height: "100%"
   };
 
-  // Bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -591,16 +686,9 @@ export default function Home() {
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
 
-  // Simple fallback image generator
-  const getImageUrl = (name) => {
-    // Could use a real map or an API
-    // Fallback to Unsplash
-    return "https://source.unsplash.com/collection/190727/600x800";
-  };
-
   return (
     <div style={appContainerStyle}>
-      {/* FINAL MATCH OVERLAY */}
+      {/* Final match overlay */}
       {finalMatch && (
         <div style={finalMatchOverlayStyle}>
           <h1>Match Found!</h1>
@@ -621,14 +709,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* NO MORE CARDS MESSAGE */}
+      {/* No more overlay */}
       {noMoreMessage && (
         <div style={noMoreOverlayStyle}>
           No more options at this layer! Going back one level…
         </div>
       )}
 
-      {/* MATCHES OVERLAY */}
+      {/* Matches panel */}
       {showMatches && (
         <div style={matchesModalStyle}>
           <h2>My Matches</h2>
@@ -667,24 +755,19 @@ export default function Home() {
 
       {/* HEADER */}
       <div style={headerStyle}>
-        <button onClick={goBack} style={backButtonStyle}>
-          ←
-        </button>
+        <button onClick={goBack} style={backButtonStyle}>←</button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
-        <button
-          onClick={() => setShowMatches(true)}
-          style={matchesButtonStyle}
-        >
+        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
           ♡
         </button>
       </div>
 
-      {/* REWARD POINTS */}
+      {/* Reward Points */}
       <div style={{ textAlign: "center", padding: "0.5rem" }}>
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* MAIN CARD */}
+      {/* Card */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -693,14 +776,7 @@ export default function Home() {
               onSwipe={(dir) => handleSwipe(dir)}
               preventSwipe={["up", "down"]}
             >
-              <div
-                style={{
-                  ...cardStyle,
-                  backgroundImage: `url(${getImageUrl(
-                    sortedOptions[currentIndex]
-                  )})`
-                }}
-              >
+              <div style={cardStyle}>
                 <div style={cardOverlayStyle}>
                   <h2 style={{ margin: 0 }}>{sortedOptions[currentIndex]}</h2>
                 </div>
@@ -712,7 +788,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* BOTTOM BAR: Discard & Continue */}
+      {/* Bottom Bar: Discard & Continue */}
       <div style={bottomBarStyle}>
         {hasOptions ? (
           <>
@@ -734,7 +810,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* RESHUFFLE AT BOTTOM */}
+      {/* Reshuffle Button */}
       <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
         <button
           onClick={reshuffleDeck}
