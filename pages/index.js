@@ -39,6 +39,7 @@ const Home = () => {
   const [history, setHistory] = useState([]);
   const [currentLayer, setCurrentLayer] = useState("Select a Category");
   const [currentOptions, setCurrentOptions] = useState(Object.keys(categories));
+  const [childOptions, setChildOptions] = useState([]); // Stores child categories
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matched, setMatched] = useState([]);
   const [finalMatch, setFinalMatch] = useState(null);
@@ -74,25 +75,20 @@ const Home = () => {
     const nextLayer = categories[currentLayer]?.[choice];
 
     if (nextLayer && typeof nextLayer === "object") {
-      // Move deeper into categories
+      // Move deeper and show child categories below parent
       setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
-      setCurrentLayer(choice);
-      setCurrentOptions(Object.keys(nextLayer));
-      setCurrentIndex(0);
+      setChildOptions(Object.keys(nextLayer));
     } else if (Array.isArray(nextLayer)) {
       // Move to specific activity layer
       setHistory((prev) => [...prev, { layer: currentLayer, options: currentOptions }]);
-      setCurrentLayer(choice);
-      setCurrentOptions(nextLayer);
-      setCurrentIndex(0);
+      setChildOptions(nextLayer);
     } else if (isFinalOption(choice)) {
       handleFinalMatch(choice);
     } else {
       console.warn("Unexpected case: No valid next layer detected.");
     }
 
-    // Force React re-render by resetting state
-    setCurrentOptions([...currentOptions]);
+    // Force React re-render
     setTimeout(() => {
       setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     }, 100);
@@ -120,6 +116,7 @@ const Home = () => {
   const reshuffleDeck = () => {
     setCurrentLayer("Select a Category");
     setCurrentOptions(Object.keys(categories));
+    setChildOptions([]);
     setCurrentIndex(0);
     setFinalMatch(null);
     setRewardPoints(0);
@@ -130,6 +127,7 @@ const Home = () => {
       const prevState = history.pop();
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
+      setChildOptions([]);
       setCurrentIndex(0);
       setHistory([...history]);
     }
@@ -163,12 +161,14 @@ const Home = () => {
         </>
       )}
       {history.length > 0 && !finalMatch && <button className="back" onClick={goBack}>Go Back</button>}
-      {matched.length > 0 && (
-        <div className="matches">
-          <h3>Matched Activities:</h3>
-          <ul>
-            {matched.map((match, index) => <li key={index}>{match}</li>)}
-          </ul>
+      {childOptions.length > 0 && (
+        <div className="child-cards">
+          <h3>Subcategories:</h3>
+          {childOptions.map((option, index) => (
+            <div key={index} className="child-card" style={{ width: '250px', height: '400px', backgroundColor: 'lightblue', margin: '10px', padding: '10px', textAlign: 'center' }}>
+              <h4>{option}</h4>
+            </div>
+          ))}
         </div>
       )}
     </div>
