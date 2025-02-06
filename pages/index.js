@@ -1,117 +1,74 @@
 import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
-/**
- * 1) BROAD TOP-LEVEL CATEGORIES, plus expanded "Food & Drink"
- *    with many subcategories, ensuring if we don't have a
- *    real final match, we show placeholders like
- *    "This could be your pizza shop!"
+/** 
+ * 1) BROADER TOP-LEVEL CATEGORIES: Eat, Drink, Party, Explore,
+ *    Culture & History, Seasonal & Special, Shop & Leisure.
+ *    With multiple sub-layers and final placeholders.
  */
 const rawActivities = {
-  "Taste": {
-    "Eat": {
-      "Seafood": [
-        "Crabs & Old Bay Seasoning",
-        "Fresh Oysters",
-        "Shrimp & Grits",
-        "Lobster Rolls",
-        "This could be your fish house!"
-      ],
-      "Pizza & Italian": [
-        "Classic Neapolitan Pizza",
-        "Chicago Deep Dish",
-        "NY-Style Slices",
-        "Fine Italian Cuisine",
-        "This could be your pizza shop!"
-      ],
-      "Burgers & Sandwiches": [
-        "Gourmet Burger Joints",
-        "Classic Deli Sandwiches",
-        "Pulled Pork BBQ",
-        "Philly Cheesesteak",
-        "This could be your burger bar!"
-      ],
-      "Tacos & Tex-Mex": [
-        "Street Tacos",
-        "Burritos & Bowls",
-        "Quesadillas",
-        "Enchiladas",
-        "This could be your taco stand!"
-      ],
-      "Vegetarian & Vegan": [
-        "Vegan Comfort Food",
-        "Farm-to-Table Veggie Spot",
-        "Smoothie & Juice Bars",
-        "Tempeh & Tofu Specials",
-        "This could be your vegan café!"
-      ],
-      "Desserts & Sweets": [
-        "Cupcake Shops",
-        "Frozen Yogurt & Gelato",
-        "Artisanal Donuts",
-        "Old-Fashioned Ice Cream",
-        "This could be your dessert place!"
-      ]
-    },
-    "Drink": {
-      "Beer & Breweries": [
-        "IPA Taprooms",
-        "Seasonal Oktoberfest Spots",
-        "Local Microbreweries",
-        "Stout & Porter Specialists",
-        "This could be your beer brand!"
-      ],
-      "Cocktails & Mixology": [
-        "Craft Cocktail Lounges",
-        "Tiki Bars",
-        "Martini Bars",
-        "Mimosa Brunch Spots",
-        "This could be your speakeasy!"
-      ],
-      "Wine & Distilleries": [
-        "Urban Wineries",
-        "Distillery Tours",
-        "Whiskey & Bourbon Tastings",
-        "Champagne & Sparkling Bars",
-        "This could be your winery!"
-      ],
-      "Coffee & Tea": [
-        "Specialty Espresso Bars",
-        "Loose Leaf Tea Houses",
-        "Bubble Tea & Boba Cafés",
-        "Traditional Afternoon Tea",
-        "This could be your coffee shop!"
-      ]
-    }
+  "Eat": {
+    "Seafood": [
+      "Blue Crab & Old Bay",
+      "Fresh Oysters",
+      "Shrimp Po' Boys",
+      "Lobster Rolls",
+      "This could be your seafood house!"
+    ],
+    "Pizza & Italian": [
+      "Classic Neapolitan Pizza",
+      "Chicago Deep Dish",
+      "NY-Style Pizza",
+      "Fine Italian Dining",
+      "This could be your pizza shop!"
+    ],
+    "Burgers & Sandwiches": [
+      "Gourmet Burger Bars",
+      "Local Deli Sandwiches",
+      "BBQ Pulled Pork",
+      "Philly Cheesesteaks",
+      "This could be your burger joint!"
+    ]
   },
 
-  "Experience": {
-    "Nightlife": {
-      "Dance Clubs": [
-        "High-Energy EDM Clubs",
-        "Retro 80s/90s Night Clubs",
-        "Latin Dance Nights"
-      ],
-      "Live Music Pubs": [
-        "Rock & Indie Bars",
-        "Jazz & Blues Lounges",
-        "Acoustic Singer-Songwriter Cafés"
-      ],
-      "Comedy & Improv": [
-        "Stand-Up Comedy Clubs",
-        "Improv Theater Workshops",
-        "Open Mic Comedy Nights"
-      ]
-    },
-    "Festivals": [
-      "Music Festivals (Local Scene)",
-      "Street Fairs & Block Parties",
-      "Food & Drink Festivals"
+  "Drink": {
+    "Beer & Breweries": [
+      "IPA Taprooms",
+      "Seasonal Beer Gardens",
+      "Microbreweries",
+      "Stout & Porter Specialists",
+      "This could be your brewery!"
     ],
-    "Sports & Games": [
-      "Bowling Alleys",
-      "Arcade Bars & Retro Gaming",
-      "Pool Halls & Billiards"
+    "Cocktails": [
+      "Craft Cocktail Lounges",
+      "Tiki Bars",
+      "Martini Bars",
+      "Mimosa Brunch Spots",
+      "This could be your speakeasy!"
+    ],
+    "Coffee & Tea": [
+      "Specialty Espresso Cafés",
+      "Loose Leaf Tea Houses",
+      "Bubble Tea Shops",
+      "Afternoon Tea Service",
+      "This could be your coffee shop!"
+    ]
+  },
+
+  "Party": {
+    "Dance Clubs": [
+      "High-Energy EDM Clubs",
+      "Retro 80s/90s Clubs",
+      "Latin Dance Nights",
+      "Hip-Hop & R&B Lounges",
+      "This could be your dance floor!"
+    ],
+    "Night Bars & Live Music": [
+      "Rock & Indie Bars",
+      "Jazz & Blues Lounges",
+      "Acoustic Café Sets",
+      "Reggae & Dancehall Spots",
+      "This could be your nightlife venue!"
     ]
   },
 
@@ -119,22 +76,16 @@ const rawActivities = {
     "Outdoor Adventures": [
       "Hiking & Nature Trails",
       "Kayaking & Paddleboarding",
-      "Overnight Camping Nearby"
+      "Overnight Camping Sites",
+      "Mountain Biking",
+      "This could be your outdoor retreat!"
     ],
     "Urban Sightseeing": [
       "Self-Guided Walking Tours",
-      "Historic Neighborhood Explorations",
-      "City Skyline Views"
-    ],
-    "Waterfront Activities": [
-      "Harbor Cruises",
-      "Stand-Up Paddle Yoga",
-      "Boat Rentals"
-    ],
-    "Offbeat & Quirky": [
-      "Graffiti Alleys & Street Art",
-      "Weird Museums & Odd Exhibits",
-      "Local Ghost Tours"
+      "Historic Neighborhood Strolls",
+      "Skyline Overlooks",
+      "Rooftop Views",
+      "This could be your city tour!"
     ]
   },
 
@@ -142,22 +93,16 @@ const rawActivities = {
     "Museums & Art": [
       "Art Museums & Galleries",
       "Interactive Science Centers",
-      "Pop-Up Exhibitions"
+      "Pop-Up Exhibitions",
+      "Modern Art Collectives",
+      "This could be your museum!"
     ],
     "Historic Sites": [
       "Forts & Battlefields",
       "Colonial-Era Mansions",
-      "Heritage Walking Tours"
-    ],
-    "Architectural Gems": [
-      "Cathedrals & Basilicas",
-      "Beaux-Arts Libraries",
-      "Victorian Row Houses"
-    ],
-    "Local Heritage & Tours": [
-      "African-American Heritage Trails",
-      "Famous Author Birthplace Tours",
-      "Ethnic Neighborhood Heritage"
+      "Heritage Walking Tours",
+      "Civil War Landmarks",
+      "This could be your historic estate!"
     ]
   },
 
@@ -165,22 +110,16 @@ const rawActivities = {
     "Spring-Summer": [
       "Flower Bloom Events",
       "Outdoor Concert Series",
-      "Seasonal Farmers’ Markets"
+      "Farmers’ Markets",
+      "Seaside Carnivals",
+      "This could be your summer fest!"
     ],
     "Fall-Winter": [
-      "Leaf-Peeping Day Trips",
+      "Leaf-Peeping Trails",
       "Holiday Light Shows",
-      "Indoor Ice Skating Rinks"
-    ],
-    "Holiday Highlights": [
-      "Halloween Haunted Houses",
-      "Christmas Village & Markets",
-      "New Year’s Fireworks at the Harbor"
-    ],
-    "Annual Traditions": [
-      "City Anniversary Celebrations",
-      "Marathon & Running Festivals",
-      "Local Food Truck Rallies"
+      "Indoor Ice Skating",
+      "Hot Chocolate Crawl",
+      "This could be your winter wonderland!"
     ]
   },
 
@@ -188,27 +127,21 @@ const rawActivities = {
     "Markets & Bazaars": [
       "Sunday Flea Markets",
       "Antique Fairs",
-      "Artisan Pop-Up Bazaars"
+      "Artisan Pop-Up Bazaars",
+      "Local Craft Fairs",
+      "This could be your market!"
     ],
     "Neighborhood Shopping": [
-      "Quirky Main Street Boutiques",
-      "Upscale Downtown Retail",
-      "Local Fashion Designer Shops"
-    ],
-    "Boutiques & Oddities": [
-      "Curio & Oddity Shops",
+      "Main Street Boutiques",
+      "Downtown Retail Spots",
+      "Local Fashion Designers",
       "Vintage Thrift Emporiums",
-      "Unique Handmade Jewelry Stores"
-    ],
-    "Handmade & Crafts": [
-      "Pottery Studios & Workshops",
-      "DIY Woodworking Co-Ops",
-      "Local Artist Collectives"
+      "This could be your shop!"
     ]
   }
 };
 
-/** 2) Flatten single-child sublayers */
+/** 2) Flatten single-child sublayers to avoid lonely categories. */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
@@ -233,18 +166,14 @@ const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// 4) Code preference
+// 4) Code preference weighting
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
-/** 
- * 5) "Trading Card" Styles: 
- *    We'll pick randomly from these card frames to give a "flashy" variety 
- *    (some Pokemon-like, some baseball-like, etc.)
- */
+/** 5) Some "trading card" frames for variety. */
 const cardFrames = [
   {
-    name: "Classic Pokémon",
+    name: "Pokémon Classic",
     border: "4px solid #F8C859",
     borderRadius: "12px",
     background: "linear-gradient(135deg, #7EC0EE 0%, #F8C859 100%)"
@@ -280,21 +209,20 @@ const cardFrames = [
     background: "linear-gradient(135deg, #f0f0f0 0%, #fafafa 100%)"
   }
 ];
-
-// Helper to pick a random card frame
 function getRandomCardFrame() {
   const idx = Math.floor(Math.random() * cardFrames.length);
   return cardFrames[idx];
 }
 
-// 6) Basic color map for top-level categories
+/** 6) Simple color map for top-level categories. */
 const topLevelColors = {
-  "Taste": "#E74C3C",
-  "Experience": "#8E44AD",
+  "Eat": "#E74C3C",
+  "Drink": "#8E44AD",
+  "Party": "#D35400",
   "Explore": "#27AE60",
   "Culture & History": "#2980B9",
-  "Seasonal & Special": "#D35400",
-  "Shop & Leisure": "#F39C12"
+  "Seasonal & Special": "#F39C12",
+  "Shop & Leisure": "#16A085"
 };
 
 // Darken color
@@ -317,7 +245,6 @@ function darkenColor(hex, amount) {
   const bb = ("0" + b.toString(16)).slice(-2);
   return `#${rr}${gg}${bb}`;
 }
-
 function getColorForPath(path) {
   if (path.length === 0) return "#BDC3C7";
   const topCat = path[0];
@@ -340,7 +267,7 @@ function getNodeAtPath(obj, path) {
 }
 
 /** 
- * PRIMARY COMPONENT
+ * MAIN COMPONENT
  */
 export default function Home() {
   // PATH + INDEX
@@ -350,21 +277,21 @@ export default function Home() {
   // FINAL MATCH
   const [finalMatch, setFinalMatch] = useState(null);
 
-  // Matches (collection)
+  // MATCHES
   const [matched, setMatched] = useState([]);
   const [completed, setCompleted] = useState({});
   const [ratings, setRatings] = useState({});
 
-  // Show matches overlay?
+  // SHOW MATCHES
   const [showMatches, setShowMatches] = useState(false);
 
-  // User scoreboard
+  // USER scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // History
+  // NAV HISTORY
   const [history, setHistory] = useState([]);
 
-  // Loading splash
+  // LOADING SPLASH
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setIsShuffling(false), 2000);
@@ -374,7 +301,7 @@ export default function Home() {
   // "No more" overlay
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // Code preference
+  // CODE preference
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -392,6 +319,7 @@ export default function Home() {
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
   if (!node && currentPath.length === 0) {
+    // top-level categories
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
     thisLayerOptions = Object.keys(node);
@@ -400,34 +328,40 @@ export default function Home() {
   }
 
   // Sort by preference
-  const sortByPreference = (arr) => {
+  function sortByPreference(arr) {
     const copy = [...arr];
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA;
+      return wB - wA; // higher weight first
     });
     return copy;
-  };
+  }
   const sortedOptions = sortByPreference(thisLayerOptions);
 
+  // Do we have more cards at this layer?
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // preference inc/dec
+  // Preference inc/dec
   const incPreference = (item) => {
-    setWeights((prev) => ({
-      ...prev,
-      [item]: (prev[item] || 0) + PREFERENCE_INC
-    }));
+    setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) + PREFERENCE_INC }));
   };
   const decPreference = (item) => {
-    setWeights((prev) => ({
-      ...prev,
-      [item]: (prev[item] || 0) - PREFERENCE_DEC
-    }));
+    setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) - PREFERENCE_DEC }));
   };
 
-  // go back
+  // GO BACK => Make it bigger
+  const goBackButtonStyle = {
+    position: "absolute",
+    left: "1rem",
+    border: "2px solid #333",
+    background: "#eee",
+    fontSize: "1rem",
+    color: "#333",
+    cursor: "pointer",
+    padding: "0.3rem 0.7rem",
+    borderRadius: "8px"
+  };
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
@@ -439,7 +373,7 @@ export default function Home() {
     }
   };
 
-  // reshuffle
+  // RESHUFFLE
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -448,7 +382,7 @@ export default function Home() {
     setHistory([]);
   };
 
-  // final match
+  // FINAL MATCH
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -456,7 +390,7 @@ export default function Home() {
     }
   };
 
-  // check final
+  // Check if final
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -465,7 +399,7 @@ export default function Home() {
     return true;
   }
 
-  // swipe
+  // SWIPE
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -476,7 +410,7 @@ export default function Home() {
     }
   };
 
-  // continue => user +10, code +5
+  // CONTINUE => user +10, code +5
   const processContinue = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     incPreference(choice);
@@ -484,49 +418,56 @@ export default function Home() {
     if (isFinalOption(currentPath, choice)) {
       handleFinalMatch(choice);
     } else {
+      // go deeper
       setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
   };
 
-  // discard => user +1, code -1
+  // DISCARD => user +1, code -1
   const processDiscard = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
     decPreference(choice);
 
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedOptions.length) {
+      // we have more siblings
       setCurrentIndex(nextIndex);
     } else {
-      setNoMoreMessage(true);
-      setTimeout(() => {
-        setNoMoreMessage(false);
-        if (history.length > 0) {
-          goBack();
-        } else {
+      // we've used up everything at this layer
+      if (currentPath.length === 0) {
+        // top-level => if user discards all top-level categories,
+        // only then do we show "no more" overlay & reshuffle
+        setNoMoreMessage(true);
+        setTimeout(() => {
+          setNoMoreMessage(false);
           reshuffleDeck();
-        }
-      }, 2000);
+        }, 2000);
+      } else {
+        // second layer or deeper => "never go back to top layer if categories are exhausted,
+        // just keep recycling options indefinitely"
+        setCurrentIndex(0); // reset index => infinite cycle
+      }
     }
   };
 
-  // completed
+  // Mark item as completed
   const markCompleted = (item) => {
     setCompleted((prev) => ({ ...prev, [item]: true }));
   };
 
-  // rating
+  // Rate item
   const setItemRating = (item, stars) => {
     setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
-  // layer name
+  // LAYER NAME
   const currentLayerName = currentPath.length === 0
     ? "Shuffling..."
     : currentPath[currentPath.length - 1];
 
-  // styles
+  // 7) UI STYLES: phone-screen layout
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -539,6 +480,7 @@ export default function Home() {
     position: "relative"
   };
 
+  // LOADING SPLASH
   if (isShuffling) {
     return (
       <div
@@ -554,7 +496,7 @@ export default function Home() {
     );
   }
 
-  // overlays
+  // Overlays
   const finalMatchOverlay = {
     position: "absolute",
     top: 0,
@@ -611,24 +553,16 @@ export default function Home() {
     fontWeight: "bold"
   };
 
-  const backButtonStyle = {
-    position: "absolute",
-    left: "1rem",
-    border: "none",
-    background: "none",
-    fontSize: "1rem",
-    color: "#333",
-    cursor: "pointer"
-  };
-
   const matchesButtonStyle = {
     position: "absolute",
     right: "1rem",
-    border: "none",
-    background: "none",
+    border: "2px solid #333",
+    background: "#eee",
     fontSize: "1rem",
     color: "#333",
-    cursor: "pointer"
+    cursor: "pointer",
+    padding: "0.3rem 0.7rem",
+    borderRadius: "8px"
   };
 
   // main content
@@ -646,31 +580,29 @@ export default function Home() {
     position: "relative"
   };
 
-  // randomly pick a card frame style each time we show a new item
-  const [cardFrame, setCardFrame] = useState(getRandomCardFrame());
+  // random card frame
+  const [cardFrame, setCardFrame] = useState(cardFrames[0]);
   useEffect(() => {
     if (hasOptions) {
-      // whenever currentIndex changes or we navigate deeper, pick a new frame
       setCardFrame(getRandomCardFrame());
     }
   }, [currentIndex, currentPath, hasOptions]);
 
-  // also get top-level color for the text highlight
+  // also top-level color
   const cardColor = getColorForPath(currentPath);
 
-  // Combine the random frame style + layout
+  // combine frame style
   const cardStyle = {
     width: "100%",
     height: "100%",
-    ...cardFrame,
     display: "flex",
     flexDirection: "column",
     position: "relative",
     overflow: "hidden",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    ...cardFrame
   };
 
-  // top label area
   const cardTopStyle = {
     padding: "0.5rem",
     textAlign: "center",
@@ -686,6 +618,7 @@ export default function Home() {
     padding: "0.5rem 1rem"
   };
 
+  // bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -695,13 +628,13 @@ export default function Home() {
   };
 
   const circleButtonStyle = (bgColor) => ({
-    width: "50px",
-    height: "50px",
+    width: "60px",
+    height: "60px",
     borderRadius: "50%",
     background: bgColor,
     color: "#fff",
     border: "none",
-    fontSize: "1.2rem",
+    fontSize: "1.4rem",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -739,7 +672,7 @@ export default function Home() {
 
       {noMoreMessage && (
         <div style={noMoreOverlay}>
-          No more options at this layer! Going back one level…
+          No more top-level options! Reshuffling...
         </div>
       )}
 
@@ -777,7 +710,7 @@ export default function Home() {
                         cursor: "pointer",
                         padding: "0.25rem 0.5rem"
                       }}
-                      onClick={() => markCompleted(item)}
+                      onClick={() => setCompleted((prev) => ({ ...prev, [item]: true }))}
                     >
                       Mark Completed
                     </button>
@@ -792,7 +725,7 @@ export default function Home() {
                         ...starStyle,
                         color: ratings[item] >= star ? "#f1c40f" : "#ccc"
                       }}
-                      onClick={() => setItemRating(item, star)}
+                      onClick={() => setRatings((prev) => ({ ...prev, [item]: star }))}
                     >
                       ★
                     </span>
@@ -854,12 +787,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* Header */}
+      {/* HEADER */}
       <div style={headerStyle}>
-        <button onClick={goBack} style={backButtonStyle}>←</button>
+        <button onClick={goBack} style={goBackButtonStyle}>
+          ← Back
+        </button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
         <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
-          ♡
+          ♡ Matches
         </button>
       </div>
 
@@ -867,7 +802,7 @@ export default function Home() {
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* MAIN CARD => "Trading Card" style (random) */}
+      {/* MAIN CARD */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -888,9 +823,7 @@ export default function Home() {
                     justifyContent: "center"
                   }}
                 >
-                  <h2 style={cardTitleStyle}>
-                    {sortedOptions[currentIndex]}
-                  </h2>
+                  <h2 style={cardTitleStyle}>{sortedOptions[currentIndex]}</h2>
                 </div>
               </div>
             </TinderCard>
@@ -900,7 +833,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* bottom bar */}
+      {/* BOTTOM BAR */}
       <div style={bottomBarStyle}>
         {hasOptions ? (
           <>
