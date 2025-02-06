@@ -1,4 +1,4 @@
-"use client"; // Important for Next 13 client components
+"use client";
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
@@ -7,10 +7,9 @@ import dynamic from "next/dynamic";
 const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
 
 /**
- * 1) REAL ACTIVITIES DATA
- *    Seven top-level categories: Eat, Drink, Party, Explore,
- *    Culture & History, Seasonal & Special, Shop & Leisure.
- *    Each item is a final card with numbering only (no flavor text).
+ * 1) ALL ACTIVITIES (#80–#168),
+ *    with expanded "Bars & Live Music" under Party
+ *    to include many breweries/distilleries as "bars."
  */
 const rawActivities = {
   "Eat": {
@@ -45,9 +44,21 @@ const rawActivities = {
   },
 
   "Party": {
-    "Night Bars & Live Music": [
-      "#131 Horseshoe Casino",
-      "#161 The Horse You Came In On Saloon"
+    "Bars & Live Music": [
+      // Duplicating breweries/distilleries as "bars" to show more
+      "#80 Sagamore Spirit Distillery",
+      "#81 Union Craft Brewing",
+      "#82 Checkerspot Brewing Co.",
+      "#83 Diamondback Brewing Co.",
+      "#84 Mobtown Brewing Co.",
+      "#85 Heavy Seas Beer",
+      "#86 The Brewer’s Art",
+      "#87 Baltimore Spirits Company",
+      "#88 Old Line Spirits",
+      "#89 Charm City Meadworks",
+      "#90 Guinness Open Gate Brewery",
+      "#161 The Horse You Came In On Saloon",
+      "#131 Horseshoe Casino"
     ],
     "Other Nightlife": [
       "#130 Urban Axes",
@@ -154,7 +165,7 @@ const rawActivities = {
 };
 
 /**
- * 2) Flatten single-child sublayers to avoid lonely categories.
+ * 2) Flatten single-child sublayers (no lonely categories).
  */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
@@ -180,60 +191,55 @@ const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// 4) Code preference weighting
+// 4) Preference weighting
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
 /**
- * 5) Trading card frames (neutral theme).
- *    We'll pick one randomly on the client.
+ * 5) Generic card frames—only used for styles now.
+ *    We'll label cards by top-level category instead.
  */
 const cardFrames = [
   {
-    name: "Vibrant Stripes",
     border: "4px solid #F8C859",
     borderRadius: "12px",
     background: "linear-gradient(135deg, #7EC0EE 0%, #F8C859 100%)"
   },
   {
-    name: "Bold Red",
     border: "4px solid #C0392B",
     borderRadius: "0px",
     background: "linear-gradient(135deg, #BDC3C7 0%, #ECF0F1 100%)"
   },
   {
-    name: "Retro Purple",
     border: "4px dashed #9B59B6",
     borderRadius: "20px",
     background: "linear-gradient(135deg, #D2B4DE 0%, #F5EEF8 100%)"
   },
   {
-    name: "Neon Green",
     border: "3px solid #2ECC71",
     borderRadius: "8px",
     background: "radial-gradient(circle, #1ABC9C 0%, #16A085 100%)"
   },
   {
-    name: "Galactic Foil",
     border: "5px double #8E44AD",
     borderRadius: "16px",
     background: "linear-gradient(120deg, #BEBADA 0%, #E7E7E7 100%)"
   },
   {
-    name: "Minimal Gray",
     border: "2px solid #666",
     borderRadius: "5px",
     background: "linear-gradient(135deg, #f0f0f0 0%, #fafafa 100%)"
   }
 ];
 
+/** Randomly pick a frame index. */
 function getRandomFrameIndex() {
   return Math.floor(Math.random() * cardFrames.length);
 }
 
 /**
  * 6) Simple color map for top-level categories
- *    We will NOT darken for deeper layers—children share parent's color.
+ *    No darkening on deeper layers—child shares parent's color.
  */
 const topLevelColors = {
   "Eat": "#E74C3C",
@@ -245,14 +251,13 @@ const topLevelColors = {
   "Shop & Leisure": "#16A085"
 };
 
-/** Return the color of the top-level category, ignoring sub-depth. */
 function getTopLevelColor(path) {
   if (!path.length) return "#BDC3C7";
-  const topCat = path[0];
-  return topLevelColors[topCat] || "#BDC3C7";
+  const cat = path[0];
+  return topLevelColors[cat] || "#BDC3C7";
 }
 
-// Safely walk object for next node
+// Safely walk object by path
 function getNodeAtPath(obj, path) {
   let current = obj;
   for (const seg of path) {
@@ -266,14 +271,13 @@ function getNodeAtPath(obj, path) {
 }
 
 export default function Home() {
-  // Path + index in the current array
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Final match (leaf choice)
+  // Final match
   const [finalMatch, setFinalMatch] = useState(null);
 
-  // Matched items (the user "collected" these)
+  // Collections
   const [matched, setMatched] = useState([]);
   const [completed, setCompleted] = useState({});
   const [ratings, setRatings] = useState({});
@@ -284,25 +288,22 @@ export default function Home() {
   // Scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // Nav history (to go back)
+  // Nav history
   const [history, setHistory] = useState([]);
 
   // Loading splash
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
-    // Fake 2s loading
     const t = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(t);
   }, []);
 
-  // "No more" top-level overlay
+  // "No more" top-level
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // Category preference weighting (loaded from localStorage)
+  // Preference weights (saved in localStorage)
   const [weights, setWeights] = useState({});
-
   useEffect(() => {
-    // Load from localStorage after mount
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
       if (stored) {
@@ -310,24 +311,23 @@ export default function Home() {
       }
     }
   }, []);
-
   useEffect(() => {
-    // Save whenever weights changes
     if (typeof window !== "undefined") {
       localStorage.setItem("categoryWeights", JSON.stringify(weights));
     }
   }, [weights]);
 
-  // Build the array of options for this layer
+  // Build this layer's array
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
-
   if (!node && currentPath.length === 0) {
     // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
+    // sub-layers
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
+    // final matches
     thisLayerOptions = node;
   }
 
@@ -337,14 +337,14 @@ export default function Home() {
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA; // higher weight first
+      return wB - wA;
     });
     return copy;
   }
   const sortedOptions = sortByPreference(thisLayerOptions);
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // Increase or decrease preference
+  // Inc/dec preference
   const incPreference = (item) => {
     setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) + PREFERENCE_INC }));
   };
@@ -356,15 +356,14 @@ export default function Home() {
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
-      const newHist = history.slice(0, -1);
+      setHistory(history.slice(0, -1));
       setCurrentPath(prev.path);
       setCurrentIndex(prev.index);
-      setHistory(newHist);
       setFinalMatch(null);
     }
   };
 
-  // Reshuffle everything
+  // Reshuffle
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -373,7 +372,7 @@ export default function Home() {
     setHistory([]);
   };
 
-  // Final match found
+  // Final match
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -381,7 +380,7 @@ export default function Home() {
     }
   };
 
-  // Check if a choice is "final" (no deeper branches)
+  // Check final or sub-later
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -390,7 +389,7 @@ export default function Home() {
     return true;
   }
 
-  // Handle swipes
+  // Swipe
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -401,33 +400,28 @@ export default function Home() {
     }
   };
 
-  // "Like"/Continue => user +10, inc pref
   const processContinue = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
     incPreference(choice);
-
     if (isFinalOption(currentPath, choice)) {
       handleFinalMatch(choice);
     } else {
-      // go deeper
       setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
   };
 
-  // "Nope"/Discard => user +1, dec pref
   const processDiscard = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
     decPreference(choice);
-
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedOptions.length) {
       setCurrentIndex(nextIndex);
     } else {
-      // no more at this layer
+      // no more at this level
       if (currentPath.length === 0) {
-        // top-level => user discards them all => show overlay, reshuffle
+        // top-level => user discards them all
         setNoMoreMessage(true);
         setTimeout(() => {
           setNoMoreMessage(false);
@@ -440,7 +434,7 @@ export default function Home() {
     }
   };
 
-  // Mark item as completed & rating
+  // Completed / rating
   const markCompleted = (item) => {
     setCompleted((prev) => ({ ...prev, [item]: true }));
   };
@@ -448,23 +442,23 @@ export default function Home() {
     setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
-  // Current layer name
-  const currentLayerName =
-    currentPath.length === 0 ? "Shuffling..." : currentPath[currentPath.length - 1];
+  // Titles
+  const topCategory = currentPath[0] || "Shuffling...";
+  const currentLayerName = currentPath.length
+    ? currentPath[currentPath.length - 1]
+    : "Shuffling...";
 
-  // Pick a random frame index for each new card (avoid SSR mismatch)
+  // Random frame styling
   const [cardFrameIndex, setCardFrameIndex] = useState(0);
   useEffect(() => {
     if (hasOptions) {
       setCardFrameIndex(getRandomFrameIndex());
     }
   }, [currentIndex, currentPath, hasOptions]);
-
-  // Use the same color for top-level and sub-layers
-  const cardColor = getTopLevelColor(currentPath);
   const cardFrame = cardFrames[cardFrameIndex];
+  const cardColor = getTopLevelColor(currentPath);
 
-  /* ---------- STYLES ---------- */
+  // Styles
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -479,20 +473,12 @@ export default function Home() {
 
   if (isShuffling) {
     return (
-      <div
-        style={{
-          ...appContainerStyle,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-      >
+      <div style={{ ...appContainerStyle, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <h2>Shuffling Baltimore...</h2>
       </div>
     );
   }
 
-  // Overlays
   const finalMatchOverlay = {
     position: "absolute",
     top: 0,
@@ -534,7 +520,6 @@ export default function Home() {
     padding: "1rem"
   };
 
-  // Header
   const headerStyle = {
     display: "flex",
     justifyContent: "center",
@@ -543,10 +528,7 @@ export default function Home() {
     borderBottom: "1px solid #ccc",
     position: "relative"
   };
-  const phoneScreenTitleStyle = {
-    margin: 0,
-    fontWeight: "bold"
-  };
+  const phoneScreenTitleStyle = { margin: 0, fontWeight: "bold" };
   const goBackButtonStyle = {
     position: "absolute",
     left: "1rem",
@@ -570,7 +552,6 @@ export default function Home() {
     borderRadius: "8px"
   };
 
-  // Main area
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -607,7 +588,6 @@ export default function Home() {
     padding: "0.5rem 1rem"
   };
 
-  // Bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -636,7 +616,6 @@ export default function Home() {
 
   return (
     <div style={appContainerStyle}>
-      {/* FINAL MATCH OVERLAY */}
       {finalMatch && (
         <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
@@ -657,14 +636,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* "No more" overlay */}
       {noMoreMessage && (
         <div style={noMoreOverlay}>
           No more top-level options! Reshuffling...
         </div>
       )}
 
-      {/* MATCHES MODAL */}
       {showMatches && (
         <div style={matchesModalStyle}>
           <h2>My Collection</h2>
@@ -781,7 +758,9 @@ export default function Home() {
         <button onClick={goBack} style={goBackButtonStyle}>
           ← Back
         </button>
-        <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
+        <h3 style={phoneScreenTitleStyle}>
+          {topCategory} | {currentLayerName}
+        </h3>
         <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
           ♡ Matches
         </button>
@@ -801,9 +780,8 @@ export default function Home() {
               preventSwipe={["up", "down"]} // left/right only
             >
               <div style={cardStyle}>
-                <div style={cardTopStyle}>
-                  {cardFrame.name} | {currentLayerName}
-                </div>
+                {/* top bar => top-level category only */}
+                <div style={cardTopStyle}>{topCategory} | {currentLayerName}</div>
                 <div
                   style={{
                     flex: 1,
