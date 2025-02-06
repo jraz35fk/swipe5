@@ -2,52 +2,245 @@ import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
 /**
- * SAMPLE CATEGORIES
- * (You can replace this with your full "baltimoreActivities" object,
- * or any other structure you prefer.)
+ * FULL BALTIMORE ACTIVITIES DATA (from your provided list).
+ * We'll store it in `categories` to use in the swipe logic.
  */
 const categories = {
   "Eating & Drinking": {
+    "Hidden Gems & Highly-Rated Restaurants": [
+      "Puerto 511",
+      "Magdalena (Ivy Hotel)",
+      "Foraged (Station North)",
+      "Peter’s Inn (Fells Point)",
+      "Gertrude’s Chesapeake Kitchen (BMA)",
+      "Alma Cocina Latina",
+      "Clavel Mezcaleria",
+      "Le Comptoir du Vin",
+      "Faidley’s Seafood (Lexington Market)",
+      "Ekiben (Asian Fusion)",
+      "The Tavern at Woodberry (Woodberry Kitchen)",
+      "Duck Duck Goose (Fells Point)",
+      "The Helmand (Mt. Vernon)",
+      "Hersh’s (Riverside)",
+      "Little Donna’s (Upper Fells)",
+      "Dock Street Bar & Grill (Canton)",
+      "NiHao (Canton)",
+      "Samos Restaurant (Greektown)",
+      "Ananda (Fulton)",
+      "Azumi (Harbor East)"
+    ],
+    "Italian & Fine Dining": [
+      "Charleston (Harbor East)",
+      "Cinghiale (Harbor East)",
+      "La Scala (Little Italy)",
+      "Matthew’s Pizza",
+      "Isabella’s Brick Oven",
+      "Vacarro’s (Little Italy)",
+      "Magdalena (Ivy Hotel) – (also fine dining)",
+      "Tavern at Woodberry (also upscale, farm-to-table)"
+    ],
     "Seafood & Oyster Bars": [
       "LP Steamers",
       "Thames Street Oyster House",
-      "Nick’s Fish House"
+      "Nick’s Fish House",
+      "Ryleigh’s Oyster",
+      "The Choptank"
     ],
-    "Italian & Fine Dining": [
-      "Charleston",
-      "Cinghiale",
-      "La Scala"
+    "International & Fusion": [
+      "Alma Cocina Latina",
+      "Ekiben (Asian Fusion)",
+      "Samos Restaurant (Greek)",
+      "The Helmand (Afghan)",
+      "Little Italy Restaurants (general)",
+      "La Cuchara (Basque-inspired)"
     ]
   },
+
   "Nightlife & Entertainment": {
     "Unique Bars & Speakeasies": [
-      "The Elk Room",
-      "WC Harlan",
-      "Illusions Magic Bar"
+      "The Elk Room (Speakeasy)",
+      "WC Harlan (Hidden Bar, Remington)",
+      "Martick’s (Historic Speakeasy)",
+      "Illusions Magic Bar & Theater",
+      "The Owl Bar (Historic, Mt. Vernon)"
+    ],
+    "Dive Bars & Karaoke": [
+      "Walt’s Inn (Karaoke, Canton)",
+      "Max’s Taphouse (Fells Point)",
+      "Cat’s Eye Pub (Fells Point)"
+    ],
+    "Live Music Venues": [
+      "Ottobar",
+      "The Crown (Station North)",
+      "8x10 (Federal Hill)",
+      "Baltimore Soundstage",
+      "Rams Head Live!",
+      "Creative Alliance (Highlandtown)"
+    ],
+    "Large Theaters & Concert Halls": [
+      "CFG Bank Arena (Downtown)",
+      "Hippodrome Theatre (Historic)",
+      "The Lyric (Performing Arts)",
+      "Bengies Drive-In Theatre (Middle River)"
     ]
   },
-  "Events & Festivals": {
-    "Major Annual Events": [
-      "Preakness Stakes",
-      "AFRAM",
-      "Artscape"
-    ]
-  },
+
   "Outdoors & Nature": {
     "Parks & Gardens": [
-      "Druid Hill Park",
+      "Druid Hill Park & Reservoir Loop",
       "Federal Hill Park",
-      "Patterson Park"
+      "Patterson Park & Pagoda",
+      "Gwynns Falls/Leakin Park",
+      "Cylburn Arboretum",
+      "Sherwood Gardens (Guilford)",
+      "Howard Peters Rawlings Conservatory (Druid Hill)",
+      "Lake Roland Park"
+    ],
+    "Water Activities": [
+      "Inner Harbor Paddle Boats",
+      "Urban Pirates Cruise",
+      "Dundee Creek Marina (Kayaking)",
+      "Marshy Point Nature Center"
+    ],
+    "Nearby Nature & Trails": [
+      "Loch Raven Reservoir",
+      "Gunpowder Falls State Park",
+      "Rails-to-Trails at Jones Falls"
+    ],
+    "Sports & Scenic Venues": [
+      "Oriole Park at Camden Yards",
+      "M&T Bank Stadium"
+    ]
+  },
+
+  "Historic & Cultural Landmarks": {
+    "Iconic Historic Sites": [
+      "Fort McHenry National Monument",
+      "USS Constellation (Inner Harbor)",
+      "Washington Monument (Mt. Vernon)",
+      "Basilica of the Assumption (America’s First Cathedral)",
+      "Fell’s Point Historic Main Street",
+      "Hampton National Historic Site (Towson)",
+      "Carroll Mansion (Jonestown)",
+      "Phoenix Shot Tower",
+      "Star-Spangled Banner Flag House",
+      "Evergreen Museum & Library (Gilded Age)"
+    ],
+    "Museums & Art": [
+      "The Walters Art Museum",
+      "Baltimore Museum of Art",
+      "George Peabody Library",
+      "American Visionary Art Museum",
+      "Reginald F. Lewis Museum",
+      "B&O Railroad Museum",
+      "National Great Blacks In Wax Museum",
+      "Jewish Museum of Maryland",
+      "Baltimore Museum of Industry (Locust Point)",
+      "Port Discovery Children’s Museum"
+    ],
+    "Edgar Allan Poe Heritage": [
+      "Edgar Allan Poe’s Grave & Memorial (Westminster Hall)",
+      "Edgar Allan Poe House & Museum (Poppleton)"
+    ]
+  },
+
+  "Shopping & Markets": {
+    "Food Markets": [
+      "Lexington Market",
+      "Broadway Market",
+      "Cross Street Market",
+      "Mount Vernon Marketplace",
+      "Baltimore Farmers’ Market & Bazaar",
+      "Belvedere Square Market"
+    ],
+    "Shopping Districts": [
+      "Hampden ‘The Avenue’ (36th Street)",
+      "Fells Point Antique Shops & Galleries",
+      "Harbor East Shopping District",
+      "Federal Hill Shops (Cross Street Market area)",
+      "Village of Cross Keys",
+      "White Marsh Mall",
+      "Antique Row (Howard Street)"
+    ],
+    "Unique Boutiques & Stores": [
+      "Ma Petite Shoe (Hampden)",
+      "Atomic Books (Hampden)",
+      "The Book Thing (Free Book ‘Store’)",
+      "Corradetti Glassblowing Studio (Clipper Mill)",
+      "Baltimore Clayworks (Mt. Washington)",
+      "Sound Garden (Fells Point)",
+      "Brightside Boutique (Hampden/Fed Hill)",
+      "Double Dutch Boutique (Hampden)",
+      "Bazaar (Oddities & Curiosities, Hampden)",
+      "Loring Cornish Gallery (Fells Point)"
+    ]
+  },
+
+  "Events & Festivals": {
+    "Major Annual Events": [
+      "Preakness Stakes (Horse Race & InFieldFest)",
+      "AFRAM Festival",
+      "Artscape (Free Summer Arts Fest)",
+      "Baltimore Pride",
+      "Baltimore Book Festival",
+      "Light City Festival",
+      "Maryland Film Festival",
+      "Baltimore Running Festival"
+    ],
+    "Neighborhood & Seasonal": [
+      "Fells Point Fun Festival",
+      "HonFest",
+      "Pigtown Festival (‘Squeakness’)",
+      "Kinetic Sculpture Race",
+      "Opening Day at Camden Yards (Orioles)",
+      "Baltimore Farmers’ Market & Bazaar (Apr–Dec)",
+      "Waterfront Wellness Series (Summer)"
+    ],
+    "Holiday & Winter": [
+      "Miracle on 34th Street (Hampden Lights)",
+      "German Christmas Village (Inner Harbor)",
+      "Lighting of the Washington Monument",
+      "St. Patrick’s Day Parade (Downtown)",
+      "Great Halloween Lantern Parade",
+      "Flower Mart (Mt. Vernon)"
+    ]
+  },
+
+  "Unusual & Quirky Experiences": {
+    "Odd Attractions": [
+      "Papermoon Diner (Eccentric Decor)",
+      "Elijah Bond’s Ouija Board Grave (Green Mount Cemetery)",
+      "Ministry of Brewing (Church-Turned-Brewery)",
+      "Nutshell Studies of Unexplained Death (mini dioramas)",
+      "Graffiti Alley (Station North)",
+      "Bromo Seltzer Arts Tower (Clock Tower Museum)",
+      "Federal Reserve Bank Money Museum",
+      "Escape Room at Poe’s Death Site (fictional scenario)",
+      "Dinner at Medieval Times (Arundel Mills)"
+    ],
+    "Ghost Tours & Spooky": [
+      "Nighttime Ghost Tour of Fells Point",
+      "Twilight Tattoo Ceremony (Fort McHenry, summer re-enactment)"
+    ],
+    "Unique Bars & Activities": [
+      "Urban Axes (Axe-Throwing Bar)",
+      "Korean BBQ Karaoke Rooms (Station North)",
+      "Hampden’s HONfest Photo Ops",
+      "Scavenger Hunt in Inner Harbor",
+      "Everyman Theatre (Local Theater)",
+      "The Senator Theatre (Art Deco Cinema)"
     ]
   }
 };
 
+// ----------------------
 // REWARD CONSTANTS
+// ----------------------
 const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// Helper: get node by path
+// Safe helper to get nested object/array by path
 function getNodeAtPath(data, path) {
   let current = data;
   for (const segment of path) {
@@ -60,46 +253,33 @@ function getNodeAtPath(data, path) {
   return current;
 }
 
-// If the node is an object (not array), it means more layers
-// If it's an array, final items
-// If undefined, no deeper layer
-function isFinalNode(data, path, choice) {
-  const nextNode = getNodeAtPath(data, [...path, choice]);
-  if (!nextNode) return true;
-  if (Array.isArray(nextNode)) return false; // there's one more final level
-  if (typeof nextNode === "object") return false; // more sub-layers
-  return true;
-}
-
 export default function Home() {
-  // 1) State for path + index
+  // PATH + INDEX
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // 2) Final match overlay
+  // FINAL MATCH & MATCHES
   const [finalMatch, setFinalMatch] = useState(null);
-
-  // 3) Reward points
-  const [rewardPoints, setRewardPoints] = useState(0);
-
-  // 4) Matched items in memory
   const [matched, setMatched] = useState([]);
   const [showMatches, setShowMatches] = useState(false);
 
-  // 5) Keep track of previous layers for "goBack"
+  // REWARDS
+  const [rewardPoints, setRewardPoints] = useState(0);
+
+  // HISTORY for "goBack"
   const [history, setHistory] = useState([]);
 
-  // 6) “Shuffling…” screen for 2s
+  // LOADING SPLASH
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setIsShuffling(false), 2000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setIsShuffling(false), 2000);
+    return () => clearTimeout(timer);
   }, []);
 
-  // 7) “No more cards” message
+  // NO MORE CARDS message
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // Weighted preference system
+  // WEIGHTS (for preference learning)
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -113,10 +293,11 @@ export default function Home() {
     }
   }, [weights]);
 
-  // Build this layer's options
+  // GET CURRENT NODE
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
-  if (!node && currentPath.length === 0) {
+
+  if (currentPath.length === 0 && !node) {
     // top-level
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
@@ -127,21 +308,18 @@ export default function Home() {
     thisLayerOptions = node;
   }
 
-  // Sort them by descending weight
+  // SORT BY WEIGHT
   const sortByWeight = (arr) => {
     const copy = [...arr];
-    copy.sort((a, b) => {
-      const wA = weights[a] || 0;
-      const wB = weights[b] || 0;
-      return wB - wA;
-    });
+    copy.sort((a, b) => ( (weights[b] || 0) - (weights[a] || 0) ));
     return copy;
   };
   const sortedOptions = sortByWeight(thisLayerOptions);
 
-  const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
+  const hasOptions =
+    sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // UTILS
+  // UTILS: increment/decrement
   const incrementWeight = (item) => {
     setWeights((prev) => ({
       ...prev,
@@ -155,7 +333,7 @@ export default function Home() {
     }));
   };
 
-  // “Go Back” logic
+  // GO BACK
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
@@ -167,7 +345,7 @@ export default function Home() {
     }
   };
 
-  // Reshuffle => reset to top-level
+  // RESHUFFLE
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -176,7 +354,7 @@ export default function Home() {
     setHistory([]);
   };
 
-  // If final item chosen => match
+  // MATCH
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
     if (!matched.includes(choice)) {
@@ -184,70 +362,72 @@ export default function Home() {
     }
   };
 
+  // DETERMINE IF IT'S A FINAL OPTION
+  function isFinalOption(path, choice) {
+    const nextNode = getNodeAtPath(categories, [...path, choice]);
+    if (!nextNode) return true; // no sub-layer
+    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // sub-layers exist
+    if (Array.isArray(nextNode)) return false; // final array next
+    return true;
+  }
+
   // SWIPE
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
     if (direction === "right") {
-      handleContinue(choice);
+      processContinue(choice);
     } else {
-      handleDiscard(choice);
+      processDiscard(choice);
     }
   };
 
-  // Continue => +10, deeper or final
-  const handleContinue = (choice) => {
+  // CONTINUE => +10
+  const processContinue = (choice) => {
     incrementWeight(choice);
 
-    // Check if it's final
-    if (isFinalNode(categories, currentPath, choice)) {
-      // final => match
+    if (isFinalOption(currentPath, choice)) {
+      // final
       handleFinalMatch(choice);
     } else {
-      // go deeper
+      // deeper
       setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
-
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
   };
 
-  // Discard => +1, next card. If no next card, auto “go back” or “reshuffle”
-  const handleDiscard = (choice) => {
+  // DISCARD => +1, next card if any, else back/reshuffle
+  const processDiscard = (choice) => {
     decrementWeight(choice);
     const nextIndex = currentIndex + 1;
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
 
-    // If we still have more cards at this layer => just move on
     if (nextIndex < sortedOptions.length) {
       setCurrentIndex(nextIndex);
     } else {
-      // No more cards. Show a small message, then go back one layer or reshuffle
+      // no more cards at this layer
       setNoMoreMessage(true);
-
       setTimeout(() => {
         setNoMoreMessage(false);
-
-        // If there's a parent in history => goBack
         if (history.length > 0) {
           goBack();
         } else {
-          // We're at top-level with no more items => Reshuffle
           reshuffleDeck();
         }
       }, 2000);
     }
   };
 
-  // UI strings
+  // UI
   const currentLayerName =
     currentPath.length === 0
       ? "Shuffling..."
       : currentPath[currentPath.length - 1];
 
   // STYLES
-  const containerStyle = {
+  const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
     margin: "0 auto",
@@ -259,11 +439,12 @@ export default function Home() {
     position: "relative"
   };
 
+  // LOADING
   if (isShuffling) {
     return (
       <div
         style={{
-          ...containerStyle,
+          ...appContainerStyle,
           display: "flex",
           alignItems: "center",
           justifyContent: "center"
@@ -275,7 +456,7 @@ export default function Home() {
   }
 
   // Overlays
-  const finalMatchOverlay = {
+  const finalMatchOverlayStyle = {
     position: "absolute",
     top: 0,
     left: 0,
@@ -290,7 +471,7 @@ export default function Home() {
     zIndex: 999
   };
 
-  const noMoreOverlay = {
+  const noMoreOverlayStyle = {
     position: "absolute",
     top: "40%",
     left: 0,
@@ -301,6 +482,19 @@ export default function Home() {
     backgroundColor: "rgba(0,0,0,0.6)",
     padding: "1rem",
     zIndex: 998
+  };
+
+  const matchesModalStyle = {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    background: "rgba(255,255,255,0.9)",
+    zIndex: 997,
+    display: "flex",
+    flexDirection: "column",
+    padding: "1rem"
   };
 
   // Header
@@ -338,7 +532,7 @@ export default function Home() {
     cursor: "pointer"
   };
 
-  // main content
+  // Main content
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -347,7 +541,7 @@ export default function Home() {
     justifyContent: "center"
   };
 
-  // card
+  // Card container
   const cardContainerStyle = {
     width: "300px",
     height: "420px",
@@ -373,6 +567,7 @@ export default function Home() {
     padding: "1rem"
   };
 
+  // Bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -396,18 +591,18 @@ export default function Home() {
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
 
-  // get some fallback images
+  // Simple fallback image generator
   const getImageUrl = (name) => {
-    // could incorporate a real map or fallback
-    // for now, a random unsplash
+    // Could use a real map or an API
+    // Fallback to Unsplash
     return "https://source.unsplash.com/collection/190727/600x800";
   };
 
   return (
-    <div style={containerStyle}>
-      {/* Final match overlay */}
+    <div style={appContainerStyle}>
+      {/* FINAL MATCH OVERLAY */}
       {finalMatch && (
-        <div style={finalMatchOverlay}>
+        <div style={finalMatchOverlayStyle}>
           <h1>Match Found!</h1>
           <h2>{finalMatch}</h2>
           <button
@@ -426,29 +621,16 @@ export default function Home() {
         </div>
       )}
 
-      {/* "No more cards" overlay */}
+      {/* NO MORE CARDS MESSAGE */}
       {noMoreMessage && (
-        <div style={noMoreOverlay}>
+        <div style={noMoreOverlayStyle}>
           No more options at this layer! Going back one level…
         </div>
       )}
 
-      {/* Show matches overlay */}
+      {/* MATCHES OVERLAY */}
       {showMatches && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(255,255,255,0.9)",
-            zIndex: 997,
-            display: "flex",
-            flexDirection: "column",
-            padding: "1rem"
-          }}
-        >
+        <div style={matchesModalStyle}>
           <h2>My Matches</h2>
           {matched.length === 0 ? (
             <p>No matches yet.</p>
@@ -489,7 +671,10 @@ export default function Home() {
           ←
         </button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
-        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
+        <button
+          onClick={() => setShowMatches(true)}
+          style={matchesButtonStyle}
+        >
           ♡
         </button>
       </div>
@@ -499,7 +684,7 @@ export default function Home() {
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* CARD */}
+      {/* MAIN CARD */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -511,7 +696,9 @@ export default function Home() {
               <div
                 style={{
                   ...cardStyle,
-                  backgroundImage: `url(${getImageUrl(sortedOptions[currentIndex])})`
+                  backgroundImage: `url(${getImageUrl(
+                    sortedOptions[currentIndex]
+                  )})`
                 }}
               >
                 <div style={cardOverlayStyle}>
@@ -525,7 +712,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* BOTTOM BAR */}
+      {/* BOTTOM BAR: Discard & Continue */}
       <div style={bottomBarStyle}>
         {hasOptions ? (
           <>
@@ -547,7 +734,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* RESHUFFLE BUTTON */}
+      {/* RESHUFFLE AT BOTTOM */}
       <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
         <button
           onClick={reshuffleDeck}
