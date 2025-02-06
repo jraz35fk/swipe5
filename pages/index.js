@@ -31,7 +31,9 @@ const categories = {
   }
 };
 
-const REWARD_THRESHOLD = 5; // Rewards must reach this level before a match is allowed
+const MAX_REWARD_POINTS = 100;
+const REWARD_DISCARD = 1;
+const REWARD_CONTINUE = 10;
 
 const Home = () => {
   const [history, setHistory] = useState([]);
@@ -62,34 +64,45 @@ const Home = () => {
     const choice = currentOptions[currentIndex];
 
     if (direction === "right") {
-      const nextLayer = categories[currentLayer]?.[choice];
-
-      if (nextLayer && typeof nextLayer === "object") {
-        // Move deeper & increase rewards
-        setHistory([...history, { layer: currentLayer, options: currentOptions }]);
-        setCurrentLayer(choice);
-        setCurrentOptions(Object.keys(nextLayer));
-        setCurrentIndex(0);
-        setRewardPoints((prev) => prev + 1);
-      } else if (Array.isArray(nextLayer)) {
-        // Move to specific activity layer
-        setHistory([...history, { layer: currentLayer, options: currentOptions }]);
-        setCurrentLayer(choice);
-        setCurrentOptions(nextLayer);
-        setCurrentIndex(0);
-        setRewardPoints((prev) => prev + 1);
-      } else {
-        if (rewardPoints >= REWARD_THRESHOLD && isFinalOption(choice)) {
-          handleFinalMatch(choice);
-        } else {
-          // Keep building reward points before allowing a match
-          setRewardPoints((prev) => prev + 1);
-        }
-      }
+      processContinue(choice);
     } else {
-      // Move to next option at the same level
-      setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
+      processDiscard();
     }
+  };
+
+  const processContinue = (choice) => {
+    const nextLayer = categories[currentLayer]?.[choice];
+
+    if (nextLayer && typeof nextLayer === "object") {
+      // Move deeper into categories
+      setHistory([...history, { layer: currentLayer, options: currentOptions }]);
+      setCurrentLayer(choice);
+      setCurrentOptions(Object.keys(nextLayer));
+      setCurrentIndex(0);
+    } else if (Array.isArray(nextLayer)) {
+      // Move to specific activity layer
+      setHistory([...history, { layer: currentLayer, options: currentOptions }]);
+      setCurrentLayer(choice);
+      setCurrentOptions(nextLayer);
+      setCurrentIndex(0);
+    } else {
+      handleFinalMatch(choice);
+    }
+
+    // Grant reward AFTER transition is completed
+    setTimeout(() => {
+      setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
+    }, 100);
+  };
+
+  const processDiscard = () => {
+    // Move to next option at the same level
+    setCurrentIndex((prev) => (prev + 1) % currentOptions.length);
+
+    // Grant reward AFTER card is disposed of
+    setTimeout(() => {
+      setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
+    }, 100);
   };
 
   const handleFinalMatch = (choice) => {
@@ -115,7 +128,6 @@ const Home = () => {
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
       setCurrentIndex(0);
-      setRewardPoints((prev) => (prev > 0 ? prev - 1 : 0));
       setHistory([...history]);
     }
   };
