@@ -85,8 +85,10 @@ const Home = () => {
       setCurrentLayer(choice);
       setCurrentOptions(nextLayer);
       setCurrentIndex(0);
-    } else {
+    } else if (isFinalOption(choice)) {
       handleFinalMatch(choice);
+    } else {
+      console.warn("Unexpected case: No valid next layer detected.");
     }
 
     // Grant reward AFTER transition is completed
