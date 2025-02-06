@@ -8,151 +8,147 @@ const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
 
 /**
  * 1) REAL ACTIVITIES DATA
- *    Organized under 7 top-level categories: Eat, Drink, Party, Explore,
+ *    Seven top-level categories: Eat, Drink, Party, Explore,
  *    Culture & History, Seasonal & Special, Shop & Leisure.
- *    Every item (#80–#168) is a final match card. 
- *
- *    The purpose: get all items in front of the user
- *    as quickly and efficiently as possible.
+ *    Each item is a final card with numbering only (no flavor text).
  */
-
 const rawActivities = {
   "Eat": {
     "Markets & Food Halls": [
-      "#148 Lexington Market – Historic market with fresh seafood and local eats",
-      "#149 Broadway Market – Revamped Fells Point food hall with seafood vendors",
-      "#150 Cross Street Market – Trendy indoor market in Federal Hill",
-      "#152 Belvedere Square Market – Upscale food hall with local gourmet shops",
-      "#153 Baltimore Farmers’ Market & Bazaar – Sunday market with produce & artisan goods"
+      "#148 Lexington Market",
+      "#149 Broadway Market",
+      "#150 Cross Street Market",
+      "#152 Belvedere Square Market",
+      "#153 Baltimore Farmers’ Market & Bazaar"
     ],
     "Unique Restaurants": [
-      "#144 Medieval Times Dinner & Tournament – Jousting & feast at Arundel Mills",
-      "#162 Papermoon Diner – Toy-filled diner with amazing milkshakes"
+      "#144 Medieval Times Dinner & Tournament",
+      "#162 Papermoon Diner"
     ]
   },
 
   "Drink": {
     "Breweries & Distilleries": [
-      "#80 Sagamore Spirit Distillery – Award-winning rye whiskey tours",
-      "#81 Union Craft Brewing – Popular brewery & beer garden in Hampden",
-      "#82 Checkerspot Brewing Co. – Female-owned brewery near M&T Bank Stadium",
-      "#83 Diamondback Brewing Co. – Brewery with wood-fired pizza in Locust Point",
-      "#84 Mobtown Brewing Co. – First brewery in modern Canton",
-      "#85 Heavy Seas Beer – Nautical-themed brewery known for Loose Cannon IPA",
-      "#86 The Brewer’s Art – Brewpub in a historic townhouse, famous for Resurrection Ale",
-      "#87 Baltimore Spirits Company – Distillery known for Shot Tower Gin",
-      "#88 Old Line Spirits – Veteran-owned whiskey & rum distillery",
-      "#89 Charm City Meadworks – Baltimore’s only meadery",
-      "#90 Guinness Open Gate Brewery – U.S. Guinness brewery in Halethorpe",
-      "#91 City Brew Tours – Guided brewery-hopping tours"
+      "#80 Sagamore Spirit Distillery",
+      "#81 Union Craft Brewing",
+      "#82 Checkerspot Brewing Co.",
+      "#83 Diamondback Brewing Co.",
+      "#84 Mobtown Brewing Co.",
+      "#85 Heavy Seas Beer",
+      "#86 The Brewer’s Art",
+      "#87 Baltimore Spirits Company",
+      "#88 Old Line Spirits",
+      "#89 Charm City Meadworks",
+      "#90 Guinness Open Gate Brewery",
+      "#91 City Brew Tours"
     ]
   },
 
   "Party": {
     "Night Bars & Live Music": [
-      "#131 Horseshoe Casino – Large casino with table games, slots, & dining",
-      "#161 The Horse You Came In On Saloon – America’s oldest continually operating bar"
+      "#131 Horseshoe Casino",
+      "#161 The Horse You Came In On Saloon"
     ],
     "Other Nightlife": [
-      "#130 Urban Axes – Axe-throwing bar for group fun",
-      "#134 Baltimore Bike Party – Massive monthly themed group bike ride"
+      "#130 Urban Axes",
+      "#134 Baltimore Bike Party"
     ]
   },
 
   "Explore": {
     "Outdoor Adventures": [
-      "#123 Inner Harbor Kayaking – Paddle for unique city views",
-      "#124 Urban Pirates Cruise – Family & adult-only pirate-themed rides",
-      "#125 Baltimore Waterfront Bike Route – Scenic cycling along the harbor",
-      "#134 Baltimore Bike Party – (also nightlife, but an outdoor group ride!)",
-      "#136 Route 40 Paintball – Outdoor paintball fields in White Marsh",
-      "#143 Lake Montebello – Scenic park with playgrounds & nature trails"
+      "#123 Inner Harbor Kayaking",
+      "#124 Urban Pirates Cruise",
+      "#125 Baltimore Waterfront Bike Route",
+      "#134 Baltimore Bike Party",
+      "#136 Route 40 Paintball",
+      "#143 Lake Montebello"
     ],
     "Recreation & Sports": [
-      "#126 Oriole Park at Camden Yards – Iconic MLB stadium",
-      "#127 M&T Bank Stadium – Home of the Ravens",
-      "#128 Ice Skating at Inner Harbor – Seasonal rink with skyline views",
-      "#129 Topgolf Baltimore – High-tech driving range with food & drinks",
-      "#132 Earth Treks Timonium – Rock climbing gym for all skill levels",
-      "#133 Leakin Park Miniature Steam Trains – Free rides on second Sundays",
-      "#135 Duckpin Bowling – Classic Baltimore bowling variation"
+      "#126 Oriole Park at Camden Yards",
+      "#127 M&T Bank Stadium",
+      "#128 Ice Skating at Inner Harbor",
+      "#129 Topgolf Baltimore",
+      "#132 Earth Treks Timonium",
+      "#133 Leakin Park Miniature Steam Trains",
+      "#135 Duckpin Bowling"
     ],
     "Offbeat & Street Art": [
-      "#158 Graffiti Alley – Baltimore’s only legal graffiti zone, full of street art",
-      "#163 Self-Guided Mural Tour – Hunt for Baltimore’s best street art"
+      "#158 Graffiti Alley",
+      "#163 Self-Guided Mural Tour"
     ]
   },
 
   "Culture & History": {
     "Museums & Attractions": [
-      "#137 National Aquarium – World-class aquatic exhibits",
-      "#138 Port Discovery Children’s Museum – Interactive fun for young kids",
-      "#139 Maryland Science Center – Hands-on exhibits & planetarium",
-      "#140 Maryland Zoo – African animals & penguin habitat",
-      "#142 American Visionary Art Museum – Quirky, colorful exhibits",
-      "#159 Bromo Seltzer Arts Tower – Climb inside a working clock tower",
-      "#160 Great Blacks in Wax Museum – Life-size wax figures of Black history",
-      "#164 BUZZ Lab – DIY biohacking lab for science enthusiasts"
+      "#137 National Aquarium",
+      "#138 Port Discovery Children’s Museum",
+      "#139 Maryland Science Center",
+      "#140 Maryland Zoo",
+      "#142 American Visionary Art Museum",
+      "#159 Bromo Seltzer Arts Tower",
+      "#160 Great Blacks in Wax Museum",
+      "#164 BUZZ Lab"
     ],
     "Tours & Historic Places": [
-      "#141 B&O Railroad Museum – Historic trains & kids’ ride",
-      "#165 Lexington Market Catacombs Tour – Underground burial sites",
-      "#167 Baltimore Heritage Walk – Self-guided walking tour of historic sites"
+      "#141 B&O Railroad Museum",
+      "#165 Lexington Market Catacombs Tour",
+      "#167 Baltimore Heritage Walk"
     ]
   },
 
   "Seasonal & Special": {
     "Spring-Summer": [
-      "#92 Opening Day at Camden Yards – Orioles’ first home game celebration",
-      "#93 Charm City Bluegrass Festival – Folk & bluegrass music fest",
-      "#94 Maryland Film Festival – Annual indie film fest in Station North",
-      "#95 Flower Mart – Spring festival with lemon sticks & garden vendors",
-      "#96 Kinetic Sculpture Race – Wacky amphibious human-powered race",
-      "#97 Preakness Stakes – Maryland’s biggest horse race",
-      "#98 Wine Village at Inner Harbor – Outdoor European-style wine market",
-      "#99 HonFest – Hampden’s iconic festival celebrating “Bawlmer” culture",
-      "#100 Baltimore Pride – LGBTQ+ parade & festival in Mount Vernon",
-      "#101 AFRAM – Major African American heritage festival",
-      "#102 Artscape – America’s largest free arts festival",
-      "#103 Fourth of July Fireworks – Over the Inner Harbor",
-      "#104 Baltimore Caribbean Carnival – Parade & festival of Caribbean culture",
-      "#105 Arts & Drafts at the Zoo – Craft beer fest at Maryland Zoo",
-      "#106 Waterfront Wellness – Free outdoor fitness classes",
-      "#168 SoWeBo Arts & Music Festival – Neighborhood festival of local art & music"
+      "#92 Opening Day at Camden Yards",
+      "#93 Charm City Bluegrass Festival",
+      "#94 Maryland Film Festival",
+      "#95 Flower Mart",
+      "#96 Kinetic Sculpture Race",
+      "#97 Preakness Stakes",
+      "#98 Wine Village at Inner Harbor",
+      "#99 HonFest",
+      "#100 Baltimore Pride",
+      "#101 AFRAM",
+      "#102 Artscape",
+      "#103 Fourth of July Fireworks",
+      "#104 Baltimore Caribbean Carnival",
+      "#105 Arts & Drafts at the Zoo",
+      "#106 Waterfront Wellness",
+      "#168 SoWeBo Arts & Music Festival"
     ],
     "Fall-Winter": [
-      "#107 Baltimore Book Festival – Literary event with signings",
-      "#108 Fell’s Point Fun Festival – Street fest with music & vendors",
-      "#109 Baltimore Running Festival – Marathon & running events",
-      "#110 Defenders Day at Fort McHenry – Reenactments & fireworks",
-      "#111 Edgar Allan Poe Festival – Celebrating Poe’s legacy",
-      "#112 Pigtown Festival – Quirky fest with pig races & local food",
-      "#113 Great Halloween Lantern Parade – Nighttime lantern parade",
-      "#114 Fells Point Ghost Tours – Spooky tours of haunted pubs",
-      "#115 Miracle on 34th Street – Famous Christmas lights in Hampden",
-      "#116 German Christmas Village – Traditional European holiday market",
-      "#117 Lighting of the Washington Monument – Holiday kickoff & fireworks",
-      "#118 Dollar or Free Museum Days – Winter discounts at top attractions",
-      "#119 MLK Parade – Annual Martin Luther King Jr. Day march",
-      "#120 Restaurant Week – Special prix-fixe menus across the city",
-      "#121 Frozen Harbor Music Festival – Multi-venue winter music fest",
-      "#122 Chinese New Year Celebrations – Lion dances & festivities"
+      "#107 Baltimore Book Festival",
+      "#108 Fell’s Point Fun Festival",
+      "#109 Baltimore Running Festival",
+      "#110 Defenders Day at Fort McHenry",
+      "#111 Edgar Allan Poe Festival",
+      "#112 Pigtown Festival",
+      "#113 Great Halloween Lantern Parade",
+      "#114 Fells Point Ghost Tours",
+      "#115 Miracle on 34th Street",
+      "#116 German Christmas Village",
+      "#117 Lighting of the Washington Monument",
+      "#118 Dollar or Free Museum Days",
+      "#119 MLK Parade",
+      "#120 Restaurant Week",
+      "#121 Frozen Harbor Music Festival",
+      "#122 Chinese New Year Celebrations"
     ]
   },
 
   "Shop & Leisure": {
     "Unique Shops": [
-      "#145 The Bazaar – Oddities, taxidermy & antique medical tools",
-      "#146 Atomic Books – Indie bookstore & mail stop for John Waters",
-      "#147 The Sound Garden – Baltimore’s best record store",
-      "#151 Hampden’s “The Avenue” – Quirky local boutiques & vintage shops",
-      "#154 The Book Thing – Free book warehouse (everything is $0)",
-      "#155 Fells Point Antiques & Shops – Vintage & unique boutiques",
-      "#156 Village Thrift – Bargain second-hand store",
-      "#157 Keepers Vintage – Curated retro fashion in Mount Vernon"
+      "#145 The Bazaar",
+      "#146 Atomic Books",
+      "#147 The Sound Garden",
+      "#151 Hampden’s “The Avenue”",
+      "#154 The Book Thing",
+      "#155 Fells Point Antiques & Shops",
+      "#156 Village Thrift",
+      "#157 Keepers Vintage"
     ],
     "Volunteer & Community": [
-      "#166 BARCS Animal Shelter – Walk dogs or help with adoptions"
+      "#166 BARCS Animal Shelter"
     ]
   }
 };
@@ -190,7 +186,7 @@ const PREFERENCE_DEC = 1;
 
 /**
  * 5) Trading card frames (neutral theme).
- *    We'll pick one randomly on the client to avoid SSR mismatch.
+ *    We'll pick one randomly on the client.
  */
 const cardFrames = [
   {
@@ -237,6 +233,7 @@ function getRandomFrameIndex() {
 
 /**
  * 6) Simple color map for top-level categories
+ *    We will NOT darken for deeper layers—children share parent's color.
  */
 const topLevelColors = {
   "Eat": "#E74C3C",
@@ -248,32 +245,11 @@ const topLevelColors = {
   "Shop & Leisure": "#16A085"
 };
 
-function darkenColor(hex, amount) {
-  const h = hex.replace("#", "");
-  let r = parseInt(h.substring(0, 2), 16);
-  let g = parseInt(h.substring(2, 4), 16);
-  let b = parseInt(h.substring(4, 6), 16);
-
-  r = Math.floor(r * (1 - amount));
-  g = Math.floor(g * (1 - amount));
-  b = Math.floor(b * (1 - amount));
-
-  r = Math.max(Math.min(r, 255), 0);
-  g = Math.max(Math.min(g, 255), 0);
-  b = Math.max(Math.min(b, 255), 0);
-
-  const rr = ("0" + r.toString(16)).slice(-2);
-  const gg = ("0" + g.toString(16)).slice(-2);
-  const bb = ("0" + b.toString(16)).slice(-2);
-  return `#${rr}${gg}${bb}`;
-}
-
-function getColorForPath(path) {
-  if (path.length === 0) return "#BDC3C7";
+/** Return the color of the top-level category, ignoring sub-depth. */
+function getTopLevelColor(path) {
+  if (!path.length) return "#BDC3C7";
   const topCat = path[0];
-  const base = topLevelColors[topCat] || "#7f8c8d";
-  const depth = path.length - 1;
-  return darkenColor(base, depth * 0.1);
+  return topLevelColors[topCat] || "#BDC3C7";
 }
 
 // Safely walk object for next node
@@ -451,7 +427,7 @@ export default function Home() {
     } else {
       // no more at this layer
       if (currentPath.length === 0) {
-        // top-level => discard all categories => show overlay, reshuffle
+        // top-level => user discards them all => show overlay, reshuffle
         setNoMoreMessage(true);
         setTimeout(() => {
           setNoMoreMessage(false);
@@ -472,11 +448,11 @@ export default function Home() {
     setRatings((prev) => ({ ...prev, [item]: stars }));
   };
 
-  // Show current "layer" name
+  // Current layer name
   const currentLayerName =
     currentPath.length === 0 ? "Shuffling..." : currentPath[currentPath.length - 1];
 
-  // Pick a random frame index in an effect so SSR doesn't mismatch
+  // Pick a random frame index for each new card (avoid SSR mismatch)
   const [cardFrameIndex, setCardFrameIndex] = useState(0);
   useEffect(() => {
     if (hasOptions) {
@@ -484,9 +460,9 @@ export default function Home() {
     }
   }, [currentIndex, currentPath, hasOptions]);
 
-  // Current card frame + color
+  // Use the same color for top-level and sub-layers
+  const cardColor = getTopLevelColor(currentPath);
   const cardFrame = cardFrames[cardFrameIndex];
-  const cardColor = getColorForPath(currentPath);
 
   /* ---------- STYLES ---------- */
   const appContainerStyle = {
@@ -822,7 +798,7 @@ export default function Home() {
             <TinderCard
               key={sortedOptions[currentIndex]}
               onSwipe={(dir) => handleSwipe(dir)}
-              preventSwipe={["up", "down"]}
+              preventSwipe={["up", "down"]} // left/right only
             >
               <div style={cardStyle}>
                 <div style={cardTopStyle}>
