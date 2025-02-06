@@ -31,7 +31,7 @@ const categories = {
   }
 };
 
-const WEIGHT_THRESHOLD = 3; // Users must drill down 3 layers before a match is possible
+const REWARD_THRESHOLD = 5; // Rewards must reach this level before a match is allowed
 
 const Home = () => {
   const [history, setHistory] = useState([]);
@@ -40,7 +40,7 @@ const Home = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matched, setMatched] = useState([]);
   const [finalMatch, setFinalMatch] = useState(null);
-  const [currentWeight, setCurrentWeight] = useState(0);
+  const [rewardPoints, setRewardPoints] = useState(0);
 
   useEffect(() => {
     if (!categories[currentLayer]) {
@@ -65,25 +65,25 @@ const Home = () => {
       const nextLayer = categories[currentLayer]?.[choice];
 
       if (nextLayer && typeof nextLayer === "object") {
-        // Move deeper
+        // Move deeper & increase rewards
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(Object.keys(nextLayer));
         setCurrentIndex(0);
-        setCurrentWeight((prev) => prev + 1);
+        setRewardPoints((prev) => prev + 1);
       } else if (Array.isArray(nextLayer)) {
         // Move to specific activity layer
         setHistory([...history, { layer: currentLayer, options: currentOptions }]);
         setCurrentLayer(choice);
         setCurrentOptions(nextLayer);
         setCurrentIndex(0);
-        setCurrentWeight((prev) => prev + 1);
+        setRewardPoints((prev) => prev + 1);
       } else {
-        if (currentWeight >= WEIGHT_THRESHOLD && isFinalOption(choice)) {
+        if (rewardPoints >= REWARD_THRESHOLD && isFinalOption(choice)) {
           handleFinalMatch(choice);
         } else {
-          // Keep drilling down
-          setCurrentWeight((prev) => prev + 1);
+          // Keep building reward points before allowing a match
+          setRewardPoints((prev) => prev + 1);
         }
       }
     } else {
@@ -106,7 +106,7 @@ const Home = () => {
     setCurrentOptions(Object.keys(categories));
     setCurrentIndex(0);
     setFinalMatch(null);
-    setCurrentWeight(0);
+    setRewardPoints(0);
   };
 
   const goBack = () => {
@@ -115,7 +115,7 @@ const Home = () => {
       setCurrentLayer(prevState.layer);
       setCurrentOptions(prevState.options);
       setCurrentIndex(0);
-      setCurrentWeight((prev) => (prev > 0 ? prev - 1 : 0));
+      setRewardPoints((prev) => (prev > 0 ? prev - 1 : 0));
       setHistory([...history]);
     }
   };
@@ -123,6 +123,7 @@ const Home = () => {
   return (
     <div className="swipe-container">
       <h2>{currentLayer}</h2>
+      <p>Reward Points: {rewardPoints}</p>
       {finalMatch ? (
         <div className="match-confirmation">
           <h3>Match Found: {finalMatch}</h3>
