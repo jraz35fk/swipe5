@@ -3,11 +3,7 @@ import TinderCard from 'react-tinder-card';
 
 /**
  * MASTER CATEGORIES OBJECT
- * 
- * We have fewer TOP-level categories, each with multiple SUB-layers,
- * then deeper THIRD-layers, and finally ARRAYS of final items.
- * 
- * Feel free to reorganize or add more layers if you like!
+ * Fewer top-level, deeper sub-layers for more swipes.
  */
 const categories = {
   "Eating & Drinking": {
@@ -66,7 +62,6 @@ const categories = {
       "Soundstage"
     ]
   },
-
   "Arts, Culture & Entertainment": {
     "Museums & Landmarks": {
       "Museums": [
@@ -108,7 +103,6 @@ const categories = {
       ]
     }
   },
-
   "Outdoors & Recreation": {
     "Parks & Hiking": [
       "Federal Hill Park",
@@ -129,7 +123,6 @@ const categories = {
       "Leakin Park Miniature Steam Trains"
     ]
   },
-
   "Events & Festivals": {
     "Major Annual Events": [
       "Preakness Stakes",
@@ -152,7 +145,6 @@ const categories = {
       "MLK Parade"
     ]
   },
-
   "Shopping & Hidden Gems": {
     "Markets & Bazaars": [
       "Lexington Market",
@@ -192,52 +184,48 @@ const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// ---------------------------------------
-// GOOGLE PLACES IMAGE FETCH (for final items)
-// ---------------------------------------
-async function fetchGooglePlacesImage(placeName) {
-  // Make sure you have NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env.local
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!apiKey) {
-    // If no API key is found, fallback to a random placeholder
-    return "https://source.unsplash.com/collection/190727/600x800";
-  }
+/**
+ * A simple IMAGE MAP for categories and final items.
+ * Key = string (e.g. "Eating & Drinking", "Crab Houses", "LP Steamers").
+ * Value = URL to a relevant image.
+ * 
+ * If not found, we use a fallback Unsplash link.
+ * You can expand or refine this as you like.
+ */
+const imageMap = {
+  // Top-Level
+  "Eating & Drinking": "https://images.unsplash.com/photo-1483691278019-cb7253bee49f?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Arts, Culture & Entertainment": "https://images.unsplash.com/photo-1607141154778-f7af83180c29?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Outdoors & Recreation": "https://images.unsplash.com/photo-1598550487032-0efc2ff845a2?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Events & Festivals": "https://images.unsplash.com/photo-1604252207279-0d99b71e3d6a?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Shopping & Hidden Gems": "https://images.unsplash.com/photo-1556742521-9713bf2720d8?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
 
-  try {
-    // 1) Find the place by name
-    const findUrl = new URL("https://maps.googleapis.com/maps/api/place/findplacefromtext/json");
-    findUrl.searchParams.set("key", apiKey);
-    findUrl.searchParams.set("input", placeName);
-    findUrl.searchParams.set("inputtype", "textquery");
-    // we request 'photos' field so we can get photo_reference
-    findUrl.searchParams.set("fields", "photos,formatted_address,name,place_id");
+  // Some second-level categories
+  "Seafood": "https://images.unsplash.com/photo-1514514788490-3785a9b82c00?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Nightlife": "https://images.unsplash.com/photo-1487029413235-e3f7fa17f6ca?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Breweries & Distilleries": "https://images.unsplash.com/photo-1571086578068-c7a7bfbf9680?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Museums & Landmarks": "https://images.unsplash.com/photo-1582395760561-338aaf6ec0e6?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Performing Arts": "https://images.unsplash.com/photo-1620085589319-e419433cb786?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Festivals & Seasonal": "https://images.unsplash.com/photo-1612386916723-a8dc4accffe2?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Parks & Hiking": "https://images.unsplash.com/photo-1506446001441-1dffa5b98af5?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Water Activities": "https://images.unsplash.com/photo-1563199574-26a530c714bb?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Major Annual Events": "https://images.unsplash.com/photo-1518118573782-0a7ff594d39e?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Neighborhood Festivals": "https://images.unsplash.com/photo-1440799306745-1c4392d1d6d6?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
 
-    const findRes = await fetch(findUrl.toString());
-    const findData = await findRes.json();
-    if (
-      !findData.candidates ||
-      findData.candidates.length === 0 ||
-      !findData.candidates[0].photos
-    ) {
-      // fallback
-      return "https://source.unsplash.com/collection/190727/600x800";
-    }
+  // Some final items example
+  "LP Steamers": "https://images.unsplash.com/photo-1561365452-adb940139ffa?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Nick’s Fish House": "https://images.unsplash.com/photo-1624891374782-d96f502cdd06?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Oriole Park at Camden Yards": "https://images.unsplash.com/photo-1579980297500-7596906edc76?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Fells Point Ghost Tours": "https://images.unsplash.com/photo-1527234502807-e91651720128?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Miracle on 34th Street": "https://images.unsplash.com/photo-1607881772611-c43e056576cc?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+};
 
-    const photoRef = findData.candidates[0].photos[0].photo_reference;
-    // 2) Construct the photo URL (we don't actually fetch the binary; we let the <img> do that)
-    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photoRef}&key=${apiKey}`;
-
-    return photoUrl;
-  } catch (err) {
-    console.error("Failed to fetch Google Places image:", err);
-    // fallback
-    return "https://source.unsplash.com/collection/190727/600x800";
-  }
+// Returns a fallback image from Unsplash if not in the map
+function getImageUrl(name) {
+  return imageMap[name] || "https://source.unsplash.com/collection/190727/600x800";
 }
 
-// ----------------------
-// HELPER: Safely traverse nested data by "path" array
-// ----------------------
+// Safely traverse nested data by path
 function getNodeAtPath(data, path) {
   let current = data;
   for (const segment of path) {
@@ -251,23 +239,21 @@ function getNodeAtPath(data, path) {
 }
 
 export default function Home() {
-  // PATH + INDEX for multi-layer navigation
+  // NAVIGATION + SWIPES
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // If final item is chosen
+  // FINAL MATCH
   const [finalMatch, setFinalMatch] = useState(null);
-
-  // Keep a list of matched items, stored in memory (clears on refresh)
+  // Keep in-memory matches until refresh
   const [matched, setMatched] = useState([]);
-
-  // Show/hide the "My Matches" panel
+  // Matches panel
   const [showMatches, setShowMatches] = useState(false);
 
-  // Basic "Reward points" for the user
+  // USER REWARDS
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // Weighted preference system (like our "learning" for the code)
+  // CODE "WEIGHTS" (preference learning)
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -281,29 +267,37 @@ export default function Home() {
     }
   }, [weights]);
 
-  // For "Go Back" functionality
+  // GO BACK HISTORY
   const [history, setHistory] = useState([]);
 
-  // The image for the current card if it's final
-  const [currentImageUrl, setCurrentImageUrl] = useState("");
+  // LOADING SCREEN (e.g. "Shuffling Baltimore...")
+  const [isShuffling, setIsShuffling] = useState(true);
 
-  // GET CURRENT NODE
+  // On mount, show "Shuffling Baltimore..." for ~2s, then reveal cards
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsShuffling(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // GET CURRENT NODE (object or array)
   const node = getNodeAtPath(categories, currentPath);
 
   // DETERMINE THIS LAYER'S OPTIONS
   let thisLayerOptions = [];
   if (currentPath.length === 0 && !node) {
-    // Top-level
+    // top-level categories
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // Subcategories (object keys)
+    // subcategories
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // Final items
+    // final items
     thisLayerOptions = node;
   }
 
-  // SORT OPTIONS BY DESCENDING WEIGHT
+  // SORT OPTIONS BY WEIGHT (desc)
   const sortByWeight = (arr) => {
     const copy = [...arr];
     copy.sort((a, b) => {
@@ -313,52 +307,39 @@ export default function Home() {
     });
     return copy;
   };
-  const sortedOptions = sortByWeight(thisLayerOptions);
 
-  // Check if we still have cards at this layer
+  // If we are at top-level, let's also randomize them (optional).
+  // This gives a bit of variety each time. 
+  // If you'd rather keep them sorted purely by weight, remove this shuffle logic.
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  let sortedOptions = sortByWeight(thisLayerOptions);
+  // If top-level, randomize them (you can comment this out if you want only weight-sorted)
+  if (currentPath.length === 0) {
+    sortedOptions = shuffle(sortedOptions);
+  }
+
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // DETERMINE IF CHOICE IS FINAL
+  // Check if choice is final (a single item)
   const isFinalOption = (choice) => {
     if (Array.isArray(node)) {
-      // We're already looking at a final array
-      return true;
+      return true; // already final list
     }
     const nextNode = getNodeAtPath(categories, [...currentPath, choice]);
     if (!nextNode) return true;
-    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // more sub-layers
-    if (Array.isArray(nextNode)) return false; // final array is next
+    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false;
+    if (Array.isArray(nextNode)) return false;
     return true;
   };
 
-  // Whenever the "currentIndex" changes (or the user navigates deeper),
-  // if the new item is final, fetch a real image from Google. Otherwise, fallback.
-  useEffect(() => {
-    if (!hasOptions) {
-      setCurrentImageUrl("");
-      return;
-    }
-
-    const currentChoice = sortedOptions[currentIndex];
-    if (!currentChoice) {
-      setCurrentImageUrl("");
-      return;
-    }
-
-    // If it's final, fetch from Google Places. Otherwise, set a placeholder.
-    if (isFinalOption(currentChoice)) {
-      fetchGooglePlacesImage(currentChoice).then((url) => {
-        setCurrentImageUrl(url || "");
-      });
-    } else {
-      // Middle-layer category
-      setCurrentImageUrl("https://source.unsplash.com/collection/190727/600x800");
-    }
-  }, [currentIndex, currentPath, hasOptions]);
-
-  // -----------------------
   // SWIPE HANDLERS
-  // -----------------------
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -371,7 +352,6 @@ export default function Home() {
 
   const processContinue = (choice) => {
     incrementWeight(choice);
-
     if (isFinalOption(choice)) {
       handleFinalMatch(choice);
     } else {
@@ -380,7 +360,6 @@ export default function Home() {
       setCurrentPath((prev) => [...prev, choice]);
       setCurrentIndex(0);
     }
-
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
   };
 
@@ -392,32 +371,30 @@ export default function Home() {
 
   const handleFinalMatch = (choice) => {
     setFinalMatch(choice);
-    // Add to matched array in memory
     if (!matched.includes(choice)) {
       const updated = [...matched, choice];
       setMatched(updated);
     }
   };
 
-  // GO BACK
+  // BACK, RESHUFFLE
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
       const newHist = history.slice(0, -1);
-
       setCurrentPath(prev.path);
       setCurrentIndex(prev.index);
       setHistory(newHist);
-      setFinalMatch(null); // clear final match if we had one
+      setFinalMatch(null);
     }
   };
 
-  // RESHUFFLE: Reset to top-level
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
     setFinalMatch(null);
     setRewardPoints(0);
+    setHistory([]);
   };
 
   // WEIGHT UTILS
@@ -427,6 +404,7 @@ export default function Home() {
       [item]: (prev[item] || 0) + 1
     }));
   };
+
   const decrementWeight = (item) => {
     setWeights((prev) => ({
       ...prev,
@@ -434,47 +412,76 @@ export default function Home() {
     }));
   };
 
-  // Get a display string for the current layer
   const currentLayerName =
     currentPath.length === 0
-      ? "Select a Category"
+      ? "Shuffling..."
       : currentPath[currentPath.length - 1];
 
   // -----------------------
-  // UI STYLING
+  // STYLES (PHONE-LIKE)
   // -----------------------
   const appContainerStyle = {
-    minHeight: "100vh",
-    background: "#f0f0f0",
+    width: "100%",
+    maxWidth: "420px",
+    margin: "0 auto",
+    height: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "#fdfdfd",
+    fontFamily: "sans-serif",
+    position: "relative"
+  };
+
+  // top bar
+  const headerStyle = {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: "0.5rem",
+    borderBottom: "1px solid #ccc",
+    position: "relative"
+  };
+
+  const phoneScreenTitleStyle = {
+    margin: 0,
+    fontWeight: "bold"
+  };
+
+  // We'll place "Go Back" and "View Matches" as small text buttons on left & right
+  const backButtonStyle = {
+    position: "absolute",
+    left: "1rem",
+    border: "none",
+    background: "none",
+    fontSize: "1rem",
+    color: "#333",
+    cursor: "pointer"
+  };
+
+  const matchesButtonStyle = {
+    position: "absolute",
+    right: "1rem",
+    border: "none",
+    background: "none",
+    fontSize: "1rem",
+    color: "#333",
+    cursor: "pointer"
+  };
+
+  // main content area (where the card appears)
+  const mainContentStyle = {
+    flex: 1,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    position: "relative",
-    fontFamily: "sans-serif",
-    padding: "1rem"
+    justifyContent: "center"
   };
 
-  const headerStyle = {
-    width: "100%",
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "0.5rem",
-    alignItems: "center"
-  };
-
-  const buttonLinkStyle = {
-    border: "none",
-    background: "none",
-    color: "#333",
-    cursor: "pointer",
-    fontSize: "1rem"
-  };
-
+  // card container
   const cardContainerStyle = {
-    position: "relative",
-    width: "320px",
-    height: "480px",
-    marginTop: "1rem"
+    width: "300px",
+    height: "420px",
+    position: "relative"
   };
 
   const cardStyle = {
@@ -484,7 +491,6 @@ export default function Home() {
     boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
     backgroundSize: "cover",
     backgroundPosition: "center",
-    position: "relative",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
@@ -492,19 +498,17 @@ export default function Home() {
   };
 
   const cardOverlayStyle = {
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-    padding: "1rem",
-    background: "linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(255,255,255,0) 100%)",
-    color: "#fff"
+    background: "linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 100%)",
+    color: "#fff",
+    padding: "1rem"
   };
 
-  const buttonRowStyle = {
-    marginTop: "1rem",
+  // bottom bar with discard/continue
+  const bottomBarStyle = {
     display: "flex",
     justifyContent: "center",
-    gap: "2rem"
+    gap: "2rem",
+    padding: "1rem"
   };
 
   const circleButtonStyle = (bgColor) => ({
@@ -519,15 +523,12 @@ export default function Home() {
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-    transition: "transform 0.2s"
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
 
-  // -----------
-  // SPLASH SCREEN FOR FINAL MATCH
-  // -----------
-  const splashStyle = {
-    position: "fixed",
+  // final match splash
+  const finalMatchOverlayStyle = {
+    position: "absolute",
     top: 0,
     left: 0,
     width: "100%",
@@ -541,114 +542,66 @@ export default function Home() {
     zIndex: 999
   };
 
-  // -----------
-  // MATCHES SIDEBAR/MODAL
-  // -----------
-  const matchesModalStyle = {
-    position: "fixed",
+  // matches panel
+  const matchesPanelStyle = {
+    position: "absolute",
     top: 0,
-    right: 0,
-    width: "300px",
+    left: 0,
+    width: "100%",
     height: "100%",
-    backgroundColor: "#fff",
-    boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+    background: "rgba(255,255,255,0.95)",
     zIndex: 998,
-    padding: "1rem",
-    overflowY: "auto"
+    display: "flex",
+    flexDirection: "column",
+    padding: "1rem"
   };
+
+  // LOADING SCREEN for "Shuffling Baltimore..."
+  if (isShuffling) {
+    return (
+      <div
+        style={{
+          ...appContainerStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        <h2>Shuffling Baltimore...</h2>
+      </div>
+    );
+  }
 
   return (
     <div style={appContainerStyle}>
-      {/* HEADER */}
-      <div style={headerStyle}>
-        <button onClick={goBack} style={buttonLinkStyle}>
-          ← Go Back
-        </button>
-        <h3 style={{ margin: 0 }}>{currentLayerName}</h3>
-        <div>
-          <button onClick={() => setShowMatches(true)} style={{ ...buttonLinkStyle, marginRight: "1rem" }}>
-            View My Matches
-          </button>
-          <button onClick={reshuffleDeck} style={buttonLinkStyle}>
-            Reshuffle
-          </button>
-        </div>
-      </div>
-
-      <p>Reward Points: {rewardPoints}</p>
-
-      {/* If we found a final match, show a "Splash Screen" */}
+      {/* If we have a final match, show a splash screen */}
       {finalMatch && (
-        <div style={splashStyle}>
+        <div style={finalMatchOverlayStyle}>
           <h1>Match Found!</h1>
           <h2>{finalMatch}</h2>
           <button
             onClick={() => setFinalMatch(null)}
             style={{
+              marginTop: "1rem",
               padding: "0.5rem 1rem",
-              fontSize: "1rem",
               background: "#2ECC71",
               border: "none",
               borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "1rem"
+              cursor: "pointer"
             }}
           >
-            Continue Browsing
+            Keep Exploring
           </button>
         </div>
       )}
 
-      {/* Card Container */}
-      <div style={cardContainerStyle}>
-        {hasOptions ? (
-          <TinderCard
-            key={sortedOptions[currentIndex]}
-            onSwipe={(dir) => handleSwipe(dir)}
-            preventSwipe={["up", "down"]}
-          >
-            <div
-              style={{
-                ...cardStyle,
-                backgroundImage: `url(${currentImageUrl})`
-              }}
-            >
-              <div style={cardOverlayStyle}>
-                <h2 style={{ margin: 0 }}>{sortedOptions[currentIndex]}</h2>
-              </div>
-            </div>
-          </TinderCard>
-        ) : (
-          <p style={{ textAlign: "center", marginTop: "2rem" }}>
-            No more options at this level.
-          </p>
-        )}
-      </div>
-
-      {/* Swipe Buttons */}
-      {hasOptions && (
-        <div style={buttonRowStyle}>
-          <button
-            style={circleButtonStyle("#F75D59")}
-            onClick={() => handleSwipe("left")}
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            ✕
-          </button>
-          <button
-            style={circleButtonStyle("#2ECC71")}
-            onClick={() => handleSwipe("right")}
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            ♥
-          </button>
-        </div>
-      )}
-
-      {/* MATCHES SIDEBAR */}
+      {/* If user taps "View My Matches" */}
       {showMatches && (
-        <div style={matchesModalStyle}>
+        <div style={matchesPanelStyle}>
           <h2>My Matches</h2>
+          <p style={{ color: "#555" }}>
+            (Saved until page is refreshed)
+          </p>
           {matched.length === 0 ? (
             <p>No matches yet.</p>
           ) : (
@@ -657,7 +610,7 @@ export default function Home() {
                 key={idx}
                 style={{
                   marginBottom: "0.5rem",
-                  padding: "0.5rem",
+                  padding: "0.5rem 0",
                   borderBottom: "1px solid #ccc"
                 }}
               >
@@ -668,11 +621,11 @@ export default function Home() {
           <button
             onClick={() => setShowMatches(false)}
             style={{
-              marginTop: "1rem",
+              marginTop: "auto",
               padding: "0.5rem 1rem",
-              border: "none",
-              background: "#333",
+              background: "#666",
               color: "#fff",
+              border: "none",
               borderRadius: "4px",
               cursor: "pointer"
             }}
@@ -681,6 +634,93 @@ export default function Home() {
           </button>
         </div>
       )}
+
+      {/* HEADER */}
+      <div style={headerStyle}>
+        {/* Go Back button on left */}
+        <button onClick={goBack} style={backButtonStyle}>
+          ←
+        </button>
+        {/* Title in center */}
+        <h3 style={phoneScreenTitleStyle}>
+          {currentLayerName}
+        </h3>
+        {/* Matches button on right */}
+        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
+          ♡
+        </button>
+      </div>
+
+      {/* Reward Points row */}
+      <div style={{ textAlign: "center", padding: "0.5rem" }}>
+        <strong>Points:</strong> {rewardPoints}
+      </div>
+
+      {/* MAIN CONTENT: Card */}
+      <div style={mainContentStyle}>
+        <div style={cardContainerStyle}>
+          {hasOptions ? (
+            <TinderCard
+              key={sortedOptions[currentIndex]}
+              onSwipe={(dir) => handleSwipe(dir)}
+              preventSwipe={["up", "down"]}
+            >
+              <div
+                style={{
+                  ...cardStyle,
+                  backgroundImage: `url(${getImageUrl(sortedOptions[currentIndex])})`
+                }}
+              >
+                <div style={cardOverlayStyle}>
+                  <h2 style={{ margin: 0 }}>
+                    {sortedOptions[currentIndex]}
+                  </h2>
+                </div>
+              </div>
+            </TinderCard>
+          ) : (
+            <p>No more options at this level.</p>
+          )}
+        </div>
+      </div>
+
+      {/* BOTTOM BAR: discard / continue / reshuffle */}
+      <div style={{ borderTop: "1px solid #ccc", paddingTop: "0.5rem" }}>
+        {hasOptions ? (
+          <div style={bottomBarStyle}>
+            <button
+              style={circleButtonStyle("#F75D59")}
+              onClick={() => handleSwipe("left")}
+            >
+              ✕
+            </button>
+            <button
+              style={circleButtonStyle("#2ECC71")}
+              onClick={() => handleSwipe("right")}
+            >
+              ♥
+            </button>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "1rem" }}>
+            <p>No more cards here.</p>
+          </div>
+        )}
+        <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+          <button
+            onClick={reshuffleDeck}
+            style={{
+              padding: "0.4rem 0.8rem",
+              border: "1px solid #ccc",
+              background: "#fff",
+              cursor: "pointer",
+              borderRadius: "4px"
+            }}
+          >
+            Reshuffle
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
