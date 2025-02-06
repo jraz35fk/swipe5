@@ -10,9 +10,10 @@ const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
  * 1) REAL ACTIVITIES DATA
  *    Organized under 7 top-level categories: Eat, Drink, Party, Explore,
  *    Culture & History, Seasonal & Special, Shop & Leisure.
- *    Each subcategory is an array of final "match cards."
+ *    Every item (#80–#168) is a final match card. 
  *
- *    All items below correspond to your #80–#168 list.
+ *    The purpose: get all items in front of the user
+ *    as quickly and efficiently as possible.
  */
 
 const rawActivities = {
@@ -25,7 +26,7 @@ const rawActivities = {
       "#153 Baltimore Farmers’ Market & Bazaar – Sunday market with produce & artisan goods"
     ],
     "Unique Restaurants": [
-      "#144 Medieval Times Dinner & Tournament – Jousting and feast at Arundel Mills",
+      "#144 Medieval Times Dinner & Tournament – Jousting & feast at Arundel Mills",
       "#162 Papermoon Diner – Toy-filled diner with amazing milkshakes"
     ]
   },
@@ -52,7 +53,7 @@ const rawActivities = {
       "#131 Horseshoe Casino – Large casino with table games, slots, & dining",
       "#161 The Horse You Came In On Saloon – America’s oldest continually operating bar"
     ],
-    "Other Nightlife Activities": [
+    "Other Nightlife": [
       "#130 Urban Axes – Axe-throwing bar for group fun",
       "#134 Baltimore Bike Party – Massive monthly themed group bike ride"
     ]
@@ -61,10 +62,11 @@ const rawActivities = {
   "Explore": {
     "Outdoor Adventures": [
       "#123 Inner Harbor Kayaking – Paddle for unique city views",
-      "#124 Urban Pirates Cruise – Family-friendly & adult-only pirate-themed rides",
+      "#124 Urban Pirates Cruise – Family & adult-only pirate-themed rides",
       "#125 Baltimore Waterfront Bike Route – Scenic cycling along the harbor",
-      "#134 Baltimore Bike Party – (Also nightlife, but an outdoor group ride!)",
-      "#136 Route 40 Paintball – Outdoor paintball fields in White Marsh"
+      "#134 Baltimore Bike Party – (also nightlife, but an outdoor group ride!)",
+      "#136 Route 40 Paintball – Outdoor paintball fields in White Marsh",
+      "#143 Lake Montebello – Scenic park with playgrounds & nature trails"
     ],
     "Recreation & Sports": [
       "#126 Oriole Park at Camden Yards – Iconic MLB stadium",
@@ -74,6 +76,10 @@ const rawActivities = {
       "#132 Earth Treks Timonium – Rock climbing gym for all skill levels",
       "#133 Leakin Park Miniature Steam Trains – Free rides on second Sundays",
       "#135 Duckpin Bowling – Classic Baltimore bowling variation"
+    ],
+    "Offbeat & Street Art": [
+      "#158 Graffiti Alley – Baltimore’s only legal graffiti zone, full of street art",
+      "#163 Self-Guided Mural Tour – Hunt for Baltimore’s best street art"
     ]
   },
 
@@ -90,7 +96,7 @@ const rawActivities = {
     ],
     "Tours & Historic Places": [
       "#141 B&O Railroad Museum – Historic trains & kids’ ride",
-      "#165 Lexington Market Catacombs Tour – Explore underground burial sites",
+      "#165 Lexington Market Catacombs Tour – Underground burial sites",
       "#167 Baltimore Heritage Walk – Self-guided walking tour of historic sites"
     ]
   },
@@ -100,7 +106,7 @@ const rawActivities = {
       "#92 Opening Day at Camden Yards – Orioles’ first home game celebration",
       "#93 Charm City Bluegrass Festival – Folk & bluegrass music fest",
       "#94 Maryland Film Festival – Annual indie film fest in Station North",
-      "#95 Flower Mart – Spring fest with lemon sticks & garden vendors",
+      "#95 Flower Mart – Spring festival with lemon sticks & garden vendors",
       "#96 Kinetic Sculpture Race – Wacky amphibious human-powered race",
       "#97 Preakness Stakes – Maryland’s biggest horse race",
       "#98 Wine Village at Inner Harbor – Outdoor European-style wine market",
@@ -126,7 +132,7 @@ const rawActivities = {
       "#115 Miracle on 34th Street – Famous Christmas lights in Hampden",
       "#116 German Christmas Village – Traditional European holiday market",
       "#117 Lighting of the Washington Monument – Holiday kickoff & fireworks",
-      "#118 Dollar or Free Museum Days – Winter discounts to top attractions",
+      "#118 Dollar or Free Museum Days – Winter discounts at top attractions",
       "#119 MLK Parade – Annual Martin Luther King Jr. Day march",
       "#120 Restaurant Week – Special prix-fixe menus across the city",
       "#121 Frozen Harbor Music Festival – Multi-venue winter music fest",
@@ -140,7 +146,7 @@ const rawActivities = {
       "#146 Atomic Books – Indie bookstore & mail stop for John Waters",
       "#147 The Sound Garden – Baltimore’s best record store",
       "#151 Hampden’s “The Avenue” – Quirky local boutiques & vintage shops",
-      "#154 The Book Thing – Free book warehouse, everything is $0",
+      "#154 The Book Thing – Free book warehouse (everything is $0)",
       "#155 Fells Point Antiques & Shops – Vintage & unique boutiques",
       "#156 Village Thrift – Bargain second-hand store",
       "#157 Keepers Vintage – Curated retro fashion in Mount Vernon"
@@ -183,8 +189,8 @@ const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
 /**
- * 5) Trading card frames (renamed to remove “Pokémon” flavor)
- *    We'll pick one randomly in an effect on the client only.
+ * 5) Trading card frames (neutral theme).
+ *    We'll pick one randomly on the client to avoid SSR mismatch.
  */
 const cardFrames = [
   {
@@ -225,7 +231,6 @@ const cardFrames = [
   }
 ];
 
-// Defer picking a random frame to avoid SSR mismatch
 function getRandomFrameIndex() {
   return Math.floor(Math.random() * cardFrames.length);
 }
@@ -817,7 +822,7 @@ export default function Home() {
             <TinderCard
               key={sortedOptions[currentIndex]}
               onSwipe={(dir) => handleSwipe(dir)}
-              preventSwipe={["up", "down"]} // we only allow left/right swipes
+              preventSwipe={["up", "down"]}
             >
               <div style={cardStyle}>
                 <div style={cardTopStyle}>
@@ -831,9 +836,7 @@ export default function Home() {
                     justifyContent: "center"
                   }}
                 >
-                  <h2 style={cardTitleStyle}>
-                    {sortedOptions[currentIndex]}
-                  </h2>
+                  <h2 style={cardTitleStyle}>{sortedOptions[currentIndex]}</h2>
                 </div>
               </div>
             </TinderCard>
