@@ -2,55 +2,85 @@ import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
 /**
- * BROADER TOP-LEVEL CATEGORIES
- * Each has multiple child layers so the user always gets several branches.
- * We also ensure that final arrays have multiple items,
- * and each subcategory has at least 2-3 sub-layers or final arrays.
+ * 1) BROAD TOP-LEVEL CATEGORIES, plus expanded "Food & Drink"
+ *    with many subcategories, ensuring if we don't have a
+ *    real final match, we show placeholders like
+ *    "This could be your pizza shop!"
  */
 const rawActivities = {
   "Taste": {
     "Eat": {
-      "Make at Home": [
-        "Recipe Kits from Farmer’s Market",
-        "Meal Prep Subscription Services",
-        "Learn a New Cuisine (Online Class)"
+      "Seafood": [
+        "Crabs & Old Bay Seasoning",
+        "Fresh Oysters",
+        "Shrimp & Grits",
+        "Lobster Rolls",
+        "This could be your fish house!"
       ],
-      "Carry Out": [
-        "Neighborhood Takeout Joints",
-        "Food Trucks Collective",
-        "Late-Night Carryout Spots"
+      "Pizza & Italian": [
+        "Classic Neapolitan Pizza",
+        "Chicago Deep Dish",
+        "NY-Style Slices",
+        "Fine Italian Cuisine",
+        "This could be your pizza shop!"
       ],
-      "Dine In": [
-        "Local Restaurants (Full Service)",
-        "Casual Cafés & Bistros",
-        "Upscale Fine Dining"
+      "Burgers & Sandwiches": [
+        "Gourmet Burger Joints",
+        "Classic Deli Sandwiches",
+        "Pulled Pork BBQ",
+        "Philly Cheesesteak",
+        "This could be your burger bar!"
       ],
-      "Family Style": [
-        "Buffet-Style Restaurants",
-        "Group-Friendly Hibachi Spots",
-        "Large Table Reservations"
+      "Tacos & Tex-Mex": [
+        "Street Tacos",
+        "Burritos & Bowls",
+        "Quesadillas",
+        "Enchiladas",
+        "This could be your taco stand!"
+      ],
+      "Vegetarian & Vegan": [
+        "Vegan Comfort Food",
+        "Farm-to-Table Veggie Spot",
+        "Smoothie & Juice Bars",
+        "Tempeh & Tofu Specials",
+        "This could be your vegan café!"
+      ],
+      "Desserts & Sweets": [
+        "Cupcake Shops",
+        "Frozen Yogurt & Gelato",
+        "Artisanal Donuts",
+        "Old-Fashioned Ice Cream",
+        "This could be your dessert place!"
       ]
     },
     "Drink": {
-      "Cocktails": [
+      "Beer & Breweries": [
+        "IPA Taprooms",
+        "Seasonal Oktoberfest Spots",
+        "Local Microbreweries",
+        "Stout & Porter Specialists",
+        "This could be your beer brand!"
+      ],
+      "Cocktails & Mixology": [
         "Craft Cocktail Lounges",
         "Tiki Bars",
-        "Speakeasy-Style Mixology"
-      ],
-      "Breweries": [
-        "Microbreweries & Taprooms",
-        "Seasonal Beer Gardens",
-        "Brewery Tours & Tastings"
-      ],
-      "Coffee & Tea": [
-        "Specialty Coffee Shops",
-        "Tea Houses & Afternoon Tea",
-        "Local Roasteries"
+        "Martini Bars",
+        "Mimosa Brunch Spots",
+        "This could be your speakeasy!"
       ],
       "Wine & Distilleries": [
         "Urban Wineries",
-        "Distillery Tours (Vodka, Gin)",
-        "Wine Bars"
+        "Distillery Tours",
+        "Whiskey & Bourbon Tastings",
+        "Champagne & Sparkling Bars",
+        "This could be your winery!"
+      ],
+      "Coffee & Tea": [
+        "Specialty Espresso Bars",
+        "Loose Leaf Tea Houses",
+        "Bubble Tea & Boba Cafés",
+        "Traditional Afternoon Tea",
+        "This could be your coffee shop!"
       ]
     }
   },
@@ -178,7 +208,7 @@ const rawActivities = {
   }
 };
 
-/** Flatten single-child sublayers to avoid categories with only one child. */
+/** 2) Flatten single-child sublayers */
 function flattenSingleChildLayers(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
@@ -196,19 +226,68 @@ function flattenSingleChildLayers(obj) {
   }
   return obj;
 }
-
 const categories = flattenSingleChildLayers(rawActivities);
 
-// USER scoreboard points
+// 3) Scoreboard for user
 const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// CODE preference
+// 4) Code preference
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
-// Color map for top-level
+/** 
+ * 5) "Trading Card" Styles: 
+ *    We'll pick randomly from these card frames to give a "flashy" variety 
+ *    (some Pokemon-like, some baseball-like, etc.)
+ */
+const cardFrames = [
+  {
+    name: "Classic Pokémon",
+    border: "4px solid #F8C859",
+    borderRadius: "12px",
+    background: "linear-gradient(135deg, #7EC0EE 0%, #F8C859 100%)"
+  },
+  {
+    name: "Team Baseball",
+    border: "4px solid #C0392B",
+    borderRadius: "0px",
+    background: "linear-gradient(135deg, #BDC3C7 0%, #ECF0F1 100%)"
+  },
+  {
+    name: "Retro 90s",
+    border: "4px dashed #9B59B6",
+    borderRadius: "20px",
+    background: "linear-gradient(135deg, #D2B4DE 0%, #F5EEF8 100%)"
+  },
+  {
+    name: "Neon Cyber",
+    border: "3px solid #2ECC71",
+    borderRadius: "8px",
+    background: "radial-gradient(circle, #1ABC9C 0%, #16A085 100%)"
+  },
+  {
+    name: "Galactic Foil",
+    border: "5px double #8E44AD",
+    borderRadius: "16px",
+    background: "linear-gradient(120deg, #BEBADA 0%, #E7E7E7 100%)"
+  },
+  {
+    name: "Futuristic Minimal",
+    border: "2px solid #666",
+    borderRadius: "5px",
+    background: "linear-gradient(135deg, #f0f0f0 0%, #fafafa 100%)"
+  }
+];
+
+// Helper to pick a random card frame
+function getRandomCardFrame() {
+  const idx = Math.floor(Math.random() * cardFrames.length);
+  return cardFrames[idx];
+}
+
+// 6) Basic color map for top-level categories
 const topLevelColors = {
   "Taste": "#E74C3C",
   "Experience": "#8E44AD",
@@ -218,7 +297,7 @@ const topLevelColors = {
   "Shop & Leisure": "#F39C12"
 };
 
-// Darken color helper
+// Darken color
 function darkenColor(hex, amount) {
   const h = hex.replace("#", "");
   let r = parseInt(h.substring(0, 2), 16);
@@ -247,7 +326,7 @@ function getColorForPath(path) {
   return darkenColor(base, depth * 0.1);
 }
 
-// Retrieve node by path
+// Safe retrieval
 function getNodeAtPath(obj, path) {
   let current = obj;
   for (const seg of path) {
@@ -260,39 +339,42 @@ function getNodeAtPath(obj, path) {
   return current;
 }
 
+/** 
+ * PRIMARY COMPONENT
+ */
 export default function Home() {
-  // path + index
+  // PATH + INDEX
   const [currentPath, setCurrentPath] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // final match
+  // FINAL MATCH
   const [finalMatch, setFinalMatch] = useState(null);
 
-  // matched items (collection)
+  // Matches (collection)
   const [matched, setMatched] = useState([]);
   const [completed, setCompleted] = useState({});
   const [ratings, setRatings] = useState({});
 
-  // show matches panel?
+  // Show matches overlay?
   const [showMatches, setShowMatches] = useState(false);
 
-  // user scoreboard
+  // User scoreboard
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // history stack
+  // History
   const [history, setHistory] = useState([]);
 
-  // loading splash
+  // Loading splash
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setIsShuffling(false), 2000);
     return () => clearTimeout(t);
   }, []);
 
-  // no more overlay
+  // "No more" overlay
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // code preference weights
+  // Code preference
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -306,18 +388,18 @@ export default function Home() {
     }
   }, [weights]);
 
-  // build this layer
+  // Build this layer
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
   if (!node && currentPath.length === 0) {
-    thisLayerOptions = Object.keys(categories); 
+    thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
     thisLayerOptions = node;
   }
 
-  // sort by preference
+  // Sort by preference
   const sortByPreference = (arr) => {
     const copy = [...arr];
     copy.sort((a, b) => {
@@ -331,7 +413,7 @@ export default function Home() {
 
   const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // preference up/down
+  // preference inc/dec
   const incPreference = (item) => {
     setWeights((prev) => ({
       ...prev,
@@ -345,14 +427,14 @@ export default function Home() {
     }));
   };
 
-  // goBack
+  // go back
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
-      const updated = history.slice(0, -1);
+      const newHist = history.slice(0, -1);
       setCurrentPath(prev.path);
       setCurrentIndex(prev.index);
-      setHistory(updated);
+      setHistory(newHist);
       setFinalMatch(null);
     }
   };
@@ -374,6 +456,7 @@ export default function Home() {
     }
   };
 
+  // check final
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
@@ -382,7 +465,7 @@ export default function Home() {
     return true;
   }
 
-  // handle swipe
+  // swipe
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -428,7 +511,7 @@ export default function Home() {
     }
   };
 
-  // mark completed
+  // completed
   const markCompleted = (item) => {
     setCompleted((prev) => ({ ...prev, [item]: true }));
   };
@@ -439,10 +522,11 @@ export default function Home() {
   };
 
   // layer name
-  const currentLayerName =
-    currentPath.length === 0 ? "Shuffling..." : currentPath[currentPath.length - 1];
+  const currentLayerName = currentPath.length === 0
+    ? "Shuffling..."
+    : currentPath[currentPath.length - 1];
 
-  // STYLES
+  // styles
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -455,7 +539,6 @@ export default function Home() {
     position: "relative"
   };
 
-  // loading splash
   if (isShuffling) {
     return (
       <div
@@ -563,37 +646,46 @@ export default function Home() {
     position: "relative"
   };
 
-  // "Pokémon card" style
+  // randomly pick a card frame style each time we show a new item
+  const [cardFrame, setCardFrame] = useState(getRandomCardFrame());
+  useEffect(() => {
+    if (hasOptions) {
+      // whenever currentIndex changes or we navigate deeper, pick a new frame
+      setCardFrame(getRandomCardFrame());
+    }
+  }, [currentIndex, currentPath, hasOptions]);
+
+  // also get top-level color for the text highlight
   const cardColor = getColorForPath(currentPath);
 
+  // Combine the random frame style + layout
   const cardStyle = {
     width: "100%",
     height: "100%",
-    borderRadius: "12px",
-    border: "4px solid #333",
-    backgroundColor: "#fff",
+    ...cardFrame,
     display: "flex",
     flexDirection: "column",
+    position: "relative",
     overflow: "hidden",
-    position: "relative"
+    justifyContent: "space-between"
   };
 
+  // top label area
   const cardTopStyle = {
-    background: `linear-gradient(90deg, ${cardColor} 0%, #fff 100%)`,
     padding: "0.5rem",
     textAlign: "center",
+    fontWeight: "bold",
     color: "#fff",
-    fontWeight: "bold"
+    backgroundColor: "#00000044"
   };
 
-  const cardBodyStyle = {
-    flex: 1,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
+  const cardTitleStyle = {
+    color: cardColor,
+    backgroundColor: "#ffffffcc",
+    borderRadius: "8px",
+    padding: "0.5rem 1rem"
   };
 
-  // bottom bar
   const bottomBarStyle = {
     borderTop: "1px solid #ccc",
     padding: "0.5rem",
@@ -624,7 +716,7 @@ export default function Home() {
 
   return (
     <div style={appContainerStyle}>
-      {/* Final match overlay */}
+      {/* final match overlay */}
       {finalMatch && (
         <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
@@ -685,7 +777,7 @@ export default function Home() {
                         cursor: "pointer",
                         padding: "0.25rem 0.5rem"
                       }}
-                      onClick={() => setCompleted((prev) => ({ ...prev, [item]: true }))}
+                      onClick={() => markCompleted(item)}
                     >
                       Mark Completed
                     </button>
@@ -700,9 +792,7 @@ export default function Home() {
                         ...starStyle,
                         color: ratings[item] >= star ? "#f1c40f" : "#ccc"
                       }}
-                      onClick={() =>
-                        setRatings((prev) => ({ ...prev, [item]: star }))
-                      }
+                      onClick={() => setItemRating(item, star)}
                     >
                       ★
                     </span>
@@ -766,14 +856,9 @@ export default function Home() {
 
       {/* Header */}
       <div style={headerStyle}>
-        <button onClick={goBack} style={backButtonStyle}>
-          ←
-        </button>
+        <button onClick={goBack} style={backButtonStyle}>←</button>
         <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
-        <button
-          onClick={() => setShowMatches(true)}
-          style={matchesButtonStyle}
-        >
+        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
           ♡
         </button>
       </div>
@@ -782,7 +867,7 @@ export default function Home() {
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* Card Area */}
+      {/* MAIN CARD => "Trading Card" style (random) */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -792,16 +877,18 @@ export default function Home() {
               preventSwipe={["up", "down"]}
             >
               <div style={cardStyle}>
-                <div style={cardTopStyle}>{currentLayerName}</div>
-                <div style={cardBodyStyle}>
-                  <h2
-                    style={{
-                      backgroundColor: cardColor,
-                      color: "#fff",
-                      padding: "0.5rem 1rem",
-                      borderRadius: "8px"
-                    }}
-                  >
+                <div style={cardTopStyle}>
+                  {cardFrame.name} | {currentLayerName}
+                </div>
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  <h2 style={cardTitleStyle}>
                     {sortedOptions[currentIndex]}
                   </h2>
                 </div>
@@ -813,7 +900,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Bottom bar */}
+      {/* bottom bar */}
       <div style={bottomBarStyle}>
         {hasOptions ? (
           <>
