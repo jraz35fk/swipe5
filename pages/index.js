@@ -1,14 +1,31 @@
 import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
-/**
- * ------------------------------------------------------------------
- * 1) Original BALTIMORE ACTIVITIES data from your message
- * ------------------------------------------------------------------
+/** 
+ * 1) NEW, BROADER DATA STRUCTURE:
+ *    7 major top-level categories => multiple sub-layers => final arrays.
+ *    This ensures the first layer has multiple branches, 
+ *    matching your "branching from the start" goal.
  */
-const rawBaltimoreActivities = {
-  "Eating & Drinking": {
-    "Hidden Gems & Highly-Rated Restaurants": [
+const rawActivities = {
+  "Food & Drink": {
+    "Seafood & Oyster Bars": [
+      "LP Steamers",
+      "Thames Street Oyster House",
+      "Nick’s Fish House",
+      "Ryleigh’s Oyster",
+      "The Choptank"
+    ],
+    "Italian & Fine Dining": [
+      "Charleston (Harbor East)",
+      "Cinghiale (Harbor East)",
+      "La Scala (Little Italy)",
+      "Matthew’s Pizza",
+      "Isabella’s Brick Oven",
+      "Vacarro’s (Little Italy)",
+      "Tavern at Woodberry (farm-to-table)"
+    ],
+    "Hidden Gems & Highly-Rated": [
       "Puerto 511",
       "Magdalena (Ivy Hotel)",
       "Foraged (Station North)",
@@ -19,57 +36,37 @@ const rawBaltimoreActivities = {
       "Le Comptoir du Vin",
       "Faidley’s Seafood (Lexington Market)",
       "Ekiben (Asian Fusion)",
-      "The Tavern at Woodberry (Woodberry Kitchen)",
-      "Duck Duck Goose (Fells Point)",
-      "The Helmand (Mt. Vernon)",
       "Hersh’s (Riverside)",
-      "Little Donna’s (Upper Fells)",
-      "Dock Street Bar & Grill (Canton)",
       "NiHao (Canton)",
       "Samos Restaurant (Greektown)",
-      "Ananda (Fulton)",
       "Azumi (Harbor East)"
     ],
-    "Italian & Fine Dining": [
-      "Charleston (Harbor East)",
-      "Cinghiale (Harbor East)",
-      "La Scala (Little Italy)",
-      "Matthew’s Pizza",
-      "Isabella’s Brick Oven",
-      "Vacarro’s (Little Italy)",
-      "Magdalena (Ivy Hotel) – (also fine dining)",
-      "Tavern at Woodberry (also upscale, farm-to-table)"
-    ],
-    "Seafood & Oyster Bars": [
-      "LP Steamers",
-      "Thames Street Oyster House",
-      "Nick’s Fish House",
-      "Ryleigh’s Oyster",
-      "The Choptank"
-    ],
     "International & Fusion": [
-      "Alma Cocina Latina",
       "Ekiben (Asian Fusion)",
       "Samos Restaurant (Greek)",
       "The Helmand (Afghan)",
+      "La Cuchara (Basque-inspired)",
       "Little Italy Restaurants (general)",
-      "La Cuchara (Basque-inspired)"
+      "Ananda (Fulton)",
+      "Duck Duck Goose (Fells Point)"
     ]
   },
 
-  "Nightlife & Entertainment": {
-    "Unique Bars & Speakeasies": [
-      "The Elk Room (Speakeasy)",
-      "WC Harlan (Hidden Bar, Remington)",
-      "Martick’s (Historic Speakeasy)",
-      "Illusions Magic Bar & Theater",
-      "The Owl Bar (Historic, Mt. Vernon)"
-    ],
-    "Dive Bars & Karaoke": [
-      "Walt’s Inn (Karaoke, Canton)",
-      "Max’s Taphouse (Fells Point)",
-      "Cat’s Eye Pub (Fells Point)"
-    ],
+  "Nightlife & Music": {
+    "Bars": {
+      "Speakeasies & Unique Bars": [
+        "The Elk Room (Speakeasy)",
+        "WC Harlan (Hidden Bar)",
+        "Martick’s (Historic Speakeasy)",
+        "Illusions Magic Bar & Theater",
+        "The Owl Bar (Mt. Vernon)"
+      ],
+      "Dive & Karaoke": [
+        "Walt’s Inn (Karaoke)",
+        "Max’s Taphouse (Fells Point)",
+        "Cat’s Eye Pub (Fells Point)"
+      ]
+    },
     "Live Music Venues": [
       "Ottobar",
       "The Crown (Station North)",
@@ -86,99 +83,8 @@ const rawBaltimoreActivities = {
     ]
   },
 
-  "Outdoors & Nature": {
-    "Parks & Gardens": [
-      "Druid Hill Park & Reservoir Loop",
-      "Federal Hill Park",
-      "Patterson Park & Pagoda",
-      "Gwynns Falls/Leakin Park",
-      "Cylburn Arboretum",
-      "Sherwood Gardens (Guilford)",
-      "Howard Peters Rawlings Conservatory (Druid Hill)",
-      "Lake Roland Park"
-    ],
-    "Water Activities": [
-      "Inner Harbor Paddle Boats",
-      "Urban Pirates Cruise",
-      "Dundee Creek Marina (Kayaking)",
-      "Marshy Point Nature Center"
-    ],
-    "Nearby Nature & Trails": [
-      "Loch Raven Reservoir",
-      "Gunpowder Falls State Park",
-      "Rails-to-Trails at Jones Falls"
-    ],
-    "Sports & Scenic Venues": [
-      "Oriole Park at Camden Yards",
-      "M&T Bank Stadium"
-    ]
-  },
-
-  "Historic & Cultural Landmarks": {
-    "Iconic Historic Sites": [
-      "Fort McHenry National Monument",
-      "USS Constellation (Inner Harbor)",
-      "Washington Monument (Mt. Vernon)",
-      "Basilica of the Assumption (America’s First Cathedral)",
-      "Fell’s Point Historic Main Street",
-      "Hampton National Historic Site (Towson)",
-      "Carroll Mansion (Jonestown)",
-      "Phoenix Shot Tower",
-      "Star-Spangled Banner Flag House",
-      "Evergreen Museum & Library (Gilded Age)"
-    ],
-    "Museums & Art": [
-      "The Walters Art Museum",
-      "Baltimore Museum of Art",
-      "George Peabody Library",
-      "American Visionary Art Museum",
-      "Reginald F. Lewis Museum",
-      "B&O Railroad Museum",
-      "National Great Blacks In Wax Museum",
-      "Jewish Museum of Maryland",
-      "Baltimore Museum of Industry (Locust Point)",
-      "Port Discovery Children’s Museum"
-    ],
-    "Edgar Allan Poe Heritage": [
-      "Edgar Allan Poe’s Grave & Memorial (Westminster Hall)",
-      "Edgar Allan Poe House & Museum (Poppleton)"
-    ]
-  },
-
-  "Shopping & Markets": {
-    "Food Markets": [
-      "Lexington Market",
-      "Broadway Market",
-      "Cross Street Market",
-      "Mount Vernon Marketplace",
-      "Baltimore Farmers’ Market & Bazaar",
-      "Belvedere Square Market"
-    ],
-    "Shopping Districts": [
-      "Hampden ‘The Avenue’ (36th Street)",
-      "Fells Point Antique Shops & Galleries",
-      "Harbor East Shopping District",
-      "Federal Hill Shops (Cross Street Market area)",
-      "Village of Cross Keys",
-      "White Marsh Mall",
-      "Antique Row (Howard Street)"
-    ],
-    "Unique Boutiques & Stores": [
-      "Ma Petite Shoe (Hampden)",
-      "Atomic Books (Hampden)",
-      "The Book Thing (Free Book ‘Store’)",
-      "Corradetti Glassblowing Studio (Clipper Mill)",
-      "Baltimore Clayworks (Mt. Washington)",
-      "Sound Garden (Fells Point)",
-      "Brightside Boutique (Hampden/Fed Hill)",
-      "Double Dutch Boutique (Hampden)",
-      "Bazaar (Oddities & Curiosities, Hampden)",
-      "Loring Cornish Gallery (Fells Point)"
-    ]
-  },
-
   "Events & Festivals": {
-    "Major Annual Events": [
+    "Major Annual": [
       "Preakness Stakes (Horse Race & InFieldFest)",
       "AFRAM Festival",
       "Artscape (Free Summer Arts Fest)",
@@ -207,110 +113,179 @@ const rawBaltimoreActivities = {
     ]
   },
 
-  "Unusual & Quirky Experiences": {
+  "Outdoors & Recreation": {
+    "Parks & Gardens": [
+      "Druid Hill Park & Reservoir Loop",
+      "Federal Hill Park",
+      "Patterson Park & Pagoda",
+      "Gwynns Falls/Leakin Park",
+      "Cylburn Arboretum",
+      "Sherwood Gardens (Guilford)",
+      "Howard Peters Rawlings Conservatory",
+      "Lake Roland Park"
+    ],
+    "Water Activities": [
+      "Inner Harbor Paddle Boats",
+      "Urban Pirates Cruise",
+      "Dundee Creek Marina (Kayaking)",
+      "Marshy Point Nature Center"
+    ],
+    "Nearby Trails": [
+      "Loch Raven Reservoir",
+      "Gunpowder Falls State Park",
+      "Rails-to-Trails at Jones Falls"
+    ],
+    "Sports & Scenic Venues": [
+      "Oriole Park at Camden Yards",
+      "M&T Bank Stadium"
+    ]
+  },
+
+  "Shopping & Markets": {
+    "Food Markets": [
+      "Lexington Market",
+      "Broadway Market",
+      "Cross Street Market",
+      "Mount Vernon Marketplace",
+      "Baltimore Farmers’ Market & Bazaar",
+      "Belvedere Square Market"
+    ],
+    "Shopping Districts": [
+      "Hampden ‘The Avenue’",
+      "Fells Point Antique Shops & Galleries",
+      "Harbor East Shopping District",
+      "Federal Hill Shops",
+      "Village of Cross Keys",
+      "White Marsh Mall",
+      "Antique Row (Howard Street)"
+    ],
+    "Unique Boutiques": [
+      "Ma Petite Shoe (Hampden)",
+      "Atomic Books (Hampden)",
+      "The Book Thing (Free Books)",
+      "Corradetti Glass Studio (Clipper Mill)",
+      "Baltimore Clayworks (Mt. Washington)",
+      "Sound Garden (Fells Point)",
+      "Brightside Boutique",
+      "Double Dutch Boutique",
+      "Bazaar (Hampden)",
+      "Loring Cornish Gallery"
+    ]
+  },
+
+  "Historic & Culture": {
+    "Iconic Sites": [
+      "Fort McHenry National Monument",
+      "USS Constellation (Inner Harbor)",
+      "Washington Monument (Mt. Vernon)",
+      "Basilica of the Assumption",
+      "Fell’s Point Historic Main Street",
+      "Hampton National Historic Site (Towson)",
+      "Carroll Mansion",
+      "Phoenix Shot Tower",
+      "Star-Spangled Banner Flag House",
+      "Evergreen Museum & Library"
+    ],
+    "Museums & Art": [
+      "The Walters Art Museum",
+      "Baltimore Museum of Art",
+      "George Peabody Library",
+      "American Visionary Art Museum",
+      "Reginald F. Lewis Museum",
+      "B&O Railroad Museum",
+      "National Great Blacks In Wax Museum",
+      "Jewish Museum of Maryland",
+      "Baltimore Museum of Industry",
+      "Port Discovery Children’s Museum"
+    ],
+    "Poe Heritage": [
+      "Edgar Allan Poe’s Grave (Westminster Hall)",
+      "Edgar Allan Poe House & Museum"
+    ]
+  },
+
+  "Unusual & Quirky": {
     "Odd Attractions": [
-      "Papermoon Diner (Eccentric Decor)",
-      "Elijah Bond’s Ouija Board Grave (Green Mount Cemetery)",
-      "Ministry of Brewing (Church-Turned-Brewery)",
-      "Nutshell Studies of Unexplained Death (mini dioramas)",
-      "Graffiti Alley (Station North)",
-      "Bromo Seltzer Arts Tower (Clock Tower Museum)",
+      "Papermoon Diner",
+      "Elijah Bond’s Ouija Board Grave",
+      "Ministry of Brewing (Church)",
+      "Nutshell Studies of Unexplained Death",
+      "Graffiti Alley",
+      "Bromo Seltzer Arts Tower",
       "Federal Reserve Bank Money Museum",
-      "Escape Room at Poe’s Death Site (fictional scenario)",
-      "Dinner at Medieval Times (Arundel Mills)"
+      "Escape Room at Poe’s Death Site",
+      "Dinner at Medieval Times"
     ],
-    "Ghost Tours & Spooky": [
+    "Ghost Tours": [
       "Nighttime Ghost Tour of Fells Point",
-      "Twilight Tattoo Ceremony (Fort McHenry, summer re-enactment)"
+      "Twilight Tattoo Ceremony (Fort McHenry)"
     ],
-    "Unique Bars & Activities": [
-      "Urban Axes (Axe-Throwing Bar)",
-      "Korean BBQ Karaoke Rooms (Station North)",
+    "Unique Activities": [
+      "Urban Axes (Axe-Throwing)",
+      "Korean BBQ Karaoke (Station North)",
       "Hampden’s HONfest Photo Ops",
-      "Scavenger Hunt in Inner Harbor",
-      "Everyman Theatre (Local Theater)",
-      "The Senator Theatre (Art Deco Cinema)"
+      "Scavenger Hunt (Inner Harbor)",
+      "Everyman Theatre",
+      "The Senator Theatre (Art Deco)"
     ]
   }
 };
 
-// ------------------------------------------------------------------
-// 2) Flatten Single-Child Layers
-//    If an object has exactly 1 key and that key is also an object,
-//    we merge them into the parent. This repeats until no single-child
-//    layers remain, ensuring no "one-option sub-layers" exist.
-// ------------------------------------------------------------------
+// 2) Flatten single-child sublayers 
 function flattenSingleChildLayers(obj) {
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-    return obj;
-  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
 
   let keys = Object.keys(obj);
   while (keys.length === 1) {
     const onlyKey = keys[0];
     const child = obj[onlyKey];
     if (child && typeof child === "object" && !Array.isArray(child)) {
-      // Merge child into the parent
       obj = { ...child };
       keys = Object.keys(obj);
-    } else {
-      break;
-    }
+    } else break;
   }
-
   for (const k of Object.keys(obj)) {
     obj[k] = flattenSingleChildLayers(obj[k]);
   }
   return obj;
 }
 
-const categories = flattenSingleChildLayers(rawBaltimoreActivities);
+const categories = flattenSingleChildLayers(rawActivities);
 
-// ----------------------
-// USER REWARD CONSTANTS
-// (For user scoreboard only)
-// ----------------------
+// USER POINTS
 const MAX_REWARD_POINTS = 100;
 const REWARD_DISCARD = 1;
 const REWARD_CONTINUE = 10;
 
-// ----------------------
-// CODE "PREFERENCE" CONSTANTS
-// (For "algorithm" weighting the items to appear earlier)
-// Increase a final item by +5 if user continues,
-// Decrease by -1 if user discards
-// ----------------------
+// CODE PREFERENCES
 const PREFERENCE_INC = 5;
 const PREFERENCE_DEC = 1;
 
-// ------------------------------------------------------------------
-// 3) Color Map & Helper: color-coding by top-level and sub-layer depth
-// ------------------------------------------------------------------
+// Color coding
 const topLevelColors = {
-  "Eating & Drinking": "#E74C3C",         // red
-  "Nightlife & Entertainment": "#8E44AD", // purple
-  "Outdoors & Nature": "#27AE60",         // green
-  "Historic & Cultural Landmarks": "#2980B9", // blue
-  "Shopping & Markets": "#F39C12",        // orange
-  "Events & Festivals": "#D35400",        // dark orange
-  "Unusual & Quirky Experiences": "#16A085" // teal
+  "Food & Drink": "#E74C3C",          // red
+  "Nightlife & Music": "#8E44AD",     // purple
+  "Events & Festivals": "#D35400",    // dark orange
+  "Outdoors & Recreation": "#27AE60", // green
+  "Shopping & Markets": "#F39C12",    // orange
+  "Historic & Culture": "#2980B9",    // blue
+  "Unusual & Quirky": "#16A085"       // teal
 };
 
 function getColorForPath(path) {
-  if (path.length === 0) {
-    return "#BDC3C7";
-  }
+  if (path.length === 0) return "#BDC3C7"; // fallback
   const topCategory = path[0];
-  const baseColor = topLevelColors[topCategory] || "#7f8c8d"; // fallback
+  const base = topLevelColors[topCategory] || "#7f8c8d";
   const depth = path.length - 1;
-  return darkenColor(baseColor, depth * 0.1);
+  return darkenColor(base, depth * 0.1);
 }
 
-function darkenColor(hexColor, amount = 0.1) {
-  const hex = hexColor.replace("#", "");
-  let r = parseInt(hex.substring(0, 2), 16);
-  let g = parseInt(hex.substring(2, 4), 16);
-  let b = parseInt(hex.substring(4, 6), 16);
+// Darken color by amount (0..1)
+function darkenColor(hex, amount) {
+  const h = hex.replace("#", "");
+  let r = parseInt(h.substring(0, 2), 16);
+  let g = parseInt(h.substring(2, 4), 16);
+  let b = parseInt(h.substring(4, 6), 16);
 
   r = Math.floor(r * (1 - amount));
   g = Math.floor(g * (1 - amount));
@@ -326,14 +301,12 @@ function darkenColor(hexColor, amount = 0.1) {
   return `#${rr}${gg}${bb}`;
 }
 
-// ------------------------------------------------------------------
-// 4) GET NODE BY PATH SAFELY
-// ------------------------------------------------------------------
+// get node by path
 function getNodeAtPath(obj, path) {
   let current = obj;
-  for (const segment of path) {
-    if (current && typeof current === "object" && segment in current) {
-      current = current[segment];
+  for (const seg of path) {
+    if (current && typeof current === "object" && seg in current) {
+      current = current[seg];
     } else {
       return undefined;
     }
@@ -351,23 +324,23 @@ export default function Home() {
   const [matched, setMatched] = useState([]);
   const [showMatches, setShowMatches] = useState(false);
 
-  // USER REWARD POINTS (scoreboard)
+  // USER SCORE
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // HISTORY (for goBack)
+  // HISTORY
   const [history, setHistory] = useState([]);
 
-  // LOADING SPLASH
+  // LOADING SCREEN
   const [isShuffling, setIsShuffling] = useState(true);
   useEffect(() => {
-    const timer = setTimeout(() => setIsShuffling(false), 2000);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setIsShuffling(false), 2000);
+    return () => clearTimeout(t);
   }, []);
 
-  // NO MORE message
+  // "No more" message
   const [noMoreMessage, setNoMoreMessage] = useState(false);
 
-  // CODE PREFERENCE WEIGHTS
+  // CODE PREFERENCES (weights)
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -381,7 +354,7 @@ export default function Home() {
     }
   }, [weights]);
 
-  // GET CURRENT NODE
+  // Current node 
   const node = getNodeAtPath(categories, currentPath);
   let thisLayerOptions = [];
 
@@ -396,13 +369,13 @@ export default function Home() {
     thisLayerOptions = node;
   }
 
-  // Sort by code preference weights
+  // Sort by preference
   const sortByPreference = (arr) => {
     const copy = [...arr];
     copy.sort((a, b) => {
       const wA = weights[a] || 0;
       const wB = weights[b] || 0;
-      return wB - wA; // higher weight first
+      return wB - wA;
     });
     return copy;
   };
@@ -411,7 +384,7 @@ export default function Home() {
   const hasOptions =
     sortedOptions.length > 0 && currentIndex < sortedOptions.length;
 
-  // LEVELING UP: increment/decrement code preference
+  // Preference inc/dec
   const incPreference = (item) => {
     setWeights((prev) => ({
       ...prev,
@@ -454,12 +427,12 @@ export default function Home() {
     }
   };
 
-  // DETERMINE IF FINAL
+  // Check final
   function isFinalOption(path, choice) {
     const nextNode = getNodeAtPath(categories, [...path, choice]);
     if (!nextNode) return true;
-    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false; // sub-layers
-    if (Array.isArray(nextNode)) return false; // final array next
+    if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false;
+    if (Array.isArray(nextNode)) return false;
     return true;
   }
 
@@ -474,11 +447,9 @@ export default function Home() {
     }
   };
 
-  // CONTINUE => user scoreboard +10, code preference +5
+  // CONTINUE => user +10, code +5
   const processContinue = (choice) => {
-    // user scoreboard
     setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
-    // code preference
     incPreference(choice);
 
     if (isFinalOption(currentPath, choice)) {
@@ -492,23 +463,24 @@ export default function Home() {
     }
   };
 
-  // DISCARD => user scoreboard +1, code preference -1
+  // DISCARD => user +1, code -1
   const processDiscard = (choice) => {
     setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
     decPreference(choice);
 
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedOptions.length) {
-      // more items in this layer
       setCurrentIndex(nextIndex);
     } else {
-      // no more => go back or reshuffle
+      // out of cards in this layer
       setNoMoreMessage(true);
       setTimeout(() => {
         setNoMoreMessage(false);
+        // If there's a parent layer, go back
         if (history.length > 0) {
           goBack();
         } else {
+          // top-level => reshuffle
           reshuffleDeck();
         }
       }, 2000);
@@ -521,7 +493,7 @@ export default function Home() {
       ? "Shuffling..."
       : currentPath[currentPath.length - 1];
 
-  // STYLES
+  // PHONE-SCREEN STYLES
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -550,7 +522,7 @@ export default function Home() {
   }
 
   // Overlays
-  const finalMatchOverlayStyle = {
+  const finalMatchOverlay = {
     position: "absolute",
     top: 0,
     left: 0,
@@ -565,7 +537,7 @@ export default function Home() {
     zIndex: 999
   };
 
-  const noMoreOverlayStyle = {
+  const noMoreOverlay = {
     position: "absolute",
     top: "40%",
     left: 0,
@@ -641,15 +613,14 @@ export default function Home() {
     position: "relative"
   };
 
-  // Card color
-  const cardBackgroundColor = getColorForPath(currentPath);
+  const cardColor = getColorForPath(currentPath);
 
   const cardStyle = {
     width: "100%",
     height: "100%",
     borderRadius: "12px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-    backgroundColor: cardBackgroundColor,
+    backgroundColor: cardColor,
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
@@ -690,9 +661,9 @@ export default function Home() {
 
   return (
     <div style={appContainerStyle}>
-      {/* Final match overlay */}
+      {/* FINAL MATCH OVERLAY */}
       {finalMatch && (
-        <div style={finalMatchOverlayStyle}>
+        <div style={finalMatchOverlay}>
           <h1>Match Found!</h1>
           <h2>{finalMatch}</h2>
           <button
@@ -711,14 +682,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* No more overlay */}
+      {/* NO MORE CARDS OVERLAY */}
       {noMoreMessage && (
-        <div style={noMoreOverlayStyle}>
+        <div style={noMoreOverlay}>
           No more options at this layer! Going back one level…
         </div>
       )}
 
-      {/* Matches panel */}
+      {/* MATCHES MODAL */}
       {showMatches && (
         <div style={matchesModalStyle}>
           <h2>My Matches</h2>
@@ -738,20 +709,60 @@ export default function Home() {
               </div>
             ))
           )}
-          <button
-            style={{
-              marginTop: "auto",
-              padding: "0.5rem 1rem",
-              background: "#666",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer"
-            }}
-            onClick={() => setShowMatches(false)}
-          >
-            Close
-          </button>
+
+          <div style={{ marginTop: "auto", display: "flex", gap: "1rem" }}>
+            {/* Go Back from matches overlay */}
+            <button
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#3498DB",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer"
+              }}
+              onClick={() => {
+                setShowMatches(false);
+                goBack();
+              }}
+            >
+              Go Back
+            </button>
+
+            {/* Reshuffle from matches overlay */}
+            <button
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#E74C3C",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer"
+              }}
+              onClick={() => {
+                setShowMatches(false);
+                reshuffleDeck();
+              }}
+            >
+              Reshuffle
+            </button>
+
+            {/* Or simply close the overlay */}
+            <button
+              style={{
+                marginLeft: "auto",
+                padding: "0.5rem 1rem",
+                background: "#666",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer"
+              }}
+              onClick={() => setShowMatches(false)}
+            >
+              Close
+            </button>
+          </div>
         </div>
       )}
 
@@ -764,12 +775,12 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Reward Points (user scoreboard) */}
+      {/* USER SCORE */}
       <div style={{ textAlign: "center", padding: "0.5rem" }}>
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* Card */}
+      {/* CARD */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -790,7 +801,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Bottom Bar: Discard & Continue */}
+      {/* BOTTOM BAR */}
       <div style={bottomBarStyle}>
         {hasOptions ? (
           <>
@@ -812,7 +823,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Reshuffle Button */}
+      {/* RESHUFFLE AT VERY BOTTOM */}
       <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
         <button
           onClick={reshuffleDeck}
