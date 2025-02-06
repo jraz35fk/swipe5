@@ -2,177 +2,87 @@ import { useState, useEffect } from 'react';
 import TinderCard from 'react-tinder-card';
 
 /**
- * MASTER CATEGORIES OBJECT
- * Fewer top-level, deeper sub-layers for more swipes.
+ * Minimal categories object with exactly 4 top-level parents:
+ * 1) Eating & Drinking
+ * 2) Partying & Bars
+ * 3) Events & Festivals
+ * 4) Outdoors & Recreation
+ *
+ * Each top-level leads to child layers or final items.
+ * Some child layers lead to more sub-layers, ensuring multi-swipe depth.
+ * Eventually, we reach final arrays (like "Crab Houses": [...]).
  */
 const categories = {
   "Eating & Drinking": {
-    "Restaurants": {
-      "Seafood": {
-        "Crab Houses": [
-          "LP Steamers",
-          "Thames Street Oyster House",
-          "Nick’s Fish House",
-          "The Choptank",
-          "Faidley’s Seafood"
-        ],
-        "Oyster Bars": [
-          "Ryleigh’s Oyster",
-          "The Choptank",
-          "Thames Street Oyster House"
-        ]
-      },
-      "International Cuisine": [
-        "Ekiben",
-        "Little Italy Restaurants",
-        "The Helmand",
-        "Peter’s Pour House",
-        "La Cuchara"
+    "Seafood": {
+      "Crab Houses": [
+        "LP Steamers",
+        "Thames Street Oyster House",
+        "Nick’s Fish House"
+      ],
+      "Oyster Bars": [
+        "Ryleigh’s Oyster",
+        "The Choptank",
+        "Thames Street Oyster House"
       ]
     },
-    "Breweries & Distilleries": {
-      "Craft Breweries": [
-        "Union Craft Brewing",
-        "Checkerspot Brewing Co.",
-        "Diamondback Brewing Co.",
-        "Mobtown Brewing Co.",
-        "Heavy Seas Beer",
-        "Brewer’s Art"
-      ],
-      "Distilleries & Mead": [
-        "Sagamore Spirit Distillery",
-        "Baltimore Spirits Company",
-        "Old Line Spirits",
-        "Charm City Meadworks"
-      ],
-      "Tours": [
-        "Guinness Open Gate Brewery",
-        "City Brew Tours"
-      ]
-    },
-    "Nightlife": [
-      "W.C. Harlan",
-      "The Elk Room",
-      "Dutch Courage",
-      "Sugarvale",
-      "Max’s Taphouse",
-      "The Horse You Came In On Saloon",
-      "Rams Head Live",
-      "The 8x10",
-      "Soundstage"
+    "Italian & Pizza": [
+      "Isabella’s Brick Oven",
+      "Vacarro’s (Little Italy)",
+      "Matthew’s Pizza"
     ]
   },
-  "Arts, Culture & Entertainment": {
-    "Museums & Landmarks": {
-      "Museums": [
-        "Baltimore Museum of Art",
-        "Walters Art Gallery",
-        "American Visionary Art Museum",
-        "Maryland Science Center",
-        "Port Discovery Children’s Museum"
-      ],
-      "Historic Sites": [
-        "Fort McHenry",
-        "Edgar Allan Poe House",
-        "B&O Railroad Museum",
-        "Bromo Seltzer Arts Tower",
-        "Great Blacks in Wax Museum"
-      ]
-    },
-    "Performing Arts": [
-      "Baltimore Symphony Orchestra",
-      "Hippodrome Theatre",
-      "Ottobar",
-      "Keystone Korner"
+
+  "Partying & Bars": {
+    "Cocktail Lounges": [
+      "W.C. Harlan",
+      "Dutch Courage",
+      "Sugarvale"
     ],
-    "Festivals & Seasonal": {
-      "Spring & Summer": [
-        "Opening Day at Camden Yards",
-        "Charm City Bluegrass Festival",
-        "Maryland Film Festival",
-        "HonFest",
-        "Baltimore Pride",
-        "Artscape"
-      ],
-      "Fall & Winter": [
-        "Fell’s Point Fun Festival",
-        "Great Halloween Lantern Parade",
-        "Miracle on 34th Street",
-        "German Christmas Village",
-        "Frozen Harbor Music Festival"
-      ]
-    }
+    "Dive Bars": [
+      "Max’s Taphouse",
+      "The Horse You Came In On Saloon"
+    ],
+    "Dance Clubs": [
+      "The Rockwell",
+      "POWER PLANT LIVE!",
+      "The 8x10"
+    ]
   },
+
+  "Events & Festivals": {
+    "Major Annual": [
+      "Preakness Stakes",
+      "AFRAM",
+      "Baltimore Book Festival",
+      "Artscape"
+    ],
+    "Neighborhood": [
+      "Fells Point Fun Festival",
+      "Pigtown Festival",
+      "HonFest"
+    ],
+    "Holiday": [
+      "Miracle on 34th Street",
+      "German Christmas Village",
+      "Lighting of the Washington Monument"
+    ]
+  },
+
   "Outdoors & Recreation": {
     "Parks & Hiking": [
       "Federal Hill Park",
       "Patterson Park",
-      "Cylburn Arboretum",
       "Patapsco Valley State Park Trails"
     ],
     "Water Activities": [
-      "Kayaking at Inner Harbor",
+      "Inner Harbor Kayaking",
       "Waterfront Promenade Walk",
       "Urban Pirates Cruise"
     ],
-    "Sports & Adventures": [
+    "Sports Venues": [
       "Oriole Park at Camden Yards",
-      "M&T Bank Stadium",
-      "Topgolf Baltimore",
-      "Urban Axes",
-      "Leakin Park Miniature Steam Trains"
-    ]
-  },
-  "Events & Festivals": {
-    "Major Annual Events": [
-      "Preakness Stakes",
-      "AFRAM",
-      "Baltimore Caribbean Carnival",
-      "Baltimore Book Festival",
-      "Restaurant Week"
-    ],
-    "Neighborhood Festivals": [
-      "Pigtown Festival",
-      "Fells Point Ghost Tours",
-      "Edgar Allan Poe Festival",
-      "Baltimore Running Festival",
-      "Kinetic Sculpture Race"
-    ],
-    "Holiday Celebrations": [
-      "Fourth of July Fireworks",
-      "Lighting of the Washington Monument",
-      "Chinese New Year Celebrations",
-      "MLK Parade"
-    ]
-  },
-  "Shopping & Hidden Gems": {
-    "Markets & Bazaars": [
-      "Lexington Market",
-      "Broadway Market",
-      "Cross Street Market",
-      "Baltimore Farmers’ Market & Bazaar",
-      "Belvedere Square Market"
-    ],
-    "Quirky & Offbeat": {
-      "Shops & Oddities": [
-        "Atomic Books",
-        "The Sound Garden",
-        "The Bazaar",
-        "Village Thrift",
-        "Keepers Vintage",
-        "The Book Thing"
-      ],
-      "Attractions": [
-        "Papermoon Diner",
-        "Lexington Market Catacombs Tour",
-        "Graffiti Alley",
-        "Volunteer for a Day"
-      ]
-    },
-    "Neighborhood Strolls": [
-      "Hampden’s “The Avenue”",
-      "Fells Point Antiques & Shops",
-      "Baltimore Heritage Walk"
+      "M&T Bank Stadium"
     ]
   }
 };
@@ -181,51 +91,28 @@ const categories = {
 // REWARD CONSTANTS
 // ----------------------
 const MAX_REWARD_POINTS = 100;
-const REWARD_DISCARD = 1;
-const REWARD_CONTINUE = 10;
+const REWARD_DISCARD = 1;   // +1 for discarding
+const REWARD_CONTINUE = 10; // +10 for continuing
 
-/**
- * A simple IMAGE MAP for categories and final items.
- * Key = string (e.g. "Eating & Drinking", "Crab Houses", "LP Steamers").
- * Value = URL to a relevant image.
- * 
- * If not found, we use a fallback Unsplash link.
- * You can expand or refine this as you like.
- */
+// Map a few known items to a relevant image. Everything else: fallback.
 const imageMap = {
-  // Top-Level
   "Eating & Drinking": "https://images.unsplash.com/photo-1483691278019-cb7253bee49f?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Arts, Culture & Entertainment": "https://images.unsplash.com/photo-1607141154778-f7af83180c29?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Outdoors & Recreation": "https://images.unsplash.com/photo-1598550487032-0efc2ff845a2?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Events & Festivals": "https://images.unsplash.com/photo-1604252207279-0d99b71e3d6a?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Shopping & Hidden Gems": "https://images.unsplash.com/photo-1556742521-9713bf2720d8?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-
-  // Some second-level categories
   "Seafood": "https://images.unsplash.com/photo-1514514788490-3785a9b82c00?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Nightlife": "https://images.unsplash.com/photo-1487029413235-e3f7fa17f6ca?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Breweries & Distilleries": "https://images.unsplash.com/photo-1571086578068-c7a7bfbf9680?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Museums & Landmarks": "https://images.unsplash.com/photo-1582395760561-338aaf6ec0e6?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Performing Arts": "https://images.unsplash.com/photo-1620085589319-e419433cb786?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Festivals & Seasonal": "https://images.unsplash.com/photo-1612386916723-a8dc4accffe2?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Parks & Hiking": "https://images.unsplash.com/photo-1506446001441-1dffa5b98af5?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Water Activities": "https://images.unsplash.com/photo-1563199574-26a530c714bb?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Major Annual Events": "https://images.unsplash.com/photo-1518118573782-0a7ff594d39e?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Neighborhood Festivals": "https://images.unsplash.com/photo-1440799306745-1c4392d1d6d6?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-
-  // Some final items example
-  "LP Steamers": "https://images.unsplash.com/photo-1561365452-adb940139ffa?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Partying & Bars": "https://images.unsplash.com/photo-1487029413235-e3f7fa17f6ca?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Cocktail Lounges": "https://images.unsplash.com/photo-1541854161-7dedba2ccc84?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Events & Festivals": "https://images.unsplash.com/photo-1490135900372-0263f1feecc4?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Outdoors & Recreation": "https://images.unsplash.com/photo-1598550487032-0efc2ff845a2?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Crab Houses": "https://images.unsplash.com/photo-1561365452-adb940139ffa?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
   "Nick’s Fish House": "https://images.unsplash.com/photo-1624891374782-d96f502cdd06?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
+  "Inner Harbor Kayaking": "https://images.unsplash.com/photo-1563199574-26a530c714bb?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
   "Oriole Park at Camden Yards": "https://images.unsplash.com/photo-1579980297500-7596906edc76?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Fells Point Ghost Tours": "https://images.unsplash.com/photo-1527234502807-e91651720128?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
-  "Miracle on 34th Street": "https://images.unsplash.com/photo-1607881772611-c43e056576cc?crop=entropy&cs=tinysrgb&fit=max&w=700&q=80",
 };
 
-// Returns a fallback image from Unsplash if not in the map
 function getImageUrl(name) {
   return imageMap[name] || "https://source.unsplash.com/collection/190727/600x800";
 }
 
-// Safely traverse nested data by path
+// Safe retrieval of node by path array
 function getNodeAtPath(data, path) {
   let current = data;
   for (const segment of path) {
@@ -239,21 +126,23 @@ function getNodeAtPath(data, path) {
 }
 
 export default function Home() {
-  // NAVIGATION + SWIPES
+  // Path for multi-layer nav
   const [currentPath, setCurrentPath] = useState([]);
+  // Index in the current array of items (which might be categories or final items)
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // FINAL MATCH
+  // If final item chosen
   const [finalMatch, setFinalMatch] = useState(null);
-  // Keep in-memory matches until refresh
+  // Track matched items in memory
   const [matched, setMatched] = useState([]);
-  // Matches panel
+
+  // Let user see matches in a panel
   const [showMatches, setShowMatches] = useState(false);
 
-  // USER REWARDS
+  // Basic user reward points
   const [rewardPoints, setRewardPoints] = useState(0);
 
-  // CODE "WEIGHTS" (preference learning)
+  // Weighted preferences for the "code"
   const [weights, setWeights] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("categoryWeights");
@@ -267,13 +156,11 @@ export default function Home() {
     }
   }, [weights]);
 
-  // GO BACK HISTORY
+  // For "go back" history
   const [history, setHistory] = useState([]);
 
-  // LOADING SCREEN (e.g. "Shuffling Baltimore...")
+  // Show a 2s "Shuffling Baltimore..." on initial mount
   const [isShuffling, setIsShuffling] = useState(true);
-
-  // On mount, show "Shuffling Baltimore..." for ~2s, then reveal cards
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsShuffling(false);
@@ -281,57 +168,40 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
-  // GET CURRENT NODE (object or array)
+  // Retrieve current node
   const node = getNodeAtPath(categories, currentPath);
 
-  // DETERMINE THIS LAYER'S OPTIONS
+  // Build this layer's items
   let thisLayerOptions = [];
   if (currentPath.length === 0 && !node) {
-    // top-level categories
+    // Top-level categories
     thisLayerOptions = Object.keys(categories);
   } else if (node && typeof node === "object" && !Array.isArray(node)) {
-    // subcategories
+    // Subcategories
     thisLayerOptions = Object.keys(node);
   } else if (Array.isArray(node)) {
-    // final items
+    // Final array
     thisLayerOptions = node;
   }
 
-  // SORT OPTIONS BY WEIGHT (desc)
+  // Sort them by descending weight
   const sortByWeight = (arr) => {
     const copy = [...arr];
-    copy.sort((a, b) => {
-      const wA = weights[a] || 0;
-      const wB = weights[b] || 0;
-      return wB - wA;
-    });
+    copy.sort((a, b) => ( (weights[b] || 0) - (weights[a] || 0) ));
     return copy;
   };
-
-  // If we are at top-level, let's also randomize them (optional).
-  // This gives a bit of variety each time. 
-  // If you'd rather keep them sorted purely by weight, remove this shuffle logic.
-  function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-  }
-
   let sortedOptions = sortByWeight(thisLayerOptions);
-  // If top-level, randomize them (you can comment this out if you want only weight-sorted)
-  if (currentPath.length === 0) {
-    sortedOptions = shuffle(sortedOptions);
-  }
 
-  const hasOptions = sortedOptions.length > 0 && currentIndex < sortedOptions.length;
+  // For top-level, optionally randomize or just do weight sort
+  // We'll skip randomizing here to keep it simple
+  // but you could do: sortedOptions = shuffle(sortedOptions);
 
-  // Check if choice is final (a single item)
+  const hasOptions =
+    sortedOptions.length > 0 && currentIndex < sortedOptions.length;
+
+  // Check if the chosen item is final
   const isFinalOption = (choice) => {
-    if (Array.isArray(node)) {
-      return true; // already final list
-    }
+    if (Array.isArray(node)) return true;
     const nextNode = getNodeAtPath(categories, [...currentPath, choice]);
     if (!nextNode) return true;
     if (typeof nextNode === "object" && !Array.isArray(nextNode)) return false;
@@ -339,7 +209,40 @@ export default function Home() {
     return true;
   };
 
-  // SWIPE HANDLERS
+  // Discard => Next card, +1 point
+  const processDiscard = (choice) => {
+    decrementWeight(choice);
+    setCurrentIndex((prev) => prev + 1);
+    setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
+    console.log("Discarded:", choice, "New index:", currentIndex + 1);
+  };
+
+  // Continue => If final, match. Else drill deeper. +10 points
+  const processContinue = (choice) => {
+    incrementWeight(choice);
+
+    if (isFinalOption(choice)) {
+      handleFinalMatch(choice);
+    } else {
+      // Drill deeper
+      setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
+      setCurrentPath((prev) => [...prev, choice]);
+      setCurrentIndex(0);
+    }
+
+    setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
+    console.log("Continued:", choice);
+  };
+
+  // Final match overlay
+  const handleFinalMatch = (choice) => {
+    setFinalMatch(choice);
+    if (!matched.includes(choice)) {
+      setMatched((prev) => [...prev, choice]);
+    }
+  };
+
+  // SWIPE HANDLER (left => discard, right => continue)
   const handleSwipe = (direction) => {
     if (!hasOptions) return;
     const choice = sortedOptions[currentIndex];
@@ -350,34 +253,7 @@ export default function Home() {
     }
   };
 
-  const processContinue = (choice) => {
-    incrementWeight(choice);
-    if (isFinalOption(choice)) {
-      handleFinalMatch(choice);
-    } else {
-      // go deeper
-      setHistory((prev) => [...prev, { path: [...currentPath], index: currentIndex }]);
-      setCurrentPath((prev) => [...prev, choice]);
-      setCurrentIndex(0);
-    }
-    setRewardPoints((prev) => Math.min(prev + REWARD_CONTINUE, MAX_REWARD_POINTS));
-  };
-
-  const processDiscard = (choice) => {
-    decrementWeight(choice);
-    setCurrentIndex((prev) => prev + 1);
-    setRewardPoints((prev) => Math.min(prev + REWARD_DISCARD, MAX_REWARD_POINTS));
-  };
-
-  const handleFinalMatch = (choice) => {
-    setFinalMatch(choice);
-    if (!matched.includes(choice)) {
-      const updated = [...matched, choice];
-      setMatched(updated);
-    }
-  };
-
-  // BACK, RESHUFFLE
+  // Go back up one layer
   const goBack = () => {
     if (history.length > 0) {
       const prev = history[history.length - 1];
@@ -389,6 +265,7 @@ export default function Home() {
     }
   };
 
+  // Reshuffle => back to top-level
   const reshuffleDeck = () => {
     setCurrentPath([]);
     setCurrentIndex(0);
@@ -397,29 +274,23 @@ export default function Home() {
     setHistory([]);
   };
 
-  // WEIGHT UTILS
+  // Weight updaters
   const incrementWeight = (item) => {
-    setWeights((prev) => ({
-      ...prev,
-      [item]: (prev[item] || 0) + 1
-    }));
+    setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) + 1 }));
   };
-
   const decrementWeight = (item) => {
-    setWeights((prev) => ({
-      ...prev,
-      [item]: (prev[item] || 0) - 1
-    }));
+    setWeights((prev) => ({ ...prev, [item]: (prev[item] || 0) - 1 }));
   };
 
+  // For UI label:
   const currentLayerName =
     currentPath.length === 0
       ? "Shuffling..."
       : currentPath[currentPath.length - 1];
 
-  // -----------------------
-  // STYLES (PHONE-LIKE)
-  // -----------------------
+  // -----------
+  // STYLES
+  // -----------
   const appContainerStyle = {
     width: "100%",
     maxWidth: "420px",
@@ -432,6 +303,52 @@ export default function Home() {
     position: "relative"
   };
 
+  // LOADING SCREEN
+  if (isShuffling) {
+    return (
+      <div
+        style={{
+          ...appContainerStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        <h2>Shuffling Baltimore...</h2>
+      </div>
+    );
+  }
+
+  // final match overlay
+  const finalMatchOverlayStyle = {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    zIndex: 999
+  };
+
+  // matches panel (if user taps "show matches")
+  const matchesPanelStyle = {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    background: "rgba(255,255,255,0.95)",
+    zIndex: 998,
+    display: "flex",
+    flexDirection: "column",
+    padding: "1rem"
+  };
+
   // top bar
   const headerStyle = {
     display: "flex",
@@ -442,12 +359,6 @@ export default function Home() {
     position: "relative"
   };
 
-  const phoneScreenTitleStyle = {
-    margin: 0,
-    fontWeight: "bold"
-  };
-
-  // We'll place "Go Back" and "View Matches" as small text buttons on left & right
   const backButtonStyle = {
     position: "absolute",
     left: "1rem",
@@ -468,7 +379,11 @@ export default function Home() {
     cursor: "pointer"
   };
 
-  // main content area (where the card appears)
+  const phoneScreenTitleStyle = {
+    margin: 0,
+    fontWeight: "bold"
+  };
+
   const mainContentStyle = {
     flex: 1,
     display: "flex",
@@ -477,7 +392,6 @@ export default function Home() {
     justifyContent: "center"
   };
 
-  // card container
   const cardContainerStyle = {
     width: "300px",
     height: "420px",
@@ -503,12 +417,12 @@ export default function Home() {
     padding: "1rem"
   };
 
-  // bottom bar with discard/continue
   const bottomBarStyle = {
+    borderTop: "1px solid #ccc",
+    padding: "0.5rem",
     display: "flex",
     justifyContent: "center",
-    gap: "2rem",
-    padding: "1rem"
+    gap: "2rem"
   };
 
   const circleButtonStyle = (bgColor) => ({
@@ -526,55 +440,9 @@ export default function Home() {
     boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
   });
 
-  // final match splash
-  const finalMatchOverlayStyle = {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.8)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#fff",
-    zIndex: 999
-  };
-
-  // matches panel
-  const matchesPanelStyle = {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    background: "rgba(255,255,255,0.95)",
-    zIndex: 998,
-    display: "flex",
-    flexDirection: "column",
-    padding: "1rem"
-  };
-
-  // LOADING SCREEN for "Shuffling Baltimore..."
-  if (isShuffling) {
-    return (
-      <div
-        style={{
-          ...appContainerStyle,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-      >
-        <h2>Shuffling Baltimore...</h2>
-      </div>
-    );
-  }
-
   return (
     <div style={appContainerStyle}>
-      {/* If we have a final match, show a splash screen */}
+      {/* If we have a final match, overlay it */}
       {finalMatch && (
         <div style={finalMatchOverlayStyle}>
           <h1>Match Found!</h1>
@@ -595,13 +463,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* If user taps "View My Matches" */}
+      {/* Show the "My Matches" overlay if showMatches is true */}
       {showMatches && (
         <div style={matchesPanelStyle}>
           <h2>My Matches</h2>
-          <p style={{ color: "#555" }}>
-            (Saved until page is refreshed)
-          </p>
           {matched.length === 0 ? (
             <p>No matches yet.</p>
           ) : (
@@ -637,26 +502,17 @@ export default function Home() {
 
       {/* HEADER */}
       <div style={headerStyle}>
-        {/* Go Back button on left */}
-        <button onClick={goBack} style={backButtonStyle}>
-          ←
-        </button>
-        {/* Title in center */}
-        <h3 style={phoneScreenTitleStyle}>
-          {currentLayerName}
-        </h3>
-        {/* Matches button on right */}
-        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>
-          ♡
-        </button>
+        <button onClick={goBack} style={backButtonStyle}>←</button>
+        <h3 style={phoneScreenTitleStyle}>{currentLayerName}</h3>
+        <button onClick={() => setShowMatches(true)} style={matchesButtonStyle}>♡</button>
       </div>
 
-      {/* Reward Points row */}
+      {/* Reward points */}
       <div style={{ textAlign: "center", padding: "0.5rem" }}>
         <strong>Points:</strong> {rewardPoints}
       </div>
 
-      {/* MAIN CONTENT: Card */}
+      {/* CARD */}
       <div style={mainContentStyle}>
         <div style={cardContainerStyle}>
           {hasOptions ? (
@@ -672,22 +528,20 @@ export default function Home() {
                 }}
               >
                 <div style={cardOverlayStyle}>
-                  <h2 style={{ margin: 0 }}>
-                    {sortedOptions[currentIndex]}
-                  </h2>
+                  <h2 style={{ margin: 0 }}>{sortedOptions[currentIndex]}</h2>
                 </div>
               </div>
             </TinderCard>
           ) : (
-            <p>No more options at this level.</p>
+            <p style={{ textAlign: "center" }}>No more options at this level.</p>
           )}
         </div>
       </div>
 
-      {/* BOTTOM BAR: discard / continue / reshuffle */}
-      <div style={{ borderTop: "1px solid #ccc", paddingTop: "0.5rem" }}>
+      {/* BOTTOM BAR */}
+      <div style={bottomBarStyle}>
         {hasOptions ? (
-          <div style={bottomBarStyle}>
+          <>
             <button
               style={circleButtonStyle("#F75D59")}
               onClick={() => handleSwipe("left")}
@@ -700,26 +554,28 @@ export default function Home() {
             >
               ♥
             </button>
-          </div>
+          </>
         ) : (
-          <div style={{ textAlign: "center", padding: "1rem" }}>
+          <div style={{ textAlign: "center", width: "100%" }}>
             <p>No more cards here.</p>
           </div>
         )}
-        <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
-          <button
-            onClick={reshuffleDeck}
-            style={{
-              padding: "0.4rem 0.8rem",
-              border: "1px solid #ccc",
-              background: "#fff",
-              cursor: "pointer",
-              borderRadius: "4px"
-            }}
-          >
-            Reshuffle
-          </button>
-        </div>
+      </div>
+
+      {/* Reshuffle at bottom */}
+      <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+        <button
+          onClick={reshuffleDeck}
+          style={{
+            padding: "0.4rem 0.8rem",
+            border: "1px solid #ccc",
+            background: "#fff",
+            cursor: "pointer",
+            borderRadius: "4px"
+          }}
+        >
+          Reshuffle
+        </button>
       </div>
     </div>
   );
