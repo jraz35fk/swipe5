@@ -1,218 +1,248 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client with URL and anon key from environment variables
+// Initialize Supabase client using environment variables (must be prefixed with NEXT_PUBLIC_ for client-side use)&#8203;:contentReference[oaicite:4]{index=4}
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function HomePage() {
-  // State for data lists
+  // State for each level of the decision tree
   const [categories, setCategories] = useState([]);
+  const [catIndex, setCatIndex] = useState(0);
   const [subcategories, setSubcategories] = useState([]);
-  const [places, setPlaces] = useState([]);
-  // State for selected items
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
-  // State for index of currently viewed option in the lists (for one-card-at-a-time)
-  const [categoryIndex, setCategoryIndex] = useState(0);
-  const [subcategoryIndex, setSubcategoryIndex] = useState(0);
-  // Final matches (activities) collected
-  const [finalMatches, setFinalMatches] = useState([]);
+  const [subcatIndex, setSubcatIndex] = useState(0);
+  const [activities, setActivities] = useState([]);
+  const [actIndex, setActIndex] = useState(0);
 
-  // Fetch all categories on initial load
+  const [currentLevel, setCurrentLevel] = useState('category');  // 'category' | 'subcategory' | 'activity'
+  const [path, setPath] = useState([]);  // Breadcrumb path of chosen items (categories/subcategories)
+
+  // Load top-level categories on initial render
   useEffect(() => {
-    const fetchCategories = async () => {
+    const loadCategories = async () => {
       const { data, error } = await supabase.from('categories').select('*');
       if (error) {
-        console.error('Error fetching categories:', error);
+        console.error('Error loading categories:', error);
       } else {
         setCategories(data);
+        setCatIndex(0);
+        setCurrentLevel('category');
       }
     };
-    fetchCategories();
+    loadCategories();
   }, []);
 
-  // Handle selecting a category
-  const handleSelectCategory = async (category) => {
-    setSelectedCategory(category);
-    setSelectedSubcategory(null);
-    setFinalMatches([]);  // reset any final matches from previous flow
-    // Fetch subcategories for this category
-    const { data, error } = await supabase
-      .from('subcategories')
-      .select('*')
-      .eq('category_id', category.id);  // filter by selected category ID&#8203;:contentReference[oaicite:4]{index=4}
-    if (error) {
-      console.error('Error fetching subcategories:', error);
-    } else {
-      setSubcategories(data);
-      setSubcategoryIndex(0);  // reset index for subcategories
+  // Helper to get the current item based on level
+  const currentItem = 
+    currentLevel === 'category' ? categories[catIndex] 
+    : currentLevel === 'subcategory' ? subcategories[subcatIndex] 
+    : activities[actIndex];
+
+  // Handle the "Yes" action
+  const handleYes = async () => {
+    if (!currentItem) return;
+    if (currentLevel === 'category') {
+      // User accepts this category: add to path and load its subcategories
+      setPath(prev => [...prev, currentItem.name || currentItem.title]);  // Use name/title for breadcrumb
+      const { data, error } = await supabase
+        .from('subcategories')
+        .select('*')
+        .eq('category_id', currentItem.id);  // Fetch subcategories for this category&#8203;:contentReference[oaicite:5]{index=5}
+      if (error) {
+        console.error('Error loading subcategories:', error);
+      } else {
+        setSubcategories(data || []);
+        setSubcatIndex(0);
+        setCurrentLevel('subcategory');
+      }
+      // Note: we keep catIndex at the current category so that Go Back can return here
+    } else if (currentLevel === 'subcategory') {
+      // User accepts this subcategory: add to path and load its activities
+      setPath(prev => [...prev, currentItem.name || currentItem.title]);
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('subcategory_id', currentItem.id);  // Fetch activities for this subcategory&#8203;:contentReference[oaicite:6]{index=6}
+      if (error) {
+        console.error('Error loading activities:', error);
+      } else {
+        setActivities(data || []);
+        setActIndex(0);
+        setCurrentLevel('activity');
+      }
+      // Keep subcatIndex at current so Go Back returns here
+    } else if (currentLevel === 'activity') {
+      // User accepts an activity – this could be the final selection
+      setPath(prev => [...prev, currentItem.name || currentItem.title]);
+      alert(`You selected: ${currentItem.name || currentItem.title}!`);  // final selection (could be replaced with a nicer UI)
+      // Reset (or handle end of flow as needed)
+      // Here we simply reset to start over after a selection
+      setCategories([]); setCatIndex(0);
+      setSubcategories([]); setSubcatIndex(0);
+      setActivities([]); setActIndex(0);
+      setCurrentLevel('category');
+      setPath([]);
+      // Reload categories to restart (optional)
+      const { data, error } = await supabase.from('categories').select('*');
+      if (!error) {
+        setCategories(data || []);
+        setCatIndex(0);
+      }
     }
   };
 
-  // Handle selecting a subcategory
-  const handleSelectSubcategory = async (subcategory) => {
-    setSelectedSubcategory(subcategory);
-    // Fetch final places/activities for this subcategory
-    const { data, error } = await supabase
-      .from('places')
-      .select('*')
-      .eq('subcategory_id', subcategory.id);
-    if (error) {
-      console.error('Error fetching places:', error);
-    } else {
-      setPlaces(data);
-      setFinalMatches(data);  // store the results as final matches
+  // Handle the "No" action
+  const handleNo = () => {
+    if (currentLevel === 'category') {
+      // Skip this category, go to next category
+      if (catIndex < categories.length - 1) {
+        setCatIndex(catIndex + 1);
+      } else {
+        // No more categories – end of list
+        console.log('No more categories to show.');
+      }
+      // (Optionally handle end-of-list for categories, e.g., show a message)
+    } else if (currentLevel === 'subcategory') {
+      if (subcatIndex < subcategories.length - 1) {
+        // Go to next subcategory within the same category
+        setSubcatIndex(subcatIndex + 1);
+      } else {
+        // No more subcategories in this category – go back to category level
+        // Remove last category from path (user didn't find a suitable subcategory)
+        setPath(prev => prev.slice(0, -1));
+        if (catIndex < categories.length - 1) {
+          // Move to next category
+          setCatIndex(catIndex + 1);
+          setCurrentLevel('category');
+        } else {
+          // No more categories left
+          console.log('No more categories to show.');
+          setCurrentLevel('category');
+        }
+      }
+    } else if (currentLevel === 'activity') {
+      if (actIndex < activities.length - 1) {
+        // Show next activity in the same subcategory
+        setActIndex(actIndex + 1);
+      } else {
+        // No more activities in this subcategory – go back to subcategory level
+        // Remove last subcategory from path (no activity was suitable)
+        setPath(prev => prev.slice(0, -1));
+        if (subcatIndex < subcategories.length - 1) {
+          // Move to next subcategory in the same category
+          setSubcatIndex(subcatIndex + 1);
+          setCurrentLevel('subcategory');
+        } else {
+          // No more subcategories left in this category – go back to category level
+          setPath(prev => prev.slice(0, -1));  // remove category as well
+          if (catIndex < categories.length - 1) {
+            setCatIndex(catIndex + 1);
+            setCurrentLevel('category');
+          } else {
+            console.log('No more categories to show.');
+            setCurrentLevel('category');
+          }
+        }
+      }
     }
   };
 
-  // Handle going back to the previous step
+  // Handle the "Go Back" action
   const handleGoBack = () => {
-    if (selectedSubcategory) {
-      // Currently in final matches step -> go back to subcategory selection
-      setSelectedSubcategory(null);
-      setPlaces([]);
-      setFinalMatches([]);
-      setSubcategoryIndex(0);
-    } else if (selectedCategory) {
-      // Currently in subcategory selection step -> go back to category selection
-      setSelectedCategory(null);
-      setSubcategories([]);
-      setPlaces([]);
-      setFinalMatches([]);
-      setCategoryIndex(0);
+    if (currentLevel === 'subcategory') {
+      // Go back from subcategory level to category level
+      setCurrentLevel('category');
+      // Remove the last category from path (undo choosing this category)
+      setPath(prev => prev.slice(0, -1));
+    } else if (currentLevel === 'activity') {
+      // Go back from activity level to subcategory level
+      setCurrentLevel('subcategory');
+      // Remove the last subcategory from path (undo choosing this subcategory)
+      setPath(prev => prev.slice(0, -1));
+    } else {
+      // If at category level (top), there's no parent to go back to
+      console.log('Already at top level. Cannot go back further.');
     }
-    // If no selection, there's nothing to go back to
   };
 
-  // Handle starting over (reset all selections)
-  const handleStartOver = () => {
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setSubcategories([]);
-    setPlaces([]);
-    setFinalMatches([]);
-    setCategoryIndex(0);
-    setSubcategoryIndex(0);
-  };
+  // Determine the title to display at bottom of card (if currentItem exists)
+  const currentTitle = currentItem ? (currentItem.title || currentItem.name) : '';
 
-  // Helper handlers to show next/prev option within the current selection list
-  const showNextCategory = () => {
-    if (categories.length > 0) {
-      setCategoryIndex((prevIndex) => (prevIndex + 1) % categories.length);
-    }
+  // Simple styles for responsiveness and card layout
+  const containerStyle = {
+    maxWidth: '500px', margin: '0 auto', padding: '1rem',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
+    height: '100vh'  // use full viewport height for a phone-like feel
   };
-  const showPrevCategory = () => {
-    if (categories.length > 0) {
-      setCategoryIndex((prevIndex) =>
-        prevIndex === 0 ? categories.length - 1 : prevIndex - 1
-      );
-    }
+  const breadcrumbStyle = {
+    alignSelf: 'flex-start', fontSize: '0.9rem', color: '#555'
   };
-  const showNextSubcategory = () => {
-    if (subcategories.length > 0) {
-      setSubcategoryIndex((prevIndex) => (prevIndex + 1) % subcategories.length);
-    }
+  const cardStyle = {
+    flex: '1 1 auto', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    width: '100%', maxHeight: '80vh',
+    background: '#f0f0f0', borderRadius: '8px', padding: '1rem',
+    textAlign: 'center', position: 'relative'
   };
-  const showPrevSubcategory = () => {
-    if (subcategories.length > 0) {
-      setSubcategoryIndex((prevIndex) =>
-        prevIndex === 0 ? subcategories.length - 1 : prevIndex - 1
-      );
-    }
+  const titleStyle = {
+    position: 'absolute', bottom: '1rem', width: '100%',
+    textAlign: 'center', fontWeight: 'bold', fontSize: '1.2rem'
+  };
+  const buttonsContainerStyle = {
+    display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '1rem'
+  };
+  const buttonStyle = {
+    flex: '1 1 30%', padding: '0.5rem', fontSize: '1rem',
+    border: 'none', borderRadius: '5px'
   };
 
   return (
-    <div className="container" style={{ padding: '2rem' }}>
-      {/* Stack of previous selections */}
-      <div className="selected-stack" style={{ marginBottom: '1.5rem' }}>
-        {selectedCategory && (
-          <div className="selected-card category-card" style={{ display: 'inline-block', marginRight: '1rem' }}>
-            <strong>Category:</strong> {selectedCategory.name}
-          </div>
-        )}
-        {selectedSubcategory && (
-          <div className="selected-card subcategory-card" style={{ display: 'inline-block', marginRight: '1rem' }}>
-            <strong>Subcategory:</strong> {selectedSubcategory.name}
+    <div style={containerStyle}>
+      {/* Breadcrumb Path */}
+      <div style={breadcrumbStyle}>
+        {path.length > 0 ? path.join(' > ') : ''}
+      </div>
+
+      {/* Card Display */}
+      <div style={cardStyle}>
+        {currentItem ? (
+          <>
+            {/* You can display more content about currentItem here if needed */}
+            <div style={titleStyle}>
+              {currentTitle || '(No selection)'}
+            </div>
+          </>
+        ) : (
+          <div style={titleStyle}>
+            {currentLevel === 'category' ? 'No categories available' : 
+             currentLevel === 'subcategory' ? 'No subcategories available' : 
+             'No activities available'}
           </div>
         )}
       </div>
 
-      {/* Selection card area */}
-      {!selectedCategory ? (
-        /* Category selection step */
-        <div className="card category-card" style={{ marginBottom: '1rem' }}>
-          {categories.length > 0 ? (
-            <>
-              <h2>{categories[categoryIndex]?.name}</h2>
-              <p>{categories[categoryIndex]?.description}</p>
-              <button onClick={() => handleSelectCategory(categories[categoryIndex])}>
-                Select Category
-              </button>
-              {/* Only show navigation if multiple categories */}
-              {categories.length > 1 && (
-                <div className="nav-buttons" style={{ marginTop: '0.5rem' }}>
-                  <button onClick={showPrevCategory}>◀ Prev</button>
-                  <button onClick={showNextCategory}>Next ▶</button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p>Loading categories...</p>
-          )}
-        </div>
-      ) : !selectedSubcategory ? (
-        /* Subcategory selection step */
-        <div className="card subcategory-card" style={{ marginBottom: '1rem' }}>
-          {subcategories.length > 0 ? (
-            <>
-              <h2>{subcategories[subcategoryIndex]?.name}</h2>
-              <p>{subcategories[subcategoryIndex]?.description}</p>
-              <button onClick={() => handleSelectSubcategory(subcategories[subcategoryIndex])}>
-                Select Subcategory
-              </button>
-              {subcategories.length > 1 && (
-                <div className="nav-buttons" style={{ marginTop: '0.5rem' }}>
-                  <button onClick={showPrevSubcategory}>◀ Prev</button>
-                  <button onClick={showNextSubcategory}>Next ▶</button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p>{/* If no subcategories (or still loading) */}Loading options...</p>
-          )}
-        </div>
-      ) : (
-        /* Final matches step: show results */
-        <div className="final-matches" style={{ marginBottom: '1rem' }}>
-          <h2>Final Matches</h2>
-          {finalMatches.length > 0 ? (
-            <ul>
-              {finalMatches.map((place) => (
-                <li key={place.id}>
-                  <strong>{place.name}</strong> – {place.description}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No matches found for this selection.</p>
-          )}
-        </div>
-      )}
-
-      {/* Control buttons */}
-      <div className="control-buttons" style={{ marginTop: '1rem' }}>
-        { (selectedCategory || selectedSubcategory) && (
-          <button onClick={handleGoBack} style={{ marginRight: '0.5rem' }}>
-            ⬅ Go Back
-          </button>
-        )}
-        { (selectedCategory || selectedSubcategory) && (
-          <button onClick={handleStartOver}>
-            ⟲ Start Over
-          </button>
-        )}
+      {/* Action Buttons */}
+      <div style={buttonsContainerStyle}>
+        <button 
+          onClick={handleYes} 
+          style={{ ...buttonStyle, background: '#4caf50', color: '#fff', marginRight: '0.5rem' }}
+        >
+          Yes
+        </button>
+        <button 
+          onClick={handleNo} 
+          style={{ ...buttonStyle, background: '#f44336', color: '#fff', marginRight: '0.5rem' }}
+        >
+          No
+        </button>
+        <button 
+          onClick={handleGoBack} 
+          style={{ ...buttonStyle, background: '#9e9e9e', color: '#fff' }}
+          disabled={currentLevel === 'category'}  /* disable Go Back at root level */
+        >
+          Go Back
+        </button>
       </div>
     </div>
   );
