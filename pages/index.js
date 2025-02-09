@@ -18,14 +18,17 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const TinderCard = dynamic(() => import("react-tinder-card"), { ssr: false });
 
 /**
- * Fetch categories from Supabase
+ * Fetch categories from Supabase with debugging logs
  */
 async function fetchCategories() {
+    console.log("Fetching categories from Supabase...");
     const { data, error } = await supabase.from("categories").select("*");
+    
     if (error) {
         console.error("Error fetching categories:", error);
         return [];
     }
+    
     console.log("Fetched Categories:", data);
     return data;
 }
