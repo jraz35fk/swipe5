@@ -1,165 +1,219 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// Initialize Supabase client with URL and anon key from environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export default function Home() {
-  const [stack, setStack] = useState([]); // Tracks previous choices
-  const [options, setOptions] = useState([]); // Holds the current two options
-  const [selectedTags, setSelectedTags] = useState([]); // Tracks selected categories
-  const [likedPlaces, setLikedPlaces] = useState([]); // Stores selected places (final choices)
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
+export default function HomePage() {
+  // State for data lists
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [places, setPlaces] = useState([]);
+  // State for selected items
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
+  // State for index of currently viewed option in the lists (for one-card-at-a-time)
+  const [categoryIndex, setCategoryIndex] = useState(0);
+  const [subcategoryIndex, setSubcategoryIndex] = useState(0);
+  // Final matches (activities) collected
+  const [finalMatches, setFinalMatches] = useState([]);
 
+  // Fetch all categories on initial load
   useEffect(() => {
-    // Fetch top-level categories on load
     const fetchCategories = async () => {
-      setLoading(true);
-      setErrorMessage('');
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .is('parent_id', null)
-        .order('ranking_score', { ascending: false });
-
-      setLoading(false);
+      const { data, error } = await supabase.from('categories').select('*');
       if (error) {
-        setErrorMessage('Failed to load categories.');
         console.error('Error fetching categories:', error);
       } else {
-        setOptions(data.slice(0, 2)); // Show first 2 options
+        setCategories(data);
       }
     };
     fetchCategories();
   }, []);
 
-  // Handles Yes selection (move deeper into the category)
-  const handleYes = async (selectedItem) => {
-    const { id } = selectedItem;
-    let newTags = [...selectedTags, selectedItem.name];
-
-    // Fetch subcategories or places
-    const { data: subcategories, error } = await supabase
-      .from('categories')
+  // Handle selecting a category
+  const handleSelectCategory = async (category) => {
+    setSelectedCategory(category);
+    setSelectedSubcategory(null);
+    setFinalMatches([]);  // reset any final matches from previous flow
+    // Fetch subcategories for this category
+    const { data, error } = await supabase
+      .from('subcategories')
       .select('*')
-      .eq('parent_id', id)
-      .order('ranking_score', { ascending: false });
-
+      .eq('category_id', category.id);  // filter by selected category ID&#8203;:contentReference[oaicite:4]{index=4}
     if (error) {
       console.error('Error fetching subcategories:', error);
-      return;
-    }
-
-    if (subcategories.length > 0) {
-      setStack((prev) => [...prev, selectedItem]);
-      setOptions(subcategories.slice(0, 2));
     } else {
-      // No subcategories → fetch places
-      const { data: places, error: placesError } = await supabase
-        .from('places')
-        .select('*')
-        .eq('category_id', id)
-        .order('ranking_score', { ascending: false });
-
-      if (placesError) {
-        console.error('Error fetching places:', placesError);
-        return;
-      }
-
-      setStack((prev) => [...prev, selectedItem]);
-      setOptions(places.slice(0, 2));
+      setSubcategories(data);
+      setSubcategoryIndex(0);  // reset index for subcategories
     }
-
-    setSelectedTags(newTags);
   };
 
-  // Handles No selection (replace option dynamically)
-  const handleNo = async (rejectedItem) => {
-    let newOptions = [...options];
-
-    // Remove the rejected item
-    newOptions = newOptions.filter((item) => item.id !== rejectedItem.id);
-
-    // Fetch another option
-    const { data: newOption, error } = await supabase
-      .from('categories')
+  // Handle selecting a subcategory
+  const handleSelectSubcategory = async (subcategory) => {
+    setSelectedSubcategory(subcategory);
+    // Fetch final places/activities for this subcategory
+    const { data, error } = await supabase
+      .from('places')
       .select('*')
-      .is('parent_id', null)
-      .not('id', 'in', `(${rejectedItem.id})`) // Exclude the rejected option
-      .order('ranking_score', { ascending: false })
-      .limit(1);
-
-    if (!error && newOption.length > 0) {
-      newOptions.push(newOption[0]);
+      .eq('subcategory_id', subcategory.id);
+    if (error) {
+      console.error('Error fetching places:', error);
+    } else {
+      setPlaces(data);
+      setFinalMatches(data);  // store the results as final matches
     }
+  };
 
-    setOptions(newOptions.slice(0, 2));
+  // Handle going back to the previous step
+  const handleGoBack = () => {
+    if (selectedSubcategory) {
+      // Currently in final matches step -> go back to subcategory selection
+      setSelectedSubcategory(null);
+      setPlaces([]);
+      setFinalMatches([]);
+      setSubcategoryIndex(0);
+    } else if (selectedCategory) {
+      // Currently in subcategory selection step -> go back to category selection
+      setSelectedCategory(null);
+      setSubcategories([]);
+      setPlaces([]);
+      setFinalMatches([]);
+      setCategoryIndex(0);
+    }
+    // If no selection, there's nothing to go back to
+  };
+
+  // Handle starting over (reset all selections)
+  const handleStartOver = () => {
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setSubcategories([]);
+    setPlaces([]);
+    setFinalMatches([]);
+    setCategoryIndex(0);
+    setSubcategoryIndex(0);
+  };
+
+  // Helper handlers to show next/prev option within the current selection list
+  const showNextCategory = () => {
+    if (categories.length > 0) {
+      setCategoryIndex((prevIndex) => (prevIndex + 1) % categories.length);
+    }
+  };
+  const showPrevCategory = () => {
+    if (categories.length > 0) {
+      setCategoryIndex((prevIndex) =>
+        prevIndex === 0 ? categories.length - 1 : prevIndex - 1
+      );
+    }
+  };
+  const showNextSubcategory = () => {
+    if (subcategories.length > 0) {
+      setSubcategoryIndex((prevIndex) => (prevIndex + 1) % subcategories.length);
+    }
+  };
+  const showPrevSubcategory = () => {
+    if (subcategories.length > 0) {
+      setSubcategoryIndex((prevIndex) =>
+        prevIndex === 0 ? subcategories.length - 1 : prevIndex - 1
+      );
+    }
   };
 
   return (
-    <div className="h-screen flex flex-col items-center justify-center p-4">
-      {/* Navigation buttons */}
-      <div className="flex justify-between w-full max-w-md mb-4">
-        <button
-          className="bg-gray-200 px-4 py-2 rounded"
-          onClick={() => window.location.reload()}
-        >
-          Start Over
-        </button>
-      </div>
-
-      {/* Display branching UI */}
-      <div className="relative w-full max-w-md">
-        {stack.map((item, index) => (
-          <div key={index} className="mb-2 p-3 bg-gray-100 rounded">
-            <h3 className="text-lg font-semibold">{item.name}</h3>
+    <div className="container" style={{ padding: '2rem' }}>
+      {/* Stack of previous selections */}
+      <div className="selected-stack" style={{ marginBottom: '1.5rem' }}>
+        {selectedCategory && (
+          <div className="selected-card category-card" style={{ display: 'inline-block', marginRight: '1rem' }}>
+            <strong>Category:</strong> {selectedCategory.name}
           </div>
-        ))}
-      </div>
-
-      {/* Display two cards at a time */}
-      <div className="relative w-full max-w-md h-64">
-        {options.map((option, index) => (
-          <div
-            key={option.id}
-            className={`absolute inset-0 bg-white p-4 rounded-xl shadow-lg flex flex-col items-center justify-center text-center ${
-              index === 1 ? 'translate-y-6 scale-95 opacity-80' : ''
-            }`}
-          >
-            <h2 className="text-2xl font-semibold">{option.name}</h2>
-            <div className="flex justify-around w-full mt-4">
-              <button
-                className="bg-red-500 text-white px-4 py-2 rounded"
-                onClick={() => handleNo(option)}
-              >
-                No
-              </button>
-              <button
-                className="bg-green-500 text-white px-4 py-2 rounded"
-                onClick={() => handleYes(option)}
-              >
-                Yes
-              </button>
-            </div>
+        )}
+        {selectedSubcategory && (
+          <div className="selected-card subcategory-card" style={{ display: 'inline-block', marginRight: '1rem' }}>
+            <strong>Subcategory:</strong> {selectedSubcategory.name}
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Display matched places */}
-      {likedPlaces.length > 0 && (
-        <div className="w-full max-w-md bg-white p-4 rounded shadow overflow-y-auto mt-6">
-          <h2 className="text-xl font-bold mb-2">Your Selections</h2>
-          <ul>
-            {likedPlaces.map((place) => (
-              <li key={place.id}>{place.name}</li>
-            ))}
-          </ul>
+      {/* Selection card area */}
+      {!selectedCategory ? (
+        /* Category selection step */
+        <div className="card category-card" style={{ marginBottom: '1rem' }}>
+          {categories.length > 0 ? (
+            <>
+              <h2>{categories[categoryIndex]?.name}</h2>
+              <p>{categories[categoryIndex]?.description}</p>
+              <button onClick={() => handleSelectCategory(categories[categoryIndex])}>
+                Select Category
+              </button>
+              {/* Only show navigation if multiple categories */}
+              {categories.length > 1 && (
+                <div className="nav-buttons" style={{ marginTop: '0.5rem' }}>
+                  <button onClick={showPrevCategory}>◀ Prev</button>
+                  <button onClick={showNextCategory}>Next ▶</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p>Loading categories...</p>
+          )}
+        </div>
+      ) : !selectedSubcategory ? (
+        /* Subcategory selection step */
+        <div className="card subcategory-card" style={{ marginBottom: '1rem' }}>
+          {subcategories.length > 0 ? (
+            <>
+              <h2>{subcategories[subcategoryIndex]?.name}</h2>
+              <p>{subcategories[subcategoryIndex]?.description}</p>
+              <button onClick={() => handleSelectSubcategory(subcategories[subcategoryIndex])}>
+                Select Subcategory
+              </button>
+              {subcategories.length > 1 && (
+                <div className="nav-buttons" style={{ marginTop: '0.5rem' }}>
+                  <button onClick={showPrevSubcategory}>◀ Prev</button>
+                  <button onClick={showNextSubcategory}>Next ▶</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p>{/* If no subcategories (or still loading) */}Loading options...</p>
+          )}
+        </div>
+      ) : (
+        /* Final matches step: show results */
+        <div className="final-matches" style={{ marginBottom: '1rem' }}>
+          <h2>Final Matches</h2>
+          {finalMatches.length > 0 ? (
+            <ul>
+              {finalMatches.map((place) => (
+                <li key={place.id}>
+                  <strong>{place.name}</strong> – {place.description}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No matches found for this selection.</p>
+          )}
         </div>
       )}
+
+      {/* Control buttons */}
+      <div className="control-buttons" style={{ marginTop: '1rem' }}>
+        { (selectedCategory || selectedSubcategory) && (
+          <button onClick={handleGoBack} style={{ marginRight: '0.5rem' }}>
+            ⬅ Go Back
+          </button>
+        )}
+        { (selectedCategory || selectedSubcategory) && (
+          <button onClick={handleStartOver}>
+            ⟲ Start Over
+          </button>
+        )}
+      </div>
     </div>
   );
 }
