@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client (for demo purposes; in real apps use env vars)
-const supabase = createClient('https://jxuighsfhmptxufdiwpr.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4dWlnaHNmaG1wdHh1ZmRpd3ByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkxMTQwODMsImV4cCI6MjA1NDY5MDA4M30.rZuj46f4kRU-a08KHXhx0DldK7u9CKdU0NF1ax9VVwI');
+const supabase = createClient('NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
 export default function Home() {
   // Initial two options (parent category and its two child cards)
