@@ -31,7 +31,7 @@ async function fetchCategories() {
 
 export default function Home() {
     const [categories, setCategories] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -43,29 +43,33 @@ export default function Home() {
         loadCategories();
     }, []);
 
+    const handleSwipe = (direction) => {
+        if (direction === "right") {
+            console.log("Selected Category:", categories[currentIndex]);
+        }
+        setCurrentIndex((prevIndex) => prevIndex + 1);
+    };
+
     return (
         <div style={{ width: "100%", maxWidth: "420px", margin: "0 auto", height: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#fdfdfd", fontFamily: "sans-serif" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "1rem", borderBottom: "1px solid #ccc" }}>
-                <h2>Swipe to Discover Activities</h2>
+            <div style={{ display: "flex", justifyContent: "center", padding: "1rem", borderBottom: "1px solid #ccc" }}>
+                <h2>Swipe to Select a Category</h2>
             </div>
             {loading ? (
                 <p style={{ textAlign: "center" }}>Loading categories...</p>
             ) : (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "80vh", flexDirection: "column" }}>
-                    {!selectedCategory ? (
-                        <>
-                            <h2>Select a Category</h2>
-                            {categories.map((category) => (
-                                <button key={category.id} onClick={() => setSelectedCategory(category.id)} style={{ margin: "10px", padding: "10px", fontSize: "16px" }}>
-                                    {category.name}
-                                </button>
-                            ))}
-                        </>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "80vh" }}>
+                    {categories.length > 0 && currentIndex < categories.length ? (
+                        <TinderCard
+                            key={categories[currentIndex].id}
+                            onSwipe={(dir) => handleSwipe(dir)}
+                            preventSwipe={["up", "down"]}>
+                            <div style={{ width: "300px", height: "400px", borderRadius: "10px", overflow: "hidden", boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", backgroundColor: "#fff" }}>
+                                <h3>{categories[currentIndex].name}</h3>
+                            </div>
+                        </TinderCard>
                     ) : (
-                        <div>
-                            <button onClick={() => setSelectedCategory(null)} style={{ marginBottom: "10px" }}>← Back</button>
-                            <h2>Activities for Selected Category (To Be Implemented)</h2>
-                        </div>
+                        <p>No more categories.</p>
                     )}
                 </div>
             )}
