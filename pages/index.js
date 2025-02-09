@@ -119,4 +119,65 @@ export default function Home() {
           newOptions[nextOptionIndex] = places[0]; // Replace with first available place
         }
       }
-   
+    } else {
+      // If rejecting a place, just remove it
+      newOptions = newOptions.filter((place) => place.id !== rejectedItem.id);
+    }
+
+    setOptions(newOptions.slice(0, 2)); // Ensure only 2 options at a time
+  };
+
+  return (
+    <div className="h-screen flex flex-col items-center justify-center p-4">
+      {/* Navigation buttons */}
+      <div className="flex justify-between w-full max-w-md mb-4">
+        <button
+          className="bg-gray-200 px-4 py-2 rounded"
+          onClick={() => window.location.reload()}
+        >
+          Start Over
+        </button>
+      </div>
+
+      {/* Display two cards at a time */}
+      <div className="relative w-full max-w-md h-64">
+        {options.map((option, index) => (
+          <div
+            key={option.id}
+            className={`absolute inset-0 bg-white p-4 rounded-xl shadow-lg flex flex-col items-center justify-center text-center ${
+              index === 1 ? 'translate-y-6 scale-95 opacity-80' : ''
+            }`}
+          >
+            <h2 className="text-2xl font-semibold">{option.name}</h2>
+            <div className="flex justify-around w-full mt-4">
+              <button
+                className="bg-red-500 text-white px-4 py-2 rounded"
+                onClick={() => handleNo(option)}
+              >
+                No
+              </button>
+              <button
+                className="bg-green-500 text-white px-4 py-2 rounded"
+                onClick={() => handleYes(option)}
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Display matched places */}
+      {likedPlaces.length > 0 && (
+        <div className="w-full max-w-md bg-white p-4 rounded shadow overflow-y-auto mt-6">
+          <h2 className="text-xl font-bold mb-2">Your Selections</h2>
+          <ul>
+            {likedPlaces.map((place) => (
+              <li key={place.id}>{place.name}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
