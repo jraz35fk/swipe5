@@ -1,64 +1,55 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client using environment variables (make sure these are set in Vercel)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function Home() {
-  const [stack, setStack] = useState([]);        // stack of category/subcategory/place layers
-  const [likedPlaces, setLikedPlaces] = useState([]);  // final liked places
-  const [showMatches, setShowMatches] = useState(false); // controls "Final Match Deck" view
+  const [stack, setStack] = useState([]); // Stores layers of categories → subcategories → places
+  const [likedPlaces, setLikedPlaces] = useState([]); // Stores selected final places
+  const [showMatches, setShowMatches] = useState(false); // Toggle Final Match Deck view
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch top-level categories on initial load
+    // Fetch top-level categories on page load
     const fetchTopCategories = async () => {
       const { data: categories, error } = await supabase
         .from('categories')
-        .select('*')
-        .is('parent_id', null)  // top-level categories (no parent)
-        .order('ranking_score', { ascending: false });  // highest ranking first
+        .select('id, name, ranking_score')
+        .is('parent_id', null) // Fetch only top-level categories
+        .order('ranking_score', { ascending: false }); // Show higher-ranked first
+
       if (error) {
         console.error('Error fetching categories:', error);
-      }
-      if (categories) {
-        setStack([{
-          type: 'category',
-          parentId: null,
-          items: categories,
-          index: 0
-        }]);
+      } else {
+        setStack([{ type: 'category', items: categories, index: 0 }]);
       }
       setLoading(false);
     };
     fetchTopCategories();
   }, []);
 
-  // Helper: cascade-pop finished layers (when a layer runs out of items)
-  function cascadePop(layersStack) {
-    let newStack = [...layersStack];
-    // Continue popping while the top layer is exhausted
+  // Helper function to remove exhausted layers
+  function cascadePop(layers) {
+    let newStack = [...layers];
     while (newStack.length > 0) {
-      const topLayer = newStack[newStack.length - 1];
-      if (topLayer.index >= topLayer.items.length) {
-        if (newStack.length > 1) {
-          // Remove the finished layer and check the next one up
-          newStack.pop();
-          // No need to increment parent index here (already handled on entry)
-          continue;
-        } else {
-          // Top-level layer exhausted; nothing left to pop
-          break;
+      const top = newStack[newStack.length - 1];
+      if (top.index >= top.items.length) {
+        newStack.pop();
+        if (newStack.length > 0) {
+          newStack[newStack.length - 1].index++; // Move to next item in previous layer
         }
+      } else {
+        break;
       }
-      break;
     }
     return newStack;
   }
 
-  // Handle "Yes" button (select item or like place)
+  // Handle "Yes" button click (go deeper or select place)
   const handleYes = async () => {
     if (stack.length === 0) return;
     const layerIndex = stack.length - 1;
@@ -68,248 +59,110 @@ export default function Home() {
     const currentItem = items[index];
 
     if (type !== 'place') {
-      // If current item is a category or subcategory, drill down into it
-      const { data: childCategories, error: childError } = await supabase
+      // Fetch subcategories or places based on current category
+      const { data: children, error } = await supabase
         .from('categories')
-        .select('*')
+        .select('id, name, ranking_score')
         .eq('parent_id', currentItem.id)
         .order('ranking_score', { ascending: false });
-      if (childError) {
-        console.error('Error fetching subcategories:', childError);
+
+      if (error) {
+        console.error('Error fetching subcategories:', error);
       }
-      if (childCategories && childCategories.length > 0) {
-        // Push a new layer of subcategories
-        const newLayer = {
-          type: 'subcategory',
-          parentId: currentItem.id,
-          items: childCategories,
-          index: 0
-        };
-        setStack(prevStack => {
-          const newStack = [...prevStack];
-          // Skip this category for future (increment its index)
-          newStack[layerIndex] = { 
-            ...newStack[layerIndex], 
-            index: newStack[layerIndex].index + 1 
-          };
-          newStack.push(newLayer);
-          return cascadePop(newStack);
-        });
+
+      if (children && children.length > 0) {
+        // Add a new subcategory layer
+        setStack(prev => cascadePop([...prev, { type: 'subcategory', items: children, index: 0 }]));
       } else {
-        // No subcategories – fetch places for this category
+        // No subcategories exist → Fetch places
         const { data: places, error: placesError } = await supabase
           .from('places')
-          .select('*')
+          .select('id, name, description, ranking_score')
           .eq('category_id', currentItem.id)
           .order('ranking_score', { ascending: false });
+
         if (placesError) {
           console.error('Error fetching places:', placesError);
         }
-        const newLayer = {
-          type: 'place',
-          parentId: currentItem.id,
-          items: places || [],
-          index: 0
-        };
-        setStack(prevStack => {
-          const newStack = [...prevStack];
-          // Skip this category for future
-          newStack[layerIndex] = { 
-            ...newStack[layerIndex], 
-            index: newStack[layerIndex].index + 1 
-          };
-          newStack.push(newLayer);
-          return cascadePop(newStack);
-        });
+        setStack(prev => cascadePop([...prev, { type: 'place', items: places || [], index: 0 }]));
       }
     } else {
-      // Current item is a place – user likes this place
-      setLikedPlaces(prev => (
-        prev.find(p => p.id === currentItem.id) ? prev : [...prev, currentItem]
-      ));
-      // Move to next place in the current places list
-      setStack(prevStack => {
-        const newStack = [...prevStack];
-        newStack[layerIndex] = { 
-          ...newStack[layerIndex], 
-          index: newStack[layerIndex].index + 1 
-        };
-        return cascadePop(newStack);
-      });
+      // User selects a place → Add to likedPlaces
+      setLikedPlaces(prev => (prev.some(p => p.id === currentItem.id) ? prev : [...prev, currentItem]));
+      setStack(prev => cascadePop([...prev.slice(0, -1), { ...prev[prev.length - 1], index: index + 1 }]));
     }
   };
 
-  // Handle "No" button (skip current item)
+  // Handle "No" button click (skip current card)
   const handleNo = () => {
-    if (stack.length === 0) return;
-    setStack(prevStack => {
-      const newStack = [...prevStack];
-      const layerIndex = newStack.length - 1;
-      if (layerIndex < 0) return newStack;
-      // Skip this item by advancing index
-      newStack[layerIndex] = { 
-        ...newStack[layerIndex], 
-        index: newStack[layerIndex].index + 1 
-      };
-      return cascadePop(newStack);
-    });
+    setStack(prev => cascadePop([...prev.slice(0, -1), { ...prev[prev.length - 1], index: prev[prev.length - 1].index + 1 }]));
   };
 
-  // Handle "Go Back" button (return to previous layer)
+  // Handle "Go Back" button click
   const handleBack = () => {
-    if (stack.length <= 1) return; // no previous layer if at root
-    setStack(prevStack => {
-      const newStack = [...prevStack];
-      newStack.pop(); // remove current top layer
-      return newStack;
-    });
+    if (stack.length > 1) setStack(prev => prev.slice(0, -1));
   };
 
-  // Handle "Start Over" button (reset to top-level categories)
+  // Handle "Start Over" button click
   const handleStartOver = async () => {
     setLoading(true);
     const { data: categories, error } = await supabase
       .from('categories')
-      .select('*')
+      .select('id, name, ranking_score')
       .is('parent_id', null)
       .order('ranking_score', { ascending: false });
+
     if (error) {
       console.error('Error fetching categories:', error);
     }
-    if (categories) {
-      setStack([{
-        type: 'category',
-        parentId: null,
-        items: categories,
-        index: 0
-      }]);
-    } else {
-      setStack([]);
-    }
-    // Reset liked places (remove this line if you want to preserve previous selections)
-    setLikedPlaces([]);
+    setStack([{ type: 'category', items: categories, index: 0 }]);
+    setLikedPlaces([]); // Reset liked places
     setLoading(false);
   };
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
-  }
-
-  // Determine the current and next card from the top layer
-  let currentCard = null;
-  let nextCard = null;
+  // Determine current and next cards
+  let currentCard = null, nextCard = null;
   if (stack.length > 0) {
     const topLayer = stack[stack.length - 1];
     const { items, index } = topLayer;
     if (items && index < items.length) {
       currentCard = items[index];
-      if (index + 1 < items.length) {
-        nextCard = items[index + 1];
-      }
+      nextCard = items[index + 1] || null;
     }
   }
 
   return (
     <div className="h-screen flex flex-col items-center justify-center p-4">
-      {/* Top navigation controls */}
+      {/* Navigation buttons */}
       <div className="flex justify-between w-full max-w-md mb-4">
-        <button 
-          className="bg-gray-200 text-gray-700 px-4 py-2 rounded" 
-          onClick={handleStartOver}
-        >
-          Start Over
-        </button>
-        {stack.length > 1 ? (
-          <button 
-            className="bg-gray-200 text-gray-700 px-4 py-2 rounded" 
-            onClick={handleBack}
-          >
-            Go Back
-          </button>
-        ) : <span /> }
-        <button 
-          className="bg-blue-500 text-white px-4 py-2 rounded" 
-          onClick={() => setShowMatches(true)}
-        >
-          Final Match Deck
-        </button>
+        <button className="bg-gray-200 px-4 py-2 rounded" onClick={handleStartOver}>Start Over</button>
+        {stack.length > 1 && (
+          <button className="bg-gray-200 px-4 py-2 rounded" onClick={handleBack}>Go Back</button>
+        )}
+        <button className="bg-blue-500 text-white px-4 py-2 rounded" onClick={() => setShowMatches(true)}>Final Match Deck</button>
       </div>
 
-      {/* Main card stack or final matches list */}
+      {/* Match Deck View */}
       {showMatches ? (
-        /* Final Match Deck View */
         <div className="w-full max-w-md bg-white p-4 rounded shadow overflow-y-auto">
           <h2 className="text-xl font-bold mb-2">Your Selections</h2>
-          {likedPlaces.length === 0 ? (
-            <p className="text-gray-500">No places selected yet.</p>
-          ) : (
-            <ul>
-              {likedPlaces.map(place => (
-                <li key={place.id} className="border-b last:border-0 py-2">
-                  {place.name}
-                </li>
-              ))}
-            </ul>
-          )}
-          <button 
-            className="mt-4 w-full bg-gray-300 text-gray-800 px-4 py-2 rounded" 
-            onClick={() => setShowMatches(false)}
-          >
-            Back to Swiping
-          </button>
+          {likedPlaces.length === 0 ? <p className="text-gray-500">No places selected yet.</p> : 
+            <ul>{likedPlaces.map(place => <li key={place.id} className="py-2">{place.name}</li>)}</ul>}
+          <button className="mt-4 w-full bg-gray-300 px-4 py-2 rounded" onClick={() => setShowMatches(false)}>Back to Swiping</button>
         </div>
       ) : (
-        /* Tinder-style swipe cards */
+        /* Main Cards Display */
         <div className="relative w-full max-w-md h-64">
-          {/* Current card (front) */}
-          {currentCard ? (
-            <div className="absolute inset-0 bg-white rounded-xl shadow-lg flex items-center justify-center text-center p-4">
-              <div>
-                <h2 className="text-2xl font-semibold">{currentCard.name}</h2>
-                {currentCard.description && (
-                  <p className="mt-2 text-gray-600">{currentCard.description}</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            // No current card available
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-gray-500">No more options.</p>
-            </div>
-          )}
-          {/* Next card (peeking from behind) */}
-          {nextCard && (
-            <div className="absolute inset-0 bg-white rounded-xl shadow-lg flex items-center justify-center text-center p-4 transform translate-y-4 scale-95">
-              <div>
-                <h2 className="text-2xl font-semibold text-gray-400">{nextCard.name}</h2>
-              </div>
-            </div>
-          )}
+          {currentCard && <div className="absolute inset-0 bg-white p-4 rounded-xl shadow-lg">{currentCard.name}</div>}
+          {nextCard && <div className="absolute inset-0 bg-gray-100 p-4 rounded-xl shadow-lg translate-y-4 scale-95">{nextCard.name}</div>}
         </div>
       )}
 
-      {/* Yes/No action buttons (shown only in swipe mode) */}
-      {!showMatches && (
-        <div className="flex justify-around w-full max-w-md mt-6">
-          <button 
-            className="bg-red-500 text-white w-24 py-2 rounded font-semibold" 
-            onClick={handleNo}
-          >
-            No
-          </button>
-          <button 
-            className="bg-green-500 text-white w-24 py-2 rounded font-semibold" 
-            onClick={handleYes}
-          >
-            Yes
-          </button>
-        </div>
-      )}
+      {/* Yes/No Buttons */}
+      {!showMatches && <div className="flex justify-around w-full max-w-md mt-6">
+        <button className="bg-red-500 text-white w-24 py-2 rounded" onClick={handleNo}>No</button>
+        <button className="bg-green-500 text-white w-24 py-2 rounded" onClick={handleYes}>Yes</button>
+      </div>}
     </div>
   );
 }
