@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client (for demo purposes; in real apps use env vars)
-const supabase = createClient('NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY');
+const supabase = createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_KEY');
 
 export default function Home() {
   // Initial two options (parent category and its two child cards)
