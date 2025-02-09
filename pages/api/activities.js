@@ -65,4 +65,3 @@ async function fetchFromAPIs(location, type) {
 
     return results;
 }
-
