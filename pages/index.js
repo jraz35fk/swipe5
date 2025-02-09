@@ -26,6 +26,7 @@ async function fetchCategories() {
         console.error("Error fetching categories:", error);
         return [];
     }
+    console.log("Fetched Categories:", data);
     return data;
 }
 
@@ -64,12 +65,24 @@ export default function Home() {
                             key={categories[currentIndex].id}
                             onSwipe={(dir) => handleSwipe(dir)}
                             preventSwipe={["up", "down"]}>
-                            <div style={{ width: "300px", height: "400px", borderRadius: "10px", overflow: "hidden", boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", backgroundColor: "#fff" }}>
-                                <h3>{categories[currentIndex].name}</h3>
+                            <div style={{
+                                width: "300px",
+                                height: "400px",
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                                boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                textAlign: "center",
+                                backgroundColor: "#fff"
+                            }}>
+                                <h3>{categories[currentIndex]?.name || "No Category"}</h3>
                             </div>
                         </TinderCard>
                     ) : (
-                        <p>No more categories.</p>
+                        <p>No categories available.</p>
                     )}
                 </div>
             )}
