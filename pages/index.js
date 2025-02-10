@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Create Supabase client
+// 1) Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -13,7 +13,7 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Indexes for our three-layer flow
+  // Indexes: catIndex, subIndex, placeIndex
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
@@ -21,32 +21,33 @@ export default function Home() {
   // Flow modes: "categories" | "subcategories" | "places" | "matchDeck"
   const [mode, setMode] = useState("categories");
 
-  // Track what category / subcategory we've selected
+  // Parent selections for breadcrumb or top text
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches & favorites
+  // Final matches
   const [matches, setMatches] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-
-  // Celebration & error
   const [showCelebration, setShowCelebration] = useState(false);
+
+  // Error
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Initial fetch of categories & subcategories
+  // 2) Fetch categories & subcategories on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load categories (with image_url)
+        // categories
         const { data: catData, error: catErr } = await supabase
           .from("categories")
-          .select("*");
+          .select("*")
+          .order("weight", { ascending: false }); // or not
         if (catErr) throw catErr;
 
-        // Load subcategories (with image_url)
+        // subcategories
         const { data: subData, error: subErr } = await supabase
           .from("subcategories")
-          .select("*");
+          .select("*")
+          .order("weight", { ascending: false });
         if (subErr) throw subErr;
 
         setCategories(catData || []);
@@ -58,21 +59,65 @@ export default function Home() {
     loadData();
   }, []);
 
-  // Helper: get subcats for selectedCategory
-  function getSubcatsForCat(cat) {
+  // Helper for subcats in selectedCategory
+  function getSubcatsForCategory(cat) {
     if (!cat) return [];
     return subcategories.filter((s) => s.category_id === cat.id);
   }
 
-  // Identify current items
+  // Current items
   const currentCategory = categories[catIndex] || null;
-  const subcats = getSubcatsForCat(selectedCategory);
-  const currentSubcategory = subcats[subIndex] || null;
+  const subcatsForCategory = getSubcatsForCategory(selectedCategory);
+  const currentSubcategory = subcatsForCategory[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // LAYER LOGIC
+  // Return an object with {name, image_url} for the current card
+  function getCurrentCardData() {
+    if (mode === "categories") {
+      if (!currentCategory) return null;
+      return {
+        name: currentCategory.name,
+        image_url: currentCategory.image_url || "",
+      };
+    } else if (mode === "subcategories") {
+      if (!currentSubcategory) return null;
+      return {
+        name: currentSubcategory.name,
+        image_url: currentSubcategory.image_url || "",
+      };
+    } else if (mode === "places") {
+      if (!currentPlace) return null;
+      return {
+        name: currentPlace.name,
+        image_url: currentPlace.image_url || "",
+      };
+    }
+    return null;
+  }
 
-  // ============ CATEGORIES ============
+  // If subcategory or place is missing an image, we fallback
+  function getBackgroundImage(imageUrl) {
+    return imageUrl && imageUrl.trim() !== ""
+      ? imageUrl
+      : "/images/default-bg.jpg"; // Fallback
+  }
+
+  // Parent text logic
+  function getParentText() {
+    if (mode === "subcategories" && selectedCategory) {
+      return selectedCategory.name;
+    }
+    if (mode === "places" && selectedSubcategory) {
+      return selectedSubcategory.name;
+    }
+    return "";
+  }
+
+  // The current card's info
+  const currentCard = getCurrentCardData();
+  const parentText = getParentText();
+
+  // ============= CATEGORIES LAYER =============
   function handleYesCategory() {
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
@@ -89,12 +134,11 @@ export default function Home() {
     }
   }
 
-  // ============ SUBCATEGORIES ============
+  // ============= SUBCATEGORIES LAYER =============
   async function handleYesSubcategory() {
     if (!currentSubcategory) return;
     setSelectedSubcategory(currentSubcategory);
 
-    // fetch places bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -103,6 +147,7 @@ export default function Home() {
       if (error) throw error;
 
       const placeItems = data.map((row) => row.places);
+      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       setPlaces(placeItems);
       setPlaceIndex(0);
       setMode("places");
@@ -112,12 +157,11 @@ export default function Home() {
   }
   function handleNoSubcategory() {
     const next = subIndex + 1;
-    if (next >= subcats.length) {
-      // move to next category
+    if (next >= subcatsForCategory.length) {
+      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
-        setMode("categories");
       } else {
         setCatIndex(nextCat);
         setMode("categories");
@@ -127,14 +171,13 @@ export default function Home() {
     }
   }
 
-  // ============ PLACES ============
+  // ============= PLACES LAYER =============
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    setMatches((prev) => [...prev, { ...currentPlace, rating: 0 }]);
-
+    setMatches((prev) => [...prev, currentPlace]);
     const next = placeIndex + 1;
     if (next >= places.length) {
       moveToNextSubcategory();
@@ -152,8 +195,8 @@ export default function Home() {
   }
   function moveToNextSubcategory() {
     const next = subIndex + 1;
-    if (next >= subcats.length) {
-      // move to next category
+    if (next >= subcatsForCategory.length) {
+      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -168,194 +211,104 @@ export default function Home() {
     }
   }
 
-  // MATCH DECK & NAV
+  // Go Back & Reshuffle => now at bottom
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
     } else if (mode === "subcategories") {
       setMode("categories");
-    } else if (mode === "matchDeck") {
-      setMode("categories");
     } else {
-      alert("Already at top layer!");
+      alert("Already at top-level categories!");
     }
   }
   function handleReshuffle() {
-    // reset everything
     setCatIndex(0);
     setSubIndex(0);
     setPlaceIndex(0);
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setPlaces([]);
-    // if you want to reset matches/favorites, uncomment:
-    // setMatches([]);
-    // setFavorites([]);
     setMode("categories");
   }
-  function handleShowMatches() {
-    setMode("matchDeck");
-  }
 
-  // Rating & Archive
-  function handleRateMatch(placeId, newRating) {
-    setMatches((prev) =>
-      prev.map((m) => (m.id === placeId ? { ...m, rating: newRating } : m))
-    );
-  }
-  function handleArchive(placeId) {
-    const found = matches.find((m) => m.id === placeId);
-    if (found) {
-      setFavorites((prev) => [...prev, found]);
-    }
-  }
-
-  // RENDER MATCH DECK
-  if (mode === "matchDeck") {
+  // If we have no currentCard
+  if (!currentCard) {
     return (
       <div style={styles.container}>
-        <h1 style={styles.title}>dialN — Match Deck</h1>
-        <button onClick={handleGoBack} style={styles.goBackButton}>Go Back</button>
-        {matches.length === 0 ? (
-          <p>No matches yet!</p>
-        ) : (
-          <div>
-            <h3>Your Matches:</h3>
-            {matches.map((m) => (
-              <div key={m.id} style={styles.matchCard}>
-                <p>
-                  <strong>{m.name}</strong>
-                </p>
-                <label>
-                  Rating:{" "}
-                  <select
-                    value={m.rating || 0}
-                    onChange={(e) => handleRateMatch(m.id, Number(e.target.value))}
-                  >
-                    {[0,1,2,3,4,5].map((val) => (
-                      <option key={val} value={val}>
-                        {val}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button onClick={() => handleArchive(m.id)} style={styles.archiveButton}>
-                  Archive to Favorites
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {favorites.length > 0 && (
-          <div style={styles.favoritesBar}>
-            <h3>Favorites:</h3>
-            <ul>
-              {favorites.map((f) => (
-                <li key={f.id}>
-                  {f.name} (rated {f.rating})
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <h1>DialN</h1>
+        <p>No more {mode} to show!</p>
+        <button onClick={handleReshuffle} style={styles.reshuffleButton}>
+          Reshuffle
+        </button>
       </div>
     );
   }
 
-  // Identify the "current card" + parent text
-  let currentCard = null;
-  let parentText = "";
-  let currentImage = null;
-  let currentTitle = "";
-
-  if (mode === "categories") {
-    currentCard = currentCategory;
-    parentText = ""; // no parent for top-level categories
-    currentImage = currentCategory?.image_url || "";
-    currentTitle = currentCategory?.name || "";
-  } else if (mode === "subcategories") {
-    currentCard = currentSubcategory;
-    parentText = selectedCategory ? selectedCategory.name : "";
-    currentImage = currentSubcategory?.image_url || "";
-    currentTitle = currentSubcategory?.name || "";
-  } else if (mode === "places") {
-    currentCard = currentPlace;
-    parentText = selectedSubcategory ? selectedSubcategory.name : "";
-    currentImage = currentPlace?.image_url || "";
-    currentTitle = currentPlace?.name || "";
-  }
-
-  function handleYes() {
-    if (mode === "categories") handleYesCategory();
-    else if (mode === "subcategories") handleYesSubcategory();
-    else if (mode === "places") handleYesPlace();
-  }
-  function handleNo() {
-    if (mode === "categories") handleNoCategory();
-    else if (mode === "subcategories") handleNoSubcategory();
-    else if (mode === "places") handleNoPlace();
-  }
+  // We have a valid card
+  const bgImage = getBackgroundImage(currentCard.image_url);
 
   return (
-    <div style={styles.container}>
-      <button style={styles.matchesBtn} onClick={handleShowMatches}>
-        Matches ({matches.length})
-      </button>
-      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
-
-      {currentCard ? (
-        <div
-          style={{
-            ...styles.cardBackground,
-            backgroundImage: `url(${currentImage})`
+    <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
+      <div style={styles.overlay}>
+        {/* NO / YES icons at the top corners now */}
+        <img
+          src="/images/no-icon.png" // replace with your own
+          alt="No"
+          style={styles.noIcon}
+          onClick={() => {
+            if (mode === "categories") handleNoCategory();
+            else if (mode === "subcategories") handleNoSubcategory();
+            else handleNoPlace();
           }}
-        >
-          {/* Parent text at top (if any) */}
+        />
+        <img
+          src="/images/yes-icon.png" // replace with your own
+          alt="Yes"
+          style={styles.yesIcon}
+          onClick={() => {
+            if (mode === "categories") handleYesCategory();
+            else if (mode === "subcategories") handleYesSubcategory();
+            else handleYesPlace();
+          }}
+        />
+
+        {/* Parent text (top-left or top-center) */}
+        <div style={styles.topTextRow}>
           {parentText && (
-            <div style={styles.parentText}>
-              {parentText}
-            </div>
+            <h2 style={styles.parentText}>
+              Explore <span style={styles.parentName}>{parentText}</span>
+            </h2>
           )}
-
-          {/* Title at bottom center */}
-          <div style={styles.cardTitle}>
-            {currentTitle}
-          </div>
-
-          {/* "Click for info" overlay - optional */}
-          <div style={styles.infoOverlay}>
-            CLICK FOR INFO
-          </div>
-
-          {/* Thumbs down (no) / Thumbs up (yes) */}
-          <img
-            src="/thumbs_down_red.png"
-            alt="No"
-            onClick={handleNo}
-            style={styles.noThumb}
-          />
-          <img
-            src="/thumbs_up_green.png"
-            alt="Yes"
-            onClick={handleYes}
-            style={styles.yesThumb}
-          />
         </div>
-      ) : (
-        <p>No more {mode} left!</p>
-      )}
 
-      <div style={styles.navRow}>
-        <button onClick={handleGoBack} style={styles.goBackButton}>Go Back</button>
-        <button onClick={handleReshuffle} style={styles.reshuffleButton}>Reshuffle</button>
+        {/* Middle area if needed */}
+        <div style={styles.centerContent}></div>
+
+        {/* Current card name at bottom */}
+        <div style={styles.bottomTextRow}>
+          <h1 style={styles.currentCardName}>{currentCard.name}</h1>
+          <p style={styles.clickForInfo}>Click for info</p>
+        </div>
+
+        {/* Go Back & Reshuffle at bottom corners */}
+        <button style={styles.goBackButton} onClick={handleGoBack}>
+          Go Back
+        </button>
+        <button style={styles.reshuffleButton} onClick={handleReshuffle}>
+          Reshuffle
+        </button>
       </div>
 
       {showCelebration && <CelebrationAnimation />}
+      {errorMsg && (
+        <p style={{ color: "red", position: "absolute", top: "10px", left: "10px" }}>
+          {errorMsg}
+        </p>
+      )}
     </div>
   );
 }
 
-// Celebration overlay
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -372,99 +325,90 @@ const styles = {
   container: {
     width: "100vw",
     height: "100vh",
-    margin: 0,
-    padding: 0,
-    position: "relative",
-    fontFamily: "Arial, sans-serif",
-    overflow: "hidden",
-  },
-  matchesBtn: {
-    position: "absolute",
-    top: 20,
-    right: 20,
-    zIndex: 9999,
-    backgroundColor: "#FF9800",
-    color: "#fff",
-    padding: "8px 16px",
-    border: "none",
-    borderRadius: "5px",
-    cursor: "pointer",
-  },
-  cardBackground: {
-    width: "100%",
-    height: "100%",
     backgroundSize: "cover",
     backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
     position: "relative",
+    fontFamily: "sans-serif",
+  },
+  overlay: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.3)",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
+    position: "relative",
+  },
+  // NO / YES icons (top corners)
+  noIcon: {
+    position: "absolute",
+    top: "20px",
+    left: "20px",
+    width: "60px",
+    height: "60px",
+    cursor: "pointer",
+  },
+  yesIcon: {
+    position: "absolute",
+    top: "20px",
+    right: "20px",
+    width: "60px",
+    height: "60px",
+    cursor: "pointer",
+  },
+  topTextRow: {
+    padding: "20px",
   },
   parentText: {
-    marginTop: "20px",
-    marginLeft: "20px",
-    color: "#FFD700",
-    fontSize: "3rem",
-    textShadow: "2px 2px 4px #000",
-  },
-  cardTitle: {
     color: "#fff",
-    fontSize: "4rem",
+    fontSize: "2em",
+    margin: 0,
+    textTransform: "uppercase",
+  },
+  parentName: {
+    color: "#ffdc00",
+    fontSize: "1.2em",
+  },
+  centerContent: {
+    flexGrow: 1,
+  },
+  bottomTextRow: {
+    paddingBottom: "70px",
     textAlign: "center",
-    marginBottom: "40px",
-    textShadow: "3px 3px 6px #000",
   },
-  infoOverlay: {
-    position: "absolute",
-    bottom: 0,
+  currentCardName: {
     color: "#fff",
-    backgroundColor: "rgba(0,0,0,0.3)",
-    padding: "10px",
-    fontSize: "1.5rem",
-    left: "50%",
-    transform: "translateX(-50%)",
-    marginBottom: "10rem",
-    textShadow: "2px 2px 4px #000",
-    cursor: "pointer",
+    fontSize: "3em",
+    textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+    margin: 0,
+    textTransform: "uppercase",
   },
-  noThumb: {
-    position: "absolute",
-    bottom: "20px",
-    left: "30px",
-    width: "80px",
-    height: "80px",
-    cursor: "pointer",
-  },
-  yesThumb: {
-    position: "absolute",
-    bottom: "20px",
-    right: "30px",
-    width: "80px",
-    height: "80px",
-    cursor: "pointer",
-  },
-  navRow: {
-    position: "absolute",
-    bottom: "20px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    display: "flex",
-    gap: "20px",
-    zIndex: 9999,
+  clickForInfo: {
+    color: "#fff",
+    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+    marginTop: "10px",
+    fontSize: "1em",
   },
   goBackButton: {
+    position: "absolute",
+    bottom: "20px",
+    left: "20px",
+    padding: "8px 16px",
     backgroundColor: "#2196F3",
     color: "#fff",
     border: "none",
-    padding: "10px 20px",
     borderRadius: "5px",
     cursor: "pointer",
   },
   reshuffleButton: {
+    position: "absolute",
+    bottom: "20px",
+    right: "20px",
+    padding: "8px 16px",
     backgroundColor: "#9C27B0",
     color: "#fff",
     border: "none",
-    padding: "10px 20px",
     borderRadius: "5px",
     cursor: "pointer",
   },
@@ -478,41 +422,12 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 99999,
+    zIndex: 9999,
   },
   celebrationBox: {
     backgroundColor: "#fff",
     padding: "30px",
     borderRadius: "10px",
     textAlign: "center",
-    animation: "popIn 0.5s ease",
-  },
-  title: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    fontSize: "1px", // We'll hide it but keep the structure if needed
-    color: "#fff",
-  },
-  // Match deck styles
-  matchCard: {
-    backgroundColor: "#eee",
-    padding: "10px",
-    margin: "10px",
-    borderRadius: "8px",
-  },
-  archiveButton: {
-    marginLeft: "10px",
-    backgroundColor: "#9C27B0",
-    color: "#fff",
-    border: "none",
-    padding: "6px 12px",
-    borderRadius: "5px",
-    cursor: "pointer",
-  },
-  favoritesBar: {
-    marginTop: "30px",
-    borderTop: "1px solid #ccc",
-    paddingTop: "10px",
   },
 };
