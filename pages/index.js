@@ -1,45 +1,54 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// 1) Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function Home() {
-  // MAIN STATE
+  // MAIN SWIPE STATE
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // LAYERS
+  // Index-based flow
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
-  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "subsub" or "places"
+  const [placeIndex, setPlaceIndex] = useState(0);
+  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
 
-  // SELECTED
+  // Selected category / subcategory
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // For sub-sub layer
-  const [subsub, setSubsub] = useState([]); // list of neighborhoods if subcategory=Neighborhoods
-  const [subsubIndex, setSubsubIndex] = useState(0);
-  const [subsubMode, setSubsubMode] = useState(false); // if we're in sub-sub
-
-  // MATCHES
-  const [placesMode, setPlacesMode] = useState(false); // final layer
-  const [finalPlaces, setFinalPlaces] = useState([]); // the array of places for the final swipe
-  const [placeIndex, setPlaceIndex] = useState(0);
-
-  const [showCelebration, setShowCelebration] = useState(false);
+  // Matches & celebration
   const [matches, setMatches] = useState([]);
+  const [showCelebration, setShowCelebration] = useState(false);
+
+  // Error
   const [errorMsg, setErrorMsg] = useState(null);
 
+  // 2) NEIGHBORHOOD SEARCH WITH WEIGHT
+  // We'll fetch all distinct neighborhoods. By default, neighborhoodWeight=1 for all.
+  // If the user picks one (autocomplete), that one is weight=2, so places from that
+  // neighborhood appear first in the final ordering.
+  const [allNeighborhoods, setAllNeighborhoods] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // The user-chosen "highlighted" neighborhood => weight=2
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState(null);
+
+  // On mount: load categories, subcategories, and neighborhoods
   useEffect(() => {
-    loadData();
+    loadBaseData();
+    loadAllNeighborhoods();
   }, []);
 
-  async function loadData() {
+  async function loadBaseData() {
     try {
       const { data: catData, error: catErr } = await supabase
         .from("categories")
@@ -60,7 +69,67 @@ export default function Home() {
     }
   }
 
-  // CURRENT
+  async function loadAllNeighborhoods() {
+    try {
+      const { data, error } = await supabase
+        .from("places")
+        .select("neighborhood")
+        .neq("neighborhood", null);
+      if (error) throw error;
+
+      const nbSet = new Set();
+      data.forEach((row) => {
+        if (row.neighborhood) {
+          nbSet.add(row.neighborhood);
+        }
+      });
+      const nbArray = Array.from(nbSet);
+      nbArray.sort(); // alphabetical
+      setAllNeighborhoods(nbArray);
+    } catch (err) {
+      console.error("Error loading neighborhoods:", err);
+    }
+  }
+
+  // Autocomplete logic for neighborhoods
+  useEffect(() => {
+    if (!searchTerm) {
+      setSuggestions([]);
+      return;
+    }
+    const lower = searchTerm.toLowerCase();
+    const matched = allNeighborhoods.filter((n) => n.toLowerCase().includes(lower));
+    setSuggestions(matched.slice(0, 5)); // up to 5 suggestions
+  }, [searchTerm, allNeighborhoods]);
+
+  function pickNeighborhood(nb) {
+    setSelectedNeighborhood(nb); // weight=2 for that nb
+    setSearchTerm(nb);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
+
+  // Reorder places => first by neighborhoodWeight descending, then by place.weight descending
+  function reorderPlaces(placesArray) {
+    // getNeighborhoodWeight for each place => then compare
+    return placesArray.slice().sort((a, b) => {
+      const aw = getNeighborhoodWeight(a.neighborhood);
+      const bw = getNeighborhoodWeight(b.neighborhood);
+      if (bw === aw) {
+        // tie => compare place.weight
+        return (b.weight || 0) - (a.weight || 0);
+      }
+      return bw - aw;
+    });
+  }
+
+  function getNeighborhoodWeight(nbName) {
+    if (!nbName) return 1; // no neighborhood => weight=1
+    if (nbName === selectedNeighborhood) return 2; // user-chosen =>2
+    return 1; // all others =>1
+  }
+
+  // Current items
   const currentCategory = categories[catIndex] || null;
 
   function getSubcatsForCategory(cat) {
@@ -68,83 +137,105 @@ export default function Home() {
     return subcategories.filter((s) => s.category_id === cat.id);
   }
   const scList = getSubcatsForCategory(selectedCategory);
-  const currentSubcategoryObj = scList[subIndex] || null;
+  const currentSubcategory = scList[subIndex] || null;
 
-  const currentSubsub = subsub[subsubIndex] || null; // for neighborhoods sub-sub
+  const currentPlace = places[placeIndex] || null;
 
-  const currentPlace = finalPlaces[placeIndex] || null;
-
-  // Card data depends on which "mode" we're in
-  function getCardData() {
+  // Return card data
+  function getCurrentCardData() {
     if (mode === "categories") {
-      return currentCategory ? { name: currentCategory.name } : null;
+      return currentCategory
+        ? {
+            name: currentCategory.name,
+            image_url: currentCategory.image_url || "",
+          }
+        : null;
     } else if (mode === "subcategories") {
-      return currentSubcategoryObj ? { name: currentSubcategoryObj.name } : null;
-    } else if (subsubMode) {
-      return currentSubsub ? { name: currentSubsub.name } : null;
-    } else if (placesMode) {
-      return currentPlace ? { name: currentPlace.name } : null;
+      return currentSubcategory
+        ? {
+            name: currentSubcategory.name,
+            image_url: currentSubcategory.image_url || "",
+          }
+        : null;
+    } else if (mode === "places") {
+      return currentPlace
+        ? {
+            name: currentPlace.name,
+            image_url: currentPlace.image_url || "",
+          }
+        : null;
     }
     return null;
   }
 
-  const currentCard = getCardData();
-
-  // BKG fallback
-  function getBkg() {
-    if (currentCard && currentCard.image_url) {
-      return currentCard.image_url;
-    }
-    return "/images/default-bg.jpg"; // fallback
+  function getBackgroundImage(url) {
+    return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // ============= MAIN SWIPE LOGIC =============
+  // Left breadcrumb
+  function getLeftBreadcrumb() {
+    if (mode === "subcategories" && selectedCategory) {
+      return selectedCategory.name;
+    }
+    if (mode === "places" && selectedCategory && selectedSubcategory) {
+      return `${selectedCategory.name} -> ${selectedSubcategory.name}`;
+    }
+    return "";
+  }
+
+  // Right text => "USA -> Baltimore"
+  // We'll show a NeighborhoodSearch below that
+  function getRightText() {
+    return "USA -> Baltimore";
+  }
+
+  // ============= SWIPE HANDLERS =============
   function handleYesCategory() {
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
     setSubIndex(0);
+    setPlaceIndex(0);
     setMode("subcategories");
-    setPlacesMode(false);
-    setSubsubMode(false);
   }
   function handleNoCategory() {
     const next = catIndex + 1;
     if (next >= categories.length) {
-      alert("No more categories!");
+      alert("No more categories left!");
     } else {
       setCatIndex(next);
     }
   }
 
   async function handleYesSubcategory() {
-    if (!currentSubcategoryObj) return;
-    setSelectedSubcategory(currentSubcategoryObj);
-    // If subcategory = "Neighborhoods" or if category= "Neighborhoods" => sub-sub
-    if (currentCategory && currentCategory.name === "Neighborhoods") {
-      // user is exploring top-level "Neighborhoods," so subcat is an actual neighborhood => we do final places now
-      await loadPlacesForNeighborhood(currentSubcategoryObj.name, null);
-      setMode("");
-      setSubsubMode(false);
-      setPlacesMode(true);
+    if (!currentSubcategory) return;
+    setSelectedSubcategory(currentSubcategory);
+    // load bridging places
+    try {
+      const { data, error } = await supabase
+        .from("place_subcategories")
+        .select("place_id, places(*)")
+        .eq("subcategory_id", currentSubcategory.id);
+      if (error) throw error;
+
+      let placeItems = data.map((row) => row.places);
+      // reorder => neighborhood weight => then place.weight
+      placeItems = reorderPlaces(placeItems);
+
+      setPlaces(placeItems);
       setPlaceIndex(0);
-    } else if (currentSubcategoryObj.name === "Neighborhoods") {
-      // sub-sub approach
-      // we load the sub-sub: each neighborhood that has bridging for (selectedCategory + neighborhood)
-      await loadNeighborhoodsForCategory(selectedCategory.name);
-    } else {
-      // normal subcategory => load bridging places
-      await loadPlacesForSubcategory(currentSubcategoryObj.id);
+      setMode("places");
+    } catch (err) {
+      setErrorMsg(err.message);
     }
   }
   function handleNoSubcategory() {
     const next = subIndex + 1;
-    const scList2 = getSubcatsForCategory(selectedCategory);
-    if (next >= scList2.length) {
+    const sc2 = getSubcatsForCategory(selectedCategory);
+    if (next >= sc2.length) {
       // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
-        alert("No more categories");
-        setMode("categories");
+        alert("No more categories left!");
       } else {
         setCatIndex(nextCat);
         setMode("categories");
@@ -154,319 +245,47 @@ export default function Home() {
     }
   }
 
-  // SUB-SUB
-  async function loadNeighborhoodsForCategory(catName) {
-    // We assume we have a "Neighborhoods" category with subcategories of actual neighborhoods
-    // Let's fetch those subcategories + bridging filter so only neighborhoods that contain places under catName
-    try {
-      // 1) find the "Neighborhoods" category ID
-      const { data: nbCatData, error: nbCatErr } = await supabase
-        .from("categories")
-        .select("*")
-        .eq("name", "Neighborhoods")
-        .single();
-      if (nbCatErr) throw nbCatErr;
-      const nbCatId = nbCatData.id;
-
-      // 2) all subcategories under "Neighborhoods"
-      const { data: nbSubs, error: nbSubsErr } = await supabase
-        .from("subcategories")
-        .select("*")
-        .eq("category_id", nbCatId);
-      if (nbSubsErr) throw nbSubsErr;
-
-      // 3) filter out neighborhoods that actually have places bridging to both catName & that neighborhood
-      // We'll do a bridging approach:
-      //  - find category catName => get its subcategories => bridging => intersect with neighborhood subcat => bridging
-      const { data: catIdRow } = await supabase
-        .from("categories")
-        .select("id")
-        .eq("name", catName)
-        .single();
-      if (!catIdRow) {
-        // no such cat
-        setSubsub([]);
-        return;
-      }
-      const catIdVal = catIdRow.id;
-
-      // subcategories for catName
-      const { data: mainSubs } = await supabase
-        .from("subcategories")
-        .select("id")
-        .eq("category_id", catIdVal);
-
-      if (!mainSubs || mainSubs.length === 0) {
-        setSubsub([]);
-        return;
-      }
-      const mainSubIds = mainSubs.map((s) => s.id);
-
-      // We want neighborhoods that have bridging to places that also appear in mainSubIds
-      // We'll do a bridging intersect approach:
-      // place_subcategories => subcategory_id in mainSubIds => place_id => subcategory_id in neighborhoods subcat
-      // We'll just do a direct approach in code for simplicity:
-
-      // fetch bridging for main cat
-      const { data: bridgingMain } = await supabase
-        .from("place_subcategories")
-        .select("place_id, subcategory_id");
-
-      if (!bridgingMain) {
-        setSubsub([]);
-        return;
-      }
-
-      // We'll create sets of place_ids that belong to catName subcategories
-      const placeSet = new Set();
-      bridgingMain.forEach((row) => {
-        if (mainSubIds.includes(row.subcategory_id)) {
-          placeSet.add(row.place_id);
-        }
-      });
-
-      // Now for each neighborhood subcat, check if it shares any place_id from placeSet
-      const { data: bridgingNeighborhood } = await supabase
-        .from("place_subcategories")
-        .select("place_id, subcategory_id");
-
-      const subsubList = [];
-      nbSubs.forEach((nbSub) => {
-        // find any bridging row that matches subcategory_id= nbSub.id and place_id in placeSet
-        const hasOverlap = bridgingNeighborhood.some(
-          (br) => br.subcategory_id === nbSub.id && placeSet.has(br.place_id)
-        );
-        if (hasOverlap) {
-          subsubList.push(nbSub);
-        }
-      });
-
-      // sort by number of places if you want
-      // we'll do a place_count approach
-      const counts = {};
-      subsubList.forEach((s) => {
-        const c = bridgingNeighborhood.filter(
-          (br) => br.subcategory_id === s.id && placeSet.has(br.place_id)
-        ).length;
-        counts[s.id] = c;
-      });
-      subsubList.sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
-
-      setSubsub(subsubList);
-      setSubsubIndex(0);
-      setSubsubMode(true);
-      setMode("");
-      setPlacesMode(false);
-      setPlaceIndex(0);
-    } catch (err) {
-      console.error(err);
-      setSubsub([]);
-    }
-  }
-
-  function handleYesSubsub() {
-    // The user picked a sub-sub => we load places that are in both selectedCategory + subsub
-    if (!currentSubsub) return;
-    loadPlacesForNeighborhood(currentSubsub.name, selectedCategory.name);
-  }
-  function handleNoSubsub() {
-    const next = subsubIndex + 1;
-    if (next >= subsub.length) {
-      // done subsub
-      // go back to subcategories
-      setSubsubMode(false);
-      setMode("subcategories");
-    } else {
-      setSubsubIndex(next);
-    }
-  }
-
-  async function loadPlacesForNeighborhood(nbName, catName) {
-    // This loads places that match subcat => the neighborhood + subcat => main cat
-    // We'll do bridging intersection approach
-    try {
-      // find "Neighborhoods" cat => subcat => nbName => get subcat ID
-      const { data: nbCat } = await supabase
-        .from("categories")
-        .select("id")
-        .eq("name", "Neighborhoods")
-        .single();
-      if (!nbCat) {
-        setFinalPlaces([]);
-        setPlacesMode(true);
-        setPlaceIndex(0);
-        return;
-      }
-      const { data: nbSub } = await supabase
-        .from("subcategories")
-        .select("id")
-        .eq("category_id", nbCat.id)
-        .eq("name", nbName)
-        .single();
-      if (!nbSub) {
-        setFinalPlaces([]);
-        setPlacesMode(true);
-        setPlaceIndex(0);
-        return;
-      }
-      const nbSubId = nbSub.id;
-
-      // if catName is null => means user came from top-level "Neighborhoods" category
-      // so we just fetch bridging for nbSubId
-      let placeSet = new Set();
-      const { data: bridgingAll } = await supabase
-        .from("place_subcategories")
-        .select("place_id, subcategory_id");
-      if (!bridgingAll) {
-        setFinalPlaces([]);
-        setPlacesMode(true);
-        setPlaceIndex(0);
-        return;
-      }
-
-      // gather place_ids for nbSubId
-      const nbPlaces = bridgingAll.filter((br) => br.subcategory_id === nbSubId).map((br) => br.place_id);
-
-      let catPlaces = [];
-      if (catName) {
-        // find catName => subcats => place bridging
-        const { data: catRow } = await supabase
-          .from("categories")
-          .select("id")
-          .eq("name", catName)
-          .single();
-        if (!catRow) {
-          setFinalPlaces([]);
-          setPlacesMode(true);
-          setPlaceIndex(0);
-          return;
-        }
-        const { data: catSubs } = await supabase
-          .from("subcategories")
-          .select("id")
-          .eq("category_id", catRow.id);
-
-        if (!catSubs) {
-          setFinalPlaces([]);
-          setPlacesMode(true);
-          setPlaceIndex(0);
-          return;
-        }
-        const catSubIds = catSubs.map((s) => s.id);
-        // bridging for catSubIds
-        catPlaces = bridgingAll
-          .filter((br) => catSubIds.includes(br.subcategory_id))
-          .map((br) => br.place_id);
-      } else {
-        // top-level "Neighborhoods" => no cat filter
-        catPlaces = nbPlaces;
-      }
-
-      // intersection
-      let finalPlaceIds = nbPlaces;
-      if (catName) {
-        finalPlaceIds = nbPlaces.filter((pid) => catPlaces.includes(pid));
-      }
-
-      // now load the actual place rows
-      const { data: placeRows } = await supabase
-        .from("places")
-        .select("*")
-        .in("id", finalPlaceIds);
-
-      let placeItems = placeRows || [];
-      // sort by weight desc
-      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-
-      setFinalPlaces(placeItems);
-      setPlaceIndex(0);
-      setPlacesMode(true);
-      setMode("");
-      setSubsubMode(false);
-    } catch (err) {
-      console.error(err);
-      setFinalPlaces([]);
-      setPlacesMode(true);
-      setPlaceIndex(0);
-    }
-  }
-
-  async function loadPlacesForSubcategory(subcatId) {
-    try {
-      const { data, error } = await supabase
-        .from("place_subcategories")
-        .select("place_id, places(*)")
-        .eq("subcategory_id", subcatId);
-      if (error) throw error;
-
-      let placeItems = data.map((row) => row.places);
-      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-      setFinalPlaces(placeItems);
-      setPlaceIndex(0);
-      setPlacesMode(true);
-      setMode("");
-      setSubsubMode(false);
-    } catch (err) {
-      setErrorMsg(err.message);
-    }
-  }
-
-  // PLACES SWIPE
-  const currentPlaceObj = finalPlaces[placeIndex] || null;
   function handleYesPlace() {
-    if (!currentPlaceObj) return;
+    if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    setMatches((prev) => [...prev, currentPlaceObj]);
+    setMatches((prev) => [...prev, currentPlace]);
     const next = placeIndex + 1;
-    if (next >= finalPlaces.length) {
-      // done places => go back to sub-sub or subcategories
-      if (subsubMode) {
-        // go back to sub-sub
-        setPlacesMode(false);
-        setMode("");
-        setSubsubMode(true);
-      } else {
-        // normal subcat flow
-        setPlacesMode(false);
-        setMode("subcategories");
-      }
+    if (next >= places.length) {
+      moveToNextSubcategory();
     } else {
       setPlaceIndex(next);
     }
   }
   function handleNoPlace() {
     const next = placeIndex + 1;
-    if (next >= finalPlaces.length) {
-      if (subsubMode) {
-        setPlacesMode(false);
-        setMode("");
-        setSubsubMode(true);
-      } else {
-        setPlacesMode(false);
-        setMode("subcategories");
-      }
+    if (next >= places.length) {
+      moveToNextSubcategory();
     } else {
       setPlaceIndex(next);
     }
   }
-
-  // GO BACK / RESHUFFLE
-  function handleGoBack() {
-    if (placesMode) {
-      // go back to sub-sub or subcat
-      if (subsubMode) {
-        setPlacesMode(false);
-        setMode("");
-        setSubsubMode(true);
+  function moveToNextSubcategory() {
+    const next = subIndex + 1;
+    const sc2 = getSubcatsForCategory(selectedCategory);
+    if (next >= sc2.length) {
+      const nextCat = catIndex + 1;
+      if (nextCat >= categories.length) {
+        alert("No more categories left!");
+        setMode("categories");
       } else {
-        setPlacesMode(false);
-        setMode("subcategories");
+        setCatIndex(nextCat);
+        setMode("categories");
       }
-    } else if (subsubMode) {
-      // go back to subcategories
-      setSubsubMode(false);
+    } else {
+      setSubIndex(next);
+      setMode("subcategories");
+    }
+  }
+
+  function handleGoBack() {
+    if (mode === "places") {
       setMode("subcategories");
     } else if (mode === "subcategories") {
       setMode("categories");
@@ -477,104 +296,70 @@ export default function Home() {
   function handleReshuffle() {
     setCatIndex(0);
     setSubIndex(0);
-    setSubsub([]);
-    setSubsubIndex(0);
-    setSubsubMode(false);
-    setPlacesMode(false);
     setPlaceIndex(0);
     setSelectedCategory(null);
     setSelectedSubcategory(null);
-    setFinalPlaces([]);
+    setPlaces([]);
     setMode("categories");
+    // Clear the user's chosen neighborhood => means all neighborhoods weigh=1
+    setSelectedNeighborhood(null);
+    setSearchTerm("");
+    setSuggestions([]);
+    setShowSuggestions(false);
   }
 
-  // DETERMINE CURRENT CARD
-  let currentName = "";
-  let currentNeighborhood = "";
-  if (placesMode) {
-    if (currentPlaceObj) {
-      currentName = currentPlaceObj.name;
-      if (currentPlaceObj.neighborhood) {
-        currentNeighborhood = currentPlaceObj.neighborhood;
-      }
-    }
-  } else if (subsubMode) {
-    if (currentSubsub) {
-      currentName = currentSubsub.name;
-    }
-  } else if (mode === "subcategories") {
-    if (currentSubcategoryObj) {
-      currentName = currentSubcategoryObj.name;
-    }
-  } else if (mode === "categories") {
-    if (currentCategory) {
-      currentName = currentCategory.name;
-    }
-  }
-
-  // If everything is exhausted
-  if (!currentName) {
+  // Construct the current card
+  const currentCard = getCurrentCardData();
+  if (!currentCard) {
     return (
       <div style={styles.container}>
         <h1>DialN</h1>
-        <p>No more {mode} to show.</p>
+        <p>No more {mode} to show!</p>
         <button onClick={handleReshuffle} style={styles.reshuffleButton}>
           Reshuffle
         </button>
       </div>
     );
   }
-  const bgImage = "/images/default-bg.jpg"; // or handle advanced images if you want
-
-  // LEFT BREADCRUMB
-  function getLeftText() {
-    if (mode === "subcategories" && selectedCategory) {
-      return selectedCategory.name;
-    }
-    if (subsubMode && selectedCategory && selectedSubcategory?.name === "Neighborhoods") {
-      return `${selectedCategory.name} -> Neighborhoods`;
-    }
-    if (placesMode && subsubMode) {
-      return `${selectedCategory?.name} -> Neighborhoods -> ${currentSubsub?.name}`;
-    }
-    if (placesMode && !subsubMode && selectedSubcategory) {
-      return `${selectedCategory?.name} -> ${selectedSubcategory?.name}`;
-    }
-    return "";
-  }
-  const leftText = getLeftText();
-
-  // RIGHT TEXT: If places mode & we have neighborhood => show "USA->Baltimore->..."
-  function getRightText() {
-    if (placesMode && currentNeighborhood) {
-      return `USA -> Baltimore -> ${currentNeighborhood}`;
-    }
-    return "";
-  }
+  const bgImage = getBackgroundImage(currentCard.image_url);
+  const leftText = getLeftBreadcrumb();
   const rightText = getRightText();
 
-  // RENDER
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* Top Row */}
+        {/* TOP ROW */}
         <div style={styles.topRow}>
           <div style={styles.leftText}>{leftText}</div>
-          <div style={styles.rightText}>{rightText}</div>
+
+          <div style={styles.rightText}>
+            {rightText}
+            {/* NeighborhoodSearch */}
+            <div style={{ marginTop: 8 }}>
+              <NeighborhoodSearch
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                suggestions={suggestions}
+                showSuggestions={showSuggestions}
+                setShowSuggestions={setShowSuggestions}
+                pickNeighborhood={pickNeighborhood}
+                selectedNeighborhood={selectedNeighborhood}
+              />
+            </div>
+          </div>
         </div>
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM Card */}
+        {/* BOTTOM CARD */}
         <div style={styles.bottomTextRow}>
-          <h1 style={styles.currentCardName}>{currentName}</h1>
+          <h1 style={styles.currentCardName}>{currentCard.name}</h1>
 
-          {/* If in places mode, show neighborhood text */}
-          {placesMode && currentNeighborhood && (
-            <p style={styles.neighborhoodText}>{currentNeighborhood}</p>
+          {/* If places mode, show the place's neighborhood below if any */}
+          {mode === "places" && currentPlace?.neighborhood && (
+            <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
           )}
 
-          {/* Yes/No row */}
           <div style={styles.yesNoRow}>
             <button style={styles.noButton} onClick={handleNo}>
               No
@@ -602,11 +387,10 @@ export default function Home() {
     </div>
   );
 
+  // Helper for "No" / "Yes" depending on the mode
   function handleNo() {
-    if (placesMode) {
+    if (mode === "places") {
       handleNoPlace();
-    } else if (subsubMode) {
-      handleNoSubsub();
     } else if (mode === "subcategories") {
       handleNoSubcategory();
     } else {
@@ -614,16 +398,70 @@ export default function Home() {
     }
   }
   function handleYes() {
-    if (placesMode) {
+    if (mode === "places") {
       handleYesPlace();
-    } else if (subsubMode) {
-      handleYesSubsub();
     } else if (mode === "subcategories") {
       handleYesSubcategory();
     } else {
       handleYesCategory();
     }
   }
+}
+
+function NeighborhoodSearch({
+  searchTerm,
+  setSearchTerm,
+  suggestions,
+  showSuggestions,
+  setShowSuggestions,
+  pickNeighborhood,
+  selectedNeighborhood,
+}) {
+  function handleFocus() {
+    if (searchTerm) {
+      setShowSuggestions(true);
+    }
+  }
+  function handleBlur() {
+    setTimeout(() => {
+      setShowSuggestions(false);
+    }, 200);
+  }
+  return (
+    <div style={styles.nbSearchContainer}>
+      <label style={{ color: "#fff", fontSize: "0.9em" }}>Neighborhood:</label>
+      <input
+        style={styles.nbSearchInput}
+        type="text"
+        placeholder="Type a neighborhood..."
+        value={searchTerm}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setShowSuggestions(true);
+        }}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <div style={styles.nbSuggestionList}>
+          {suggestions.map((sug) => (
+            <div
+              key={sug}
+              style={styles.nbSuggestionItem}
+              onClick={() => pickNeighborhood(sug)}
+            >
+              {sug}
+            </div>
+          ))}
+        </div>
+      )}
+      {selectedNeighborhood && (
+        <p style={styles.nbSelectedText}>
+          Weighted Neighborhood: <strong>{selectedNeighborhood}</strong>
+        </p>
+      )}
+    </div>
+  );
 }
 
 function CelebrationAnimation() {
@@ -637,6 +475,7 @@ function CelebrationAnimation() {
   );
 }
 
+// STYLES
 const styles = {
   container: {
     width: "100vw",
@@ -659,7 +498,7 @@ const styles = {
   topRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: "10px 20px",
   },
   leftText: {
@@ -668,7 +507,7 @@ const styles = {
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     margin: 0,
     textTransform: "uppercase",
-    maxWidth: "50%",
+    maxWidth: "40%",
   },
   rightText: {
     color: "#ffd700",
@@ -676,7 +515,39 @@ const styles = {
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     margin: 0,
     textAlign: "right",
-    maxWidth: "50%",
+    maxWidth: "60%",
+  },
+  nbSearchContainer: {
+    position: "relative",
+    marginTop: "5px",
+  },
+  nbSearchInput: {
+    width: "220px",
+    padding: "5px",
+    borderRadius: "4px",
+    border: "1px solid #888",
+  },
+  nbSuggestionList: {
+    position: "absolute",
+    top: "33px",
+    left: 0,
+    width: "220px",
+    backgroundColor: "#333",
+    borderRadius: "4px",
+    zIndex: 999,
+    maxHeight: "140px",
+    overflowY: "auto",
+  },
+  nbSuggestionItem: {
+    padding: "5px",
+    color: "#fff",
+    cursor: "pointer",
+    borderBottom: "1px solid #555",
+  },
+  nbSelectedText: {
+    color: "#fff",
+    fontSize: "0.8em",
+    marginTop: "3px",
   },
   centerContent: {
     flexGrow: 1,
