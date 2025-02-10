@@ -8,62 +8,64 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  // MAIN SWIPE STATE
+  // MAIN DATA
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Index-based flow
+  // Flow indexes
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
-  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
+  const [mode, setMode] = useState("categories"); // "categories" | "subcategories" | "places"
 
-  // Selected category / subcategory
+  // Chosen cat/subcat
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches & celebration
+  // Matches + celebration
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Error
+  // Error handling
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 2) NEIGHBORHOOD SEARCH WITH WEIGHT
-  // We'll fetch all distinct neighborhoods. By default, neighborhoodWeight=1 for all.
-  // If the user picks one (autocomplete), that one is weight=2, so places from that
-  // neighborhood appear first in the final ordering.
+  // 2) NEIGHBORHOOD SEARCH & WEIGHTS
+  // All neighborhoods start weight=1. If the user picks a neighborhood, that one has weight=2 => places from that neighborhood appear first
   const [allNeighborhoods, setAllNeighborhoods] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // The user-chosen "highlighted" neighborhood => weight=2
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState(null);
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState(null); // weight=2 if chosen
 
-  // On mount: load categories, subcategories, and neighborhoods
   useEffect(() => {
     loadBaseData();
     loadAllNeighborhoods();
   }, []);
 
+  // ------------- LOAD DATA -------------
   async function loadBaseData() {
     try {
+      // categories
       const { data: catData, error: catErr } = await supabase
         .from("categories")
-        .select("*")
-        .order("weight", { ascending: false });
+        .select("*");
       if (catErr) throw catErr;
 
+      // subcategories
       const { data: subData, error: subErr } = await supabase
         .from("subcategories")
-        .select("*")
-        .order("weight", { ascending: false });
+        .select("*");
       if (subErr) throw subErr;
 
-      setCategories(catData || []);
-      setSubcategories(subData || []);
+      // reorder so "Neighborhoods" is always first in categories
+      const reorderedCats = reorderForNeighborhoodsFirst(catData);
+      setCategories(reorderedCats || []);
+
+      // reorder subcategories so subcat "Neighborhoods" is first if it exists
+      const reorderedSubs = reorderForNeighborhoodsFirst(subData);
+      setSubcategories(reorderedSubs || []);
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -76,22 +78,36 @@ export default function Home() {
         .select("neighborhood")
         .neq("neighborhood", null);
       if (error) throw error;
-
       const nbSet = new Set();
       data.forEach((row) => {
         if (row.neighborhood) {
           nbSet.add(row.neighborhood);
         }
       });
-      const nbArray = Array.from(nbSet);
-      nbArray.sort(); // alphabetical
+      const nbArray = Array.from(nbSet).sort();
       setAllNeighborhoods(nbArray);
     } catch (err) {
       console.error("Error loading neighborhoods:", err);
     }
   }
 
-  // Autocomplete logic for neighborhoods
+  // If there's a "Neighborhoods" row, put it at the front
+  function reorderForNeighborhoodsFirst(array) {
+    if (!array) return [];
+    // e.g. find any item whose name === "Neighborhoods"
+    const idx = array.findIndex((x) => x.name === "Neighborhoods");
+    if (idx === -1) {
+      return array;
+    }
+    // move that item to the front
+    const item = array[idx];
+    const newArr = array.slice();
+    newArr.splice(idx, 1);
+    newArr.unshift(item);
+    return newArr;
+  }
+
+  // ------------- NEIGHBORHOOD SEARCH LOGIC -------------
   useEffect(() => {
     if (!searchTerm) {
       setSuggestions([]);
@@ -99,80 +115,72 @@ export default function Home() {
     }
     const lower = searchTerm.toLowerCase();
     const matched = allNeighborhoods.filter((n) => n.toLowerCase().includes(lower));
-    setSuggestions(matched.slice(0, 5)); // up to 5 suggestions
+    setSuggestions(matched.slice(0, 5)); 
   }, [searchTerm, allNeighborhoods]);
 
   function pickNeighborhood(nb) {
-    setSelectedNeighborhood(nb); // weight=2 for that nb
+    setSelectedNeighborhood(nb); // weight=2 for this nb
     setSearchTerm(nb);
     setSuggestions([]);
     setShowSuggestions(false);
   }
 
-  // Reorder places => first by neighborhoodWeight descending, then by place.weight descending
-  function reorderPlaces(placesArray) {
-    // getNeighborhoodWeight for each place => then compare
-    return placesArray.slice().sort((a, b) => {
+  // ------------- REORDER PLACES -------------
+  // We'll reorder so the chosen neighborhood has weight=2, others have weight=1, then we compare place.weight
+  function reorderPlaces(placeArray) {
+    return placeArray.slice().sort((a, b) => {
       const aw = getNeighborhoodWeight(a.neighborhood);
       const bw = getNeighborhoodWeight(b.neighborhood);
       if (bw === aw) {
-        // tie => compare place.weight
+        // tie => place.weight
         return (b.weight || 0) - (a.weight || 0);
       }
       return bw - aw;
     });
   }
-
   function getNeighborhoodWeight(nbName) {
-    if (!nbName) return 1; // no neighborhood => weight=1
-    if (nbName === selectedNeighborhood) return 2; // user-chosen =>2
-    return 1; // all others =>1
+    if (!nbName) return 1;
+    if (nbName === selectedNeighborhood) return 2;
+    return 1;
   }
 
-  // Current items
+  // ------------- LAYER QUERIES -------------
   const currentCategory = categories[catIndex] || null;
 
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
-    return subcategories.filter((s) => s.category_id === cat.id);
+    const sc = subcategories.filter((s) => s.category_id === cat.id);
+    // reorder so subcat "Neighborhoods" is first
+    return reorderForNeighborhoodsFirst(sc);
   }
   const scList = getSubcatsForCategory(selectedCategory);
   const currentSubcategory = scList[subIndex] || null;
 
   const currentPlace = places[placeIndex] || null;
 
-  // Return card data
-  function getCurrentCardData() {
+  function getCurrentCard() {
     if (mode === "categories") {
       return currentCategory
-        ? {
-            name: currentCategory.name,
-            image_url: currentCategory.image_url || "",
-          }
+        ? { name: currentCategory.name, image_url: currentCategory.image_url || "" }
         : null;
     } else if (mode === "subcategories") {
       return currentSubcategory
-        ? {
-            name: currentSubcategory.name,
-            image_url: currentSubcategory.image_url || "",
-          }
+        ? { name: currentSubcategory.name, image_url: currentSubcategory.image_url || "" }
         : null;
     } else if (mode === "places") {
       return currentPlace
-        ? {
-            name: currentPlace.name,
-            image_url: currentPlace.image_url || "",
-          }
+        ? { name: currentPlace.name, image_url: currentPlace.image_url || "" }
         : null;
     }
     return null;
   }
 
+  // fallback bkg
   function getBackgroundImage(url) {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // Left breadcrumb
+  // BREADCRUMB
   function getLeftBreadcrumb() {
     if (mode === "subcategories" && selectedCategory) {
       return selectedCategory.name;
@@ -182,9 +190,6 @@ export default function Home() {
     }
     return "";
   }
-
-  // Right text => "USA -> Baltimore"
-  // We'll show a NeighborhoodSearch below that
   function getRightText() {
     return "USA -> Baltimore";
   }
@@ -209,7 +214,8 @@ export default function Home() {
   async function handleYesSubcategory() {
     if (!currentSubcategory) return;
     setSelectedSubcategory(currentSubcategory);
-    // load bridging places
+
+    // bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -218,7 +224,7 @@ export default function Home() {
       if (error) throw error;
 
       let placeItems = data.map((row) => row.places);
-      // reorder => neighborhood weight => then place.weight
+      // reorder by neighborhood weight => then place.weight
       placeItems = reorderPlaces(placeItems);
 
       setPlaces(placeItems);
@@ -229,13 +235,14 @@ export default function Home() {
     }
   }
   function handleNoSubcategory() {
-    const next = subIndex + 1;
     const sc2 = getSubcatsForCategory(selectedCategory);
+    const next = subIndex + 1;
     if (next >= sc2.length) {
       // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
-        alert("No more categories left!");
+        alert("No more categories!");
+        setMode("categories");
       } else {
         setCatIndex(nextCat);
         setMode("categories");
@@ -267,8 +274,8 @@ export default function Home() {
     }
   }
   function moveToNextSubcategory() {
-    const next = subIndex + 1;
     const sc2 = getSubcatsForCategory(selectedCategory);
+    const next = subIndex + 1;
     if (next >= sc2.length) {
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
@@ -301,16 +308,16 @@ export default function Home() {
     setSelectedSubcategory(null);
     setPlaces([]);
     setMode("categories");
-    // Clear the user's chosen neighborhood => means all neighborhoods weigh=1
+    // Clear chosen neighborhood => all neighborhoods weight=1
     setSelectedNeighborhood(null);
     setSearchTerm("");
     setSuggestions([]);
     setShowSuggestions(false);
   }
 
-  // Construct the current card
-  const currentCard = getCurrentCardData();
-  if (!currentCard) {
+  // DETERMINE CURRENT CARD
+  const currentCardObj = getCurrentCard();
+  if (!currentCardObj) {
     return (
       <div style={styles.container}>
         <h1>DialN</h1>
@@ -321,17 +328,19 @@ export default function Home() {
       </div>
     );
   }
-  const bgImage = getBackgroundImage(currentCard.image_url);
+  const bgImage = getBackgroundImage(currentCardObj.image_url);
   const leftText = getLeftBreadcrumb();
   const rightText = getRightText();
+
+  const currentPlaceObj = places[placeIndex] || null;
+  const currentNeighborhood = mode === "places" && currentPlaceObj?.neighborhood ? currentPlaceObj.neighborhood : "";
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* TOP ROW */}
+        {/* Top Row */}
         <div style={styles.topRow}>
           <div style={styles.leftText}>{leftText}</div>
-
           <div style={styles.rightText}>
             {rightText}
             {/* NeighborhoodSearch */}
@@ -351,13 +360,11 @@ export default function Home() {
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM CARD */}
+        {/* Bottom row => card name + maybe place neighborhood + yes/no */}
         <div style={styles.bottomTextRow}>
-          <h1 style={styles.currentCardName}>{currentCard.name}</h1>
-
-          {/* If places mode, show the place's neighborhood below if any */}
-          {mode === "places" && currentPlace?.neighborhood && (
-            <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
+          <h1 style={styles.currentCardName}>{currentCardObj.name}</h1>
+          {mode === "places" && currentNeighborhood && (
+            <p style={styles.neighborhoodText}>{currentNeighborhood}</p>
           )}
 
           <div style={styles.yesNoRow}>
@@ -387,7 +394,7 @@ export default function Home() {
     </div>
   );
 
-  // Helper for "No" / "Yes" depending on the mode
+  // handleNo / handleYes unify
   function handleNo() {
     if (mode === "places") {
       handleNoPlace();
@@ -408,6 +415,7 @@ export default function Home() {
   }
 }
 
+// NeighborhoodSearch
 function NeighborhoodSearch({
   searchTerm,
   setSearchTerm,
