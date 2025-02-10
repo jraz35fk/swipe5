@@ -1,140 +1,73 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Supabase client
+// 1. Create Supabase client from environment variables:
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function HomePage() {
+export default function Home() {
+  // 2. State for each table + error message
   const [categories, setCategories] = useState([]);
+  const [places, setPlaces] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [selectionPath, setSelectionPath] = useState([]);
-  const [currentSelection, setCurrentSelection] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMsg, setErrorMsg] = useState(null);
 
+  // 3. Fetch data from multiple tables in parallel
   useEffect(() => {
-    // Fetch top-level categories on load
-    const fetchCategories = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .order("ranking_score", { ascending: false });
-      
-      if (error) {
-        setErrorMessage("Failed to load categories.");
-        console.error("Error fetching categories:", error);
-      } else {
-        setCategories(data);
-        setCurrentSelection(data[0]);
+    const fetchMultipleTables = async () => {
+      try {
+        const [categoriesRes, placesRes, subcategoriesRes] = await Promise.all([
+          supabase.from("categories").select("*"),
+          supabase.from("places").select("*"),
+          supabase.from("subcategories").select("*"),
+        ]);
+
+        // Check for errors in each response
+        if (categoriesRes.error) throw categoriesRes.error;
+        if (placesRes.error) throw placesRes.error;
+        if (subcategoriesRes.error) throw subcategoriesRes.error;
+
+        // Set state
+        setCategories(categoriesRes.data || []);
+        setPlaces(placesRes.data || []);
+        setSubcategories(subcategoriesRes.data || []);
+      } catch (error) {
+        setErrorMsg(error.message);
       }
-      setLoading(false);
     };
-    fetchCategories();
+
+    fetchMultipleTables();
   }, []);
 
-  // Handle "Yes" selection to drill down further
-  const handleYes = async () => {
-    if (!currentSelection) return;
-
-    setSelectionPath((prev) => [...prev, currentSelection]);
-
-    const { data: subcategories, error: subcatError } = await supabase
-      .from("subcategories")
-      .select("*")
-      .eq("category_id", currentSelection.id)
-      .order("ranking_score", { ascending: false });
-
-    if (subcatError) {
-      console.error("Error fetching subcategories:", subcatError);
-    } else if (subcategories.length > 0) {
-      setSubcategories(subcategories);
-      setCurrentSelection(subcategories[0]);
-      return;
-    }
-
-    // If no subcategories, fetch activities
-    const { data: activities, error: actError } = await supabase
-      .from("places")
-      .select("*")
-      .eq("subcategory_id", currentSelection.id)
-      .order("ranking_score", { ascending: false });
-
-    if (actError) {
-      console.error("Error fetching activities:", actError);
-    } else {
-      setActivities(activities);
-      setCurrentSelection(activities[0]);
-    }
-  };
-
-  // Handle "No" selection to skip
-  const handleNo = () => {
-    if (!categories.length || !currentSelection) return;
-    const currentIndex = categories.findIndex((c) => c.id === currentSelection.id);
-    if (currentIndex < categories.length - 1) {
-      setCurrentSelection(categories[currentIndex + 1]);
-    } else {
-      setErrorMessage("No more options available.");
-    }
-  };
-
-  // Handle "Go Back"
-  const handleGoBack = () => {
-    if (selectionPath.length > 0) {
-      const prevSelection = selectionPath.pop();
-      setSelectionPath([...selectionPath]);
-      setCurrentSelection(prevSelection);
-    }
-  };
-
+  // 4. Render the data or show errors/loading
   return (
-    <div className="h-screen flex flex-col items-center justify-center p-4">
-      {/* Breadcrumb Navigation */}
-      <div className="text-left w-full max-w-md mb-2">
-        {selectionPath.length > 0 && (
-          <p className="text-gray-600 text-sm">
-            {selectionPath.map((p, index) => (
-              <span key={index}>{p.name} &gt; </span>
-            ))}
-          </p>
-        )}
-      </div>
+    <div style={{ padding: "20px" }}>
+      <h1>Welcome to Swipe5!</h1>
 
-      {/* Card Display */}
-      <div className="relative w-full max-w-md h-64 flex items-center justify-center bg-gray-100 p-4 rounded-lg shadow-md">
-        {loading ? (
-          <p>Loading...</p>
-        ) : currentSelection ? (
-          <h2 className="text-2xl font-semibold">{currentSelection.name}</h2>
-        ) : (
-          <p className="text-gray-500">No options available.</p>
-        )}
-      </div>
+      {errorMsg && <p style={{ color: "red" }}>Error: {errorMsg}</p>}
 
-      {/* Buttons */}
-      <div className="flex justify-around w-full max-w-md mt-6">
-        <button className="bg-red-500 text-white px-4 py-2 rounded" onClick={handleNo}>
-          No
-        </button>
-        <button className="bg-green-500 text-white px-4 py-2 rounded" onClick={handleYes}>
-          Yes
-        </button>
-        <button
-          className="bg-gray-500 text-white px-4 py-2 rounded"
-          onClick={handleGoBack}
-          disabled={selectionPath.length === 0}
-        >
-          Go Back
-        </button>
-      </div>
+      <h2>Categories</h2>
+      {categories.length > 0 ? (
+        <pre>{JSON.stringify(categories, null, 2)}</pre>
+      ) : (
+        <p>Loading categories...</p>
+      )}
 
-      {/* Error Message */}
-      {errorMessage && <p className="text-red-500 mt-4">{errorMessage}</p>}
+      <h2>Places</h2>
+      {places.length > 0 ? (
+        <pre>{JSON.stringify(places, null, 2)}</pre>
+      ) : (
+        <p>Loading places...</p>
+      )}
+
+      <h2>Subcategories</h2>
+      {subcategories.length > 0 ? (
+        <pre>{JSON.stringify(subcategories, null, 2)}</pre>
+      ) : (
+        <p>Loading subcategories...</p>
+      )}
     </div>
   );
 }
