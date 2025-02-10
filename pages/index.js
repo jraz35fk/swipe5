@@ -13,19 +13,19 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Indexes: catIndex, subIndex, placeIndex
+  // Indexes for each layer
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
 
-  // Flow modes: "categories" | "subcategories" | "places" | "matchDeck"
+  // "mode": "categories" | "subcategories" | "places"
   const [mode, setMode] = useState("categories");
 
-  // Parent selections for breadcrumb or top text
+  // Selected category/subcategory for breadcrumb or top text
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Final matches
+  // For final matches & celebration
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
 
@@ -40,7 +40,7 @@ export default function Home() {
         const { data: catData, error: catErr } = await supabase
           .from("categories")
           .select("*")
-          .order("weight", { ascending: false }); // or not
+          .order("weight", { ascending: false });
         if (catErr) throw catErr;
 
         // subcategories
@@ -59,7 +59,7 @@ export default function Home() {
     loadData();
   }, []);
 
-  // Helper for subcats in selectedCategory
+  // Helper: subcats for a given category
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
     return subcategories.filter((s) => s.category_id === cat.id);
@@ -71,38 +71,39 @@ export default function Home() {
   const currentSubcategory = subcatsForCategory[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // Return an object with {name, image_url} for the current card
+  // Return { name, image_url } for the current item
   function getCurrentCardData() {
     if (mode === "categories") {
-      if (!currentCategory) return null;
-      return {
-        name: currentCategory.name,
-        image_url: currentCategory.image_url || "",
-      };
+      return currentCategory
+        ? {
+            name: currentCategory.name,
+            image_url: currentCategory.image_url || "",
+          }
+        : null;
     } else if (mode === "subcategories") {
-      if (!currentSubcategory) return null;
-      return {
-        name: currentSubcategory.name,
-        image_url: currentSubcategory.image_url || "",
-      };
+      return currentSubcategory
+        ? {
+            name: currentSubcategory.name,
+            image_url: currentSubcategory.image_url || "",
+          }
+        : null;
     } else if (mode === "places") {
-      if (!currentPlace) return null;
-      return {
-        name: currentPlace.name,
-        image_url: currentPlace.image_url || "",
-      };
+      return currentPlace
+        ? {
+            name: currentPlace.name,
+            image_url: currentPlace.image_url || "",
+          }
+        : null;
     }
     return null;
   }
 
-  // If subcategory or place is missing an image, we fallback
-  function getBackgroundImage(imageUrl) {
-    return imageUrl && imageUrl.trim() !== ""
-      ? imageUrl
-      : "/images/default-bg.jpg"; // Fallback
+  // Fallback if no image_url
+  function getBackgroundImage(url) {
+    return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // Parent text logic
+  // Parent text if subcategory or place
   function getParentText() {
     if (mode === "subcategories" && selectedCategory) {
       return selectedCategory.name;
@@ -113,7 +114,7 @@ export default function Home() {
     return "";
   }
 
-  // The current card's info
+  // The "current card"
   const currentCard = getCurrentCardData();
   const parentText = getParentText();
 
@@ -158,7 +159,7 @@ export default function Home() {
   function handleNoSubcategory() {
     const next = subIndex + 1;
     if (next >= subcatsForCategory.length) {
-      // next category
+      // next cat
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -196,7 +197,6 @@ export default function Home() {
   function moveToNextSubcategory() {
     const next = subIndex + 1;
     if (next >= subcatsForCategory.length) {
-      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -211,7 +211,7 @@ export default function Home() {
     }
   }
 
-  // Go Back & Reshuffle => now at bottom
+  // Go Back & Reshuffle => now at bottom corners
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -231,7 +231,6 @@ export default function Home() {
     setMode("categories");
   }
 
-  // If we have no currentCard
   if (!currentCard) {
     return (
       <div style={styles.container}>
@@ -244,36 +243,13 @@ export default function Home() {
     );
   }
 
-  // We have a valid card
   const bgImage = getBackgroundImage(currentCard.image_url);
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* NO / YES icons at the top corners now */}
-        <img
-          src="/images/no-icon.png" // replace with your own
-          alt="No"
-          style={styles.noIcon}
-          onClick={() => {
-            if (mode === "categories") handleNoCategory();
-            else if (mode === "subcategories") handleNoSubcategory();
-            else handleNoPlace();
-          }}
-        />
-        <img
-          src="/images/yes-icon.png" // replace with your own
-          alt="Yes"
-          style={styles.yesIcon}
-          onClick={() => {
-            if (mode === "categories") handleYesCategory();
-            else if (mode === "subcategories") handleYesSubcategory();
-            else handleYesPlace();
-          }}
-        />
-
-        {/* Parent text (top-left or top-center) */}
         <div style={styles.topTextRow}>
+          {/* If there's a parent category/subcategory */}
           {parentText && (
             <h2 style={styles.parentText}>
               Explore <span style={styles.parentName}>{parentText}</span>
@@ -281,16 +257,39 @@ export default function Home() {
           )}
         </div>
 
-        {/* Middle area if needed */}
         <div style={styles.centerContent}></div>
 
-        {/* Current card name at bottom */}
+        {/* Bottom text row with card name */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
           <p style={styles.clickForInfo}>Click for info</p>
+
+          {/* Now the YES/NO buttons appear under the card name */}
+          <div style={styles.yesNoRow}>
+            <button
+              style={styles.noButton}
+              onClick={() => {
+                if (mode === "categories") handleNoCategory();
+                else if (mode === "subcategories") handleNoSubcategory();
+                else handleNoPlace();
+              }}
+            >
+              No
+            </button>
+            <button
+              style={styles.yesButton}
+              onClick={() => {
+                if (mode === "categories") handleYesCategory();
+                else if (mode === "subcategories") handleYesSubcategory();
+                else handleYesPlace();
+              }}
+            >
+              Yes
+            </button>
+          </div>
         </div>
 
-        {/* Go Back & Reshuffle at bottom corners */}
+        {/* Go Back & Reshuffle in bottom-left & bottom-right corners */}
         <button style={styles.goBackButton} onClick={handleGoBack}>
           Go Back
         </button>
@@ -340,23 +339,6 @@ const styles = {
     justifyContent: "space-between",
     position: "relative",
   },
-  // NO / YES icons (top corners)
-  noIcon: {
-    position: "absolute",
-    top: "20px",
-    left: "20px",
-    width: "60px",
-    height: "60px",
-    cursor: "pointer",
-  },
-  yesIcon: {
-    position: "absolute",
-    top: "20px",
-    right: "20px",
-    width: "60px",
-    height: "60px",
-    cursor: "pointer",
-  },
   topTextRow: {
     padding: "20px",
   },
@@ -374,8 +356,8 @@ const styles = {
     flexGrow: 1,
   },
   bottomTextRow: {
-    paddingBottom: "70px",
     textAlign: "center",
+    marginBottom: "70px", // space for bottom buttons
   },
   currentCardName: {
     color: "#fff",
@@ -389,6 +371,30 @@ const styles = {
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     marginTop: "10px",
     fontSize: "1em",
+  },
+  yesNoRow: {
+    marginTop: "20px",
+    display: "flex",
+    justifyContent: "center",
+    gap: "40px",
+  },
+  noButton: {
+    backgroundColor: "#f44336",
+    color: "#fff",
+    border: "none",
+    padding: "12px 24px",
+    borderRadius: "5px",
+    fontSize: "1.1em",
+    cursor: "pointer",
+  },
+  yesButton: {
+    backgroundColor: "#4CAF50",
+    color: "#fff",
+    border: "none",
+    padding: "12px 24px",
+    borderRadius: "5px",
+    fontSize: "1.1em",
+    cursor: "pointer",
   },
   goBackButton: {
     position: "absolute",
