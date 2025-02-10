@@ -13,31 +13,30 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Indices for each layer
+  // Indices
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
+  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
 
-  // "mode": "categories" | "subcategories" | "places"
-  const [mode, setMode] = useState("categories");
-
-  // Selected category/subcategory
+  // Selected items
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // For final matches
+  // Matches & celebration
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Error handling
+  // Error
   const [errorMsg, setErrorMsg] = useState(null);
 
   // 2) NEIGHBORHOODS
-  // We fetch all distinct neighborhoods from "places" once, so user can enable/disable them at any layer.
+  // We'll fetch all distinct neighborhoods once, 
+  // then separate them into "within 5 miles" vs "outside city"
   const [allNeighborhoods, setAllNeighborhoods] = useState([]);
   const [enabledNeighborhoods, setEnabledNeighborhoods] = useState([]);
 
-  // On mount, load categories/subcategories + all neighborhoods
+  // On mount: load categories/subcategories & neighborhoods
   useEffect(() => {
     loadBaseData();
     loadAllNeighborhoods();
@@ -84,17 +83,17 @@ export default function Home() {
       });
       const nbArray = Array.from(nbSet);
 
-      // Optionally we can sort them alphabetically
+      // sort them alphabetically or some custom logic
       nbArray.sort();
 
       setAllNeighborhoods(nbArray);
-      setEnabledNeighborhoods(nbArray); // all enabled by default
+      setEnabledNeighborhoods(nbArray); // all enabled
     } catch (err) {
       console.error("Error loading neighborhoods:", err);
     }
   }
 
-  // Toggling neighborhoods persistent across all layers
+  // Toggling neighborhoods
   function toggleNeighborhood(nb) {
     if (enabledNeighborhoods.includes(nb)) {
       // remove it
@@ -106,14 +105,15 @@ export default function Home() {
     }
   }
 
-  // Helper to reorder places so "enabled" neighborhoods appear first, then disabled
+  // reorder places => enabled neighborhoods first, then disabled
   function reorderPlacesByNeighborhood(placesArray) {
     if (!placesArray || placesArray.length === 0) return placesArray;
-    // if all neighborhoods are enabled => no reorder
-    if (
-      enabledNeighborhoods.length === 0 ||
-      enabledNeighborhoods.length === allNeighborhoods.length
-    ) {
+    if (!enabledNeighborhoods || enabledNeighborhoods.length === 0) {
+      // if none are enabled => no special reorder
+      return placesArray;
+    }
+    if (enabledNeighborhoods.length === allNeighborhoods.length) {
+      // if all enabled => no reorder
       return placesArray;
     }
     const enabledSet = new Set(enabledNeighborhoods);
@@ -121,7 +121,6 @@ export default function Home() {
     const disabledList = [];
     placesArray.forEach((p) => {
       if (!p.neighborhood) {
-        // treat no neighborhood as disabled
         disabledList.push(p);
       } else if (enabledSet.has(p.neighborhood)) {
         enabledList.push(p);
@@ -167,15 +166,15 @@ export default function Home() {
     return null;
   }
 
-  // Fallback
+  // fallback background
   function getBackgroundImage(url) {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // Left breadcrumb (top-left)
+  // Left breadcrumb
   function getLeftBreadcrumb() {
     if (mode === "subcategories" && currentCategory) {
-      return currentCategory.name; // e.g. "Food & Dining"
+      return currentCategory.name;
     }
     if (mode === "places" && selectedCategory && selectedSubcategory) {
       return `${selectedCategory.name} -> ${selectedSubcategory.name}`;
@@ -183,8 +182,7 @@ export default function Home() {
     return "";
   }
 
-  // Right text (top-right), we always show "USA -> Baltimore" text
-  // Then the user sees the multi-check for neighborhoods below it
+  // Right text => "USA -> Baltimore"
   function getRightText() {
     return "USA -> Baltimore";
   }
@@ -217,7 +215,7 @@ export default function Home() {
       if (error) throw error;
 
       let placeItems = data.map((row) => row.places);
-      // sort by weight desc
+      // sort by weight
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       // reorder by neighborhoods
       placeItems = reorderPlacesByNeighborhood(placeItems);
@@ -231,11 +229,10 @@ export default function Home() {
   }
   function handleNoSubcategory() {
     if (!selectedCategory) return;
-    // get the subcategories for that category
     const scList = subcategories.filter((s) => s.category_id === selectedCategory.id);
     const next = subIndex + 1;
     if (next >= scList.length) {
-      // move to next category
+      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -274,7 +271,7 @@ export default function Home() {
     const scList = subcategories.filter((s) => s.category_id === selectedCategory.id);
     const next = subIndex + 1;
     if (next >= scList.length) {
-      // move to next category
+      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -295,7 +292,7 @@ export default function Home() {
     } else if (mode === "subcategories") {
       setMode("categories");
     } else {
-      alert("Already at the top-level categories!");
+      alert("Already at top-level categories!");
     }
   }
   function handleReshuffle() {
@@ -335,9 +332,10 @@ export default function Home() {
         {/* TOP ROW */}
         <div style={styles.topRow}>
           <div style={styles.leftText}>{leftText}</div>
+
           <div style={styles.rightText}>
             {rightText}
-            {/* NeighborhoodSelector always displayed below "USA -> Baltimore" */}
+            {/* NeighborhoodSelector below "USA -> Baltimore" */}
             <NeighborhoodSelector
               allNeighborhoods={allNeighborhoods}
               enabledNeighborhoods={enabledNeighborhoods}
@@ -348,12 +346,12 @@ export default function Home() {
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM ROW: card name, neighborhood if places, yes/no */}
+        {/* BOTTOM ROW: card name, maybe neighborhood if place, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
 
-          {/* If we are in places mode, show the neighborhood below the name */}
-          {mode === "places" && currentPlace && currentPlace.neighborhood && (
+          {/* If we are in places mode, show the place's neighborhood below */}
+          {mode === "places" && currentPlace?.neighborhood && (
             <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
           )}
 
@@ -400,14 +398,61 @@ export default function Home() {
   );
 }
 
-// NeighborhoodSelector: always visible in top-right below "USA -> Baltimore"
+// NeighborhoodSelector => splits neighborhoods into within 5 miles vs outside city
 function NeighborhoodSelector({ allNeighborhoods, enabledNeighborhoods, onToggle }) {
   if (!allNeighborhoods || allNeighborhoods.length === 0) {
-    return null; // no neighborhoods at all
+    return null;
   }
+
+  // Define your "within 5 miles" set manually:
+  const withinSet = new Set([
+    "Federal Hill",
+    "Fells Point",
+    "Canton",
+    "Mount Vernon",
+    "Locust Point",
+    "Remington",
+    "Hampden",
+    "Station North",
+    "Highlandtown",
+    "Little Italy",
+    "Patterson Park",
+    "Downtown",
+    "Harbor East",
+    "Inner Harbor",
+    "Woodberry",
+    "Hamilton",
+    "Charles Village",
+    "Upton",
+    "Poppleton",
+    "Old Goucher",
+    "Jonestown",
+    // add more as needed
+  ]);
+
+  const [showOutside, setShowOutside] = useState(false);
+
+  // separate them
+  const withinMiles = [];
+  const outsideCity = [];
+  allNeighborhoods.forEach((nb) => {
+    if (withinSet.has(nb)) {
+      withinMiles.push(nb);
+    } else {
+      outsideCity.push(nb);
+    }
+  });
+
+  // If you want "withinMiles" sorted by name or other logic, we can do:
+  withinMiles.sort();
+  outsideCity.sort();
+
   return (
     <div style={styles.nbSelectorContainer}>
-      {allNeighborhoods.map((nb) => {
+      <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Neighborhoods</div>
+
+      {/* Within city */}
+      {withinMiles.map((nb) => {
         const isEnabled = enabledNeighborhoods.includes(nb);
         return (
           <div key={nb} style={styles.nbCheckRow}>
@@ -422,6 +467,35 @@ function NeighborhoodSelector({ allNeighborhoods, enabledNeighborhoods, onToggle
           </div>
         );
       })}
+
+      {/* OUTSIDE CITY (collapsible) */}
+      <div style={{ marginTop: "8px" }}>
+        <button
+          style={styles.outsideToggleBtn}
+          onClick={() => setShowOutside(!showOutside)}
+        >
+          {showOutside ? "Hide Outside City" : "Show Outside City"}
+        </button>
+      </div>
+      {showOutside && (
+        <div style={{ marginTop: "5px" }}>
+          {outsideCity.map((nb) => {
+            const isEnabled = enabledNeighborhoods.includes(nb);
+            return (
+              <div key={nb} style={styles.nbCheckRow}>
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={() => onToggle(nb)}
+                />
+                <label style={{ marginLeft: 5, color: isEnabled ? "#0f0" : "#fff" }}>
+                  {nb}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -486,13 +560,21 @@ const styles = {
     backgroundColor: "rgba(0,0,0,0.5)",
     padding: "8px",
     borderRadius: "6px",
-    maxHeight: "150px",
+    maxHeight: "170px",
     overflowY: "auto",
   },
   nbCheckRow: {
     display: "flex",
     alignItems: "center",
     marginBottom: "4px",
+  },
+  outsideToggleBtn: {
+    border: "none",
+    backgroundColor: "#444",
+    color: "#fff",
+    padding: "5px 10px",
+    borderRadius: "4px",
+    cursor: "pointer",
   },
   centerContent: {
     flexGrow: 1,
