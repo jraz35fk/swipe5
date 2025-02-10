@@ -2,145 +2,177 @@ import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * This endpoint does the following:
- * 1. Fetches your list of categories from Supabase (any row missing or wanting a new image).
- * 2. For each category, queries Pexels for an image (based on its 'name' or fallback).
- * 3. Uploads that image to your Supabase Storage bucket.
- * 4. Updates the category's image_url with the new public URL.
+ * A Next.js API route that forcibly refetches images for multiple tables.
  * 
- * NOTE: This can be adapted for subcategories, places, etc. 
- *       Just change the table name and column references.
+ * 1) Loops over each table in TABLES_TO_UPDATE.
+ * 2) For each row, ignores any existing image_url and fetches a NEW image from Pexels.
+ * 3) Uploads that image to Supabase Storage.
+ * 4) Overwrites the row's image_url with the new link.
+ * 
+ * REQUIRED environment vars (set in Vercel):
+ *  - PEXELS_API_KEY
+ *  - SUPABASE_URL
+ *  - SUPABASE_ANON_KEY
+ *  (optional) SUPABASE_BUCKET => defaults to 'public-images'
+ * 
+ * Endpoint usage:
+ *   GET https://<your-app>.vercel.app/api/refetch-images
+ * 
+ * NOTE: If you have many rows or large tables, you could hit timeouts (~10s limit on Vercel).
+ *       In that case, consider splitting or limiting the script.
  */
 
 export default async function handler(req, res) {
   try {
-    // 1) Read environment variables (Vercel provides them at build/runtime)
+    // Load env vars from Vercel
     const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-    const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "public-images"; // fallback bucket name
+    const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "public-images";
 
-    // If any are missing, throw an error
     if (!PEXELS_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
       return res.status(500).json({
-        error: "Missing required environment variables (PEXELS_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY)."
+        error: "Missing required env vars (PEXELS_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY)."
       });
     }
 
-    // 2) Create Supabase client
+    // Create Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 3) Fetch the categories from your table
-    //    Feel free to adjust this query. 
-    //    Example: only fetch categories that have a NULL or empty image_url.
-    const { data: categories, error: fetchError } = await supabase
-      .from("categories")
-      .select("*")
-      .or("image_url.is.null,image_url.eq.''");
+    // Define which tables to update (excluding 'places')
+    // NOTE: Make sure each table has:
+    //   - a 'name' column (or adjust 'row.name' usage)
+    //   - an 'image_url' column to overwrite
+    const TABLES_TO_UPDATE = [
+      "categories",
+      "food_categories",
+      "neighborhoods",
+      "place_food_categories",
+      "place_subcategories",
+      "reviews",
+      "subcategories"
+      // 'places' is intentionally NOT included
+    ];
 
-    if (fetchError) {
-      return res.status(500).json({ error: fetchError.message });
-    }
+    // Helper function to fetch 1 random image URL from Pexels for a given query
+    async function fetchImageUrlFromPexels(query) {
+      const response = await axios.get("https://api.pexels.com/v1/search", {
+        headers: {
+          Authorization: PEXELS_API_KEY,
+        },
+        params: {
+          query,
+          per_page: 10
+        },
+      });
 
-    if (!categories || categories.length === 0) {
-      // No categories need images
-      return res.status(200).json({ message: "No categories found that need images." });
-    }
-
-    // Helper function: search Pexels for an image related to "categoryName"
-    async function fetchImageUrlFromPexels(categoryName) {
-      // If the category name is something like "Food & Dining", we can just pass that as a query
-      // or maybe a fallback query if categoryName is empty
-      const query = categoryName.trim() || "Fun activity";
-
-      try {
-        const response = await axios.get("https://api.pexels.com/v1/search", {
-          headers: {
-            Authorization: PEXELS_API_KEY,
-          },
-          params: {
-            query,
-            per_page: 10, // how many to fetch
-          },
-        });
-
-        const { photos } = response.data;
-        if (!photos || photos.length === 0) {
-          // no result
-          return null;
-        }
-        // pick a random photo from the results
-        const randomIndex = Math.floor(Math.random() * photos.length);
-        const photo = photos[randomIndex];
-        return photo.src.large || photo.src.original;
-      } catch (err) {
-        console.error("Pexels fetch error:", err.message);
+      const { photos } = response.data;
+      if (!photos || photos.length === 0) {
         return null;
       }
+      // pick a random one
+      const randomIndex = Math.floor(Math.random() * photos.length);
+      const photo = photos[randomIndex];
+      return photo.src.large || photo.src.original;
     }
 
-    // We'll store results messages
-    let results = [];
+    // We'll store logs for each table
+    let overallResults = [];
 
-    // 4) For each category row, fetch an image and upload
-    for (const cat of categories) {
-      const catName = cat.name || "Unknown Category";
-      console.log(`Processing category: ${catName}`);
+    // Process each table in TABLES_TO_UPDATE
+    for (const tableName of TABLES_TO_UPDATE) {
+      let tableLog = [`\n=== Table: ${tableName} ===`];
 
-      // A) Fetch an image from Pexels
-      const pexelsUrl = await fetchImageUrlFromPexels(catName);
-      if (!pexelsUrl) {
-        results.push(`No images found for "${catName}". Skipped.`);
+      // 1) Fetch all rows (no filter, forcibly refetch means ignoring existing image_url)
+      const { data: rows, error: fetchError } = await supabase
+        .from(tableName)
+        .select("*"); // selects all columns
+
+      if (fetchError) {
+        tableLog.push(`Error fetching rows: ${fetchError.message}`);
+        overallResults.push(...tableLog);
+        continue; 
+      }
+      if (!rows || rows.length === 0) {
+        tableLog.push("No rows found.");
+        overallResults.push(...tableLog);
         continue;
       }
 
-      try {
-        // B) Download the actual image data
-        const imageResponse = await axios.get(pexelsUrl, { responseType: "arraybuffer" });
-        const fileBuffer = Buffer.from(imageResponse.data, "binary");
+      // 2) For each row in this table
+      for (const row of rows) {
+        // We'll assume the row has a 'name' column. If not, change this to something else, e.g. row.title
+        const rowName = row.name || "Untitled";
+        const rowId = row.id; // or another unique identifier
 
-        // C) Construct a remote filename (like "categories/food_dining.jpg")
-        const safeName = catName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-        const remoteFileName = `categories/${safeName}.jpg`;
+        // A) Fetch a new image from Pexels (based on the row's name, or fallback if empty)
+        const queryTerm = rowName.trim() || "Generic photo";
+        let pexelsUrl;
+        try {
+          pexelsUrl = await fetchImageUrlFromPexels(queryTerm);
+        } catch (err) {
+          tableLog.push(`Row ID:${rowId} - Pexels fetch error: ${err.message}`);
+          continue;
+        }
 
-        // D) Upload to Supabase Storage
-        const { data, error } = await supabase.storage
-          .from(SUPABASE_BUCKET)
-          .upload(remoteFileName, fileBuffer, {
-            contentType: "image/jpeg",
-            upsert: true
+        if (!pexelsUrl) {
+          tableLog.push(`Row ID:${rowId} - No images found for query "${queryTerm}".`);
+          continue;
+        }
+
+        try {
+          // B) Download the image data
+          const imageResponse = await axios.get(pexelsUrl, {
+            responseType: "arraybuffer"
           });
+          const fileBuffer = Buffer.from(imageResponse.data, "binary");
 
-        if (error) {
-          // upload error
-          results.push(`Failed upload for "${catName}": ${error.message}`);
-          continue;
+          // C) Construct a remote file name for your bucket
+          //    e.g. "food_categories/food__dining.jpg"
+          const safeName = rowName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+          const remoteFileName = `${tableName}/${safeName}_${rowId}.jpg`;
+
+          // D) Upload to Supabase Storage (upsert: true to overwrite)
+          const { data, error } = await supabase.storage
+            .from(SUPABASE_BUCKET)
+            .upload(remoteFileName, fileBuffer, {
+              contentType: "image/jpeg",
+              upsert: true
+            });
+
+          if (error) {
+            tableLog.push(`Row ID:${rowId} - Upload error: ${error.message}`);
+            continue;
+          }
+
+          // E) Build the public URL
+          const publicUrl = `${SUPABASE_URL.replace(".co", ".co/storage/v1/object/public")}/${SUPABASE_BUCKET}/${remoteFileName}`;
+
+          // F) Update the row's image_url
+          const { error: updateError } = await supabase
+            .from(tableName)
+            .update({ image_url: publicUrl })
+            .eq("id", rowId);
+
+          if (updateError) {
+            tableLog.push(`Row ID:${rowId} - Update error: ${updateError.message}`);
+            continue;
+          }
+
+          tableLog.push(`Row ID:${rowId} - ${rowName} => ${publicUrl}`);
+        } catch (err) {
+          tableLog.push(`Row ID:${rowId} - General error: ${err.message}`);
         }
-
-        // E) Construct the public URL to that file
-        const publicUrl = `${SUPABASE_URL.replace(".co", ".co/storage/v1/object/public")}/${SUPABASE_BUCKET}/${remoteFileName}`;
-
-        // F) Update the categories table with the new URL
-        const { error: updateError } = await supabase
-          .from("categories")
-          .update({ image_url: publicUrl })
-          .eq("id", cat.id); // or .eq("name", catName)
-
-        if (updateError) {
-          results.push(`Failed DB update for "${catName}": ${updateError.message}`);
-          continue;
-        }
-
-        results.push(`Updated "${catName}" => ${publicUrl}`);
-      } catch (err) {
-        results.push(`Error processing "${catName}": ${err.message}`);
       }
+
+      overallResults.push(...tableLog);
     }
 
-    // 5) Return the results
-    return res.status(200).json({ results });
+    // Return combined logs
+    return res.status(200).json({ logs: overallResults });
+
   } catch (err) {
-    console.error("General error in fetch-images API:", err);
+    console.error("API general error:", err);
     return res.status(500).json({ error: err.message });
   }
 }
