@@ -13,26 +13,28 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Current "mode" controls which list we're swiping: "categories", "subcategories", or "places".
+  // Which "mode" are we in? (categories, subcategories, places)
   const [mode, setMode] = useState("categories");
 
-  // A dynamic list of "cards" we’re currently swiping through (based on the mode).
+  // List of current items (cards) we’re swiping through
   const [currentList, setCurrentList] = useState([]);
 
-  // Track which item in currentList we're displaying
+  // Current index in the currentList
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Keep track of the user’s chosen category/subcategory so we can filter the next step
+  // Track user’s chosen Category/Subcategory for breadcrumbs
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Fetch data from all three tables on mount
+  // -------------------
+  //    FETCH DATA
+  // -------------------
   useEffect(() => {
     const fetchTables = async () => {
       try {
-        // Fetch all three tables in parallel
+        // Fetch all tables in parallel
         const [catRes, subRes, placesRes] = await Promise.all([
           supabase.from("categories").select("*"),
           supabase.from("subcategories").select("*"),
@@ -47,7 +49,7 @@ export default function Home() {
         setSubcategories(subRes.data || []);
         setPlaces(placesRes.data || []);
 
-        // Start by showing categories
+        // Start with categories
         setMode("categories");
         setCurrentList(catRes.data || []);
         setCurrentIndex(0);
@@ -60,64 +62,98 @@ export default function Home() {
   }, []);
 
   // -------------------
+  //    NAVIGATION
+  // -------------------
+
+  // GO BACK one step
+  const handleGoBack = () => {
+    if (mode === "places") {
+      // Return to subcategories
+      if (selectedCategory) {
+        // Filter subcategories for this category again
+        const filteredSubs = subcategories.filter(
+          (sub) => sub.category_id === selectedCategory.id
+        );
+        setMode("subcategories");
+        setCurrentList(filteredSubs);
+        setCurrentIndex(0);
+      }
+    } else if (mode === "subcategories") {
+      // Return to categories
+      setMode("categories");
+      setCurrentList(categories);
+      setCurrentIndex(0);
+      // Reset the subcategory selection since we're going back
+      setSelectedSubcategory(null);
+    } else {
+      // Already at categories; can't go further back
+      alert("You're already at the top-level categories!");
+    }
+  };
+
+  // RESET everything to the start
+  const handleReshuffle = () => {
+    setMode("categories");
+    setCurrentList(categories);
+    setCurrentIndex(0);
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+  };
+
+  // -------------------
   //    SWIPE LOGIC
   // -------------------
   const handleYes = () => {
-    // "Yes" means we move to the next step, or if we're in the final step, just go to next card.
+    // "Yes" means we advance to the next "level," or move to the next card in "places" mode.
     if (mode === "categories") {
-      // 1) User accepted this category
+      // Chose a category
       const acceptedCategory = currentList[currentIndex];
       setSelectedCategory(acceptedCategory);
 
-      // 2) Filter subcategories for that category
+      // Filter subcategories for that category
       const filteredSubs = subcategories.filter(
         (sub) => sub.category_id === acceptedCategory.id
       );
 
-      // 3) Move to subcategories step
       setMode("subcategories");
       setCurrentList(filteredSubs);
       setCurrentIndex(0);
     } else if (mode === "subcategories") {
-      // 1) User accepted this subcategory
+      // Chose a subcategory
       const acceptedSub = currentList[currentIndex];
       setSelectedSubcategory(acceptedSub);
 
-      // 2) Filter places for that subcategory
+      // Filter places for that subcategory
       const filteredPlaces = places.filter(
         (pl) => pl.subcategory_id === acceptedSub.id
       );
 
-      // 3) Move to places step
       setMode("places");
       setCurrentList(filteredPlaces);
       setCurrentIndex(0);
     } else if (mode === "places") {
-      // In "places" mode, a "Yes" might just mean "I like this place!"
-      // Then we can go to the next place card until we're out of places.
-
+      // In places mode, "Yes" means "I like this place!"
+      // Go to next place, or end if no more places
       const nextIndex = currentIndex + 1;
       if (nextIndex < currentList.length) {
         setCurrentIndex(nextIndex);
       } else {
-        // No more places, you could reset or show a "No more content" message
-        alert("You’ve swiped through all places!");
+        alert("You’ve swiped through all places in this subcategory!");
       }
     }
   };
 
   const handleNo = () => {
-    // "No" means skip this card and go to the next one in the current mode
+    // Skip this item, move to next in the same mode
     const nextIndex = currentIndex + 1;
     if (nextIndex < currentList.length) {
       setCurrentIndex(nextIndex);
     } else {
-      // If we're out of cards in this mode, you could handle it differently
       alert(`No more ${mode} left!`);
     }
   };
 
-  // Get the current card
+  // Current card
   const currentCard = currentList[currentIndex];
 
   // -------------------
@@ -125,48 +161,73 @@ export default function Home() {
   // -------------------
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Tinder-Style Activity App</h1>
+      <h1 style={styles.title}>dialN</h1>
 
       {errorMsg && <p style={{ color: "red" }}>Error: {errorMsg}</p>}
 
-      {/* If no data yet or out of cards, show a message */}
-      {!currentCard ? (
-        <p>No more {mode} to show!</p>
-      ) : (
-        <div style={styles.card}>
-          <h2>{mode === "categories" && currentCard?.name}</h2>
-          {mode === "categories" && (
-            <p style={styles.description}>
-              Category: {currentCard.name || "No name"}
-            </p>
-          )}
+      {/* BREADCRUMB: show selected Category -> Subcategory */}
+      <div style={styles.breadcrumb}>
+        {selectedCategory && (
+          <p style={styles.smallText}>
+            Category: {selectedCategory.name || "Unknown"}
+          </p>
+        )}
+        {selectedSubcategory && (
+          <p style={styles.smallText}>
+            Subcategory: {selectedSubcategory.name || "Unknown"}
+          </p>
+        )}
+      </div>
 
-          {mode === "subcategories" && (
+      {/* MAIN CARD AREA */}
+      {currentCard ? (
+        <div style={styles.card}>
+          {mode === "categories" && (
             <>
-              <h2>{currentCard?.name}</h2>
+              <h2>{currentCard.name}</h2>
               <p style={styles.description}>
-                Subcategory: {currentCard.name || "No name"}
+                This is a category: {currentCard.name}
               </p>
             </>
           )}
-
+          {mode === "subcategories" && (
+            <>
+              <h2>{currentCard.name}</h2>
+              <p style={styles.description}>
+                This is a subcategory: {currentCard.name}
+              </p>
+            </>
+          )}
           {mode === "places" && (
             <>
-              <h2>{currentCard?.name}</h2>
+              <h2>{currentCard.name}</h2>
               <p style={styles.description}>
-                Location/Activity: {currentCard.name || "No name"}
+                This is a place: {currentCard.name}
               </p>
             </>
           )}
         </div>
+      ) : (
+        <p>No more {mode} to show!</p>
       )}
 
+      {/* BUTTONS: No / Yes */}
       <div style={styles.buttonRow}>
         <button onClick={handleNo} style={styles.noButton}>
           No
         </button>
         <button onClick={handleYes} style={styles.yesButton}>
           Yes
+        </button>
+      </div>
+
+      {/* NAVIGATION BUTTONS: Go Back / Reshuffle */}
+      <div style={styles.navRow}>
+        <button onClick={handleGoBack} style={styles.goBackButton}>
+          Go Back
+        </button>
+        <button onClick={handleReshuffle} style={styles.reshuffleButton}>
+          Reshuffle
         </button>
       </div>
     </div>
@@ -186,6 +247,14 @@ const styles = {
   title: {
     marginBottom: "20px",
   },
+  breadcrumb: {
+    marginBottom: "10px",
+  },
+  smallText: {
+    fontSize: "14px",
+    margin: "0",
+    color: "#777",
+  },
   card: {
     border: "1px solid #ccc",
     borderRadius: "10px",
@@ -201,6 +270,7 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     gap: "20px",
+    marginBottom: "20px",
   },
   yesButton: {
     backgroundColor: "#4CAF50",
@@ -215,6 +285,28 @@ const styles = {
     color: "#fff",
     border: "none",
     padding: "10px 20px",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  navRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "20px",
+    marginTop: "10px",
+  },
+  goBackButton: {
+    backgroundColor: "#2196F3",
+    color: "#fff",
+    border: "none",
+    padding: "8px 16px",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  reshuffleButton: {
+    backgroundColor: "#9C27B0",
+    color: "#fff",
+    border: "none",
+    padding: "8px 16px",
     borderRadius: "5px",
     cursor: "pointer",
   },
