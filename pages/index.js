@@ -1,73 +1,221 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// 1. Create Supabase client from environment variables:
+// Create the Supabase client from env variables
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function Home() {
-  // 2. State for each table + error message
+  // Store fetched data
   const [categories, setCategories] = useState([]);
-  const [places, setPlaces] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
+  const [places, setPlaces] = useState([]);
+
+  // Current "mode" controls which list we're swiping: "categories", "subcategories", or "places".
+  const [mode, setMode] = useState("categories");
+
+  // A dynamic list of "cards" we’re currently swiping through (based on the mode).
+  const [currentList, setCurrentList] = useState([]);
+
+  // Track which item in currentList we're displaying
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Keep track of the user’s chosen category/subcategory so we can filter the next step
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
+
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 3. Fetch data from multiple tables in parallel
+  // Fetch data from all three tables on mount
   useEffect(() => {
-    const fetchMultipleTables = async () => {
+    const fetchTables = async () => {
       try {
-        const [categoriesRes, placesRes, subcategoriesRes] = await Promise.all([
+        // Fetch all three tables in parallel
+        const [catRes, subRes, placesRes] = await Promise.all([
           supabase.from("categories").select("*"),
-          supabase.from("places").select("*"),
           supabase.from("subcategories").select("*"),
+          supabase.from("places").select("*"),
         ]);
 
-        // Check for errors in each response
-        if (categoriesRes.error) throw categoriesRes.error;
+        if (catRes.error) throw catRes.error;
+        if (subRes.error) throw subRes.error;
         if (placesRes.error) throw placesRes.error;
-        if (subcategoriesRes.error) throw subcategoriesRes.error;
 
-        // Set state
-        setCategories(categoriesRes.data || []);
+        setCategories(catRes.data || []);
+        setSubcategories(subRes.data || []);
         setPlaces(placesRes.data || []);
-        setSubcategories(subcategoriesRes.data || []);
+
+        // Start by showing categories
+        setMode("categories");
+        setCurrentList(catRes.data || []);
+        setCurrentIndex(0);
       } catch (error) {
         setErrorMsg(error.message);
       }
     };
 
-    fetchMultipleTables();
+    fetchTables();
   }, []);
 
-  // 4. Render the data or show errors/loading
+  // -------------------
+  //    SWIPE LOGIC
+  // -------------------
+  const handleYes = () => {
+    // "Yes" means we move to the next step, or if we're in the final step, just go to next card.
+    if (mode === "categories") {
+      // 1) User accepted this category
+      const acceptedCategory = currentList[currentIndex];
+      setSelectedCategory(acceptedCategory);
+
+      // 2) Filter subcategories for that category
+      const filteredSubs = subcategories.filter(
+        (sub) => sub.category_id === acceptedCategory.id
+      );
+
+      // 3) Move to subcategories step
+      setMode("subcategories");
+      setCurrentList(filteredSubs);
+      setCurrentIndex(0);
+    } else if (mode === "subcategories") {
+      // 1) User accepted this subcategory
+      const acceptedSub = currentList[currentIndex];
+      setSelectedSubcategory(acceptedSub);
+
+      // 2) Filter places for that subcategory
+      const filteredPlaces = places.filter(
+        (pl) => pl.subcategory_id === acceptedSub.id
+      );
+
+      // 3) Move to places step
+      setMode("places");
+      setCurrentList(filteredPlaces);
+      setCurrentIndex(0);
+    } else if (mode === "places") {
+      // In "places" mode, a "Yes" might just mean "I like this place!"
+      // Then we can go to the next place card until we're out of places.
+
+      const nextIndex = currentIndex + 1;
+      if (nextIndex < currentList.length) {
+        setCurrentIndex(nextIndex);
+      } else {
+        // No more places, you could reset or show a "No more content" message
+        alert("You’ve swiped through all places!");
+      }
+    }
+  };
+
+  const handleNo = () => {
+    // "No" means skip this card and go to the next one in the current mode
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < currentList.length) {
+      setCurrentIndex(nextIndex);
+    } else {
+      // If we're out of cards in this mode, you could handle it differently
+      alert(`No more ${mode} left!`);
+    }
+  };
+
+  // Get the current card
+  const currentCard = currentList[currentIndex];
+
+  // -------------------
+  //     RENDER
+  // -------------------
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Welcome to Swipe5!</h1>
+    <div style={styles.container}>
+      <h1 style={styles.title}>Tinder-Style Activity App</h1>
 
       {errorMsg && <p style={{ color: "red" }}>Error: {errorMsg}</p>}
 
-      <h2>Categories</h2>
-      {categories.length > 0 ? (
-        <pre>{JSON.stringify(categories, null, 2)}</pre>
+      {/* If no data yet or out of cards, show a message */}
+      {!currentCard ? (
+        <p>No more {mode} to show!</p>
       ) : (
-        <p>Loading categories...</p>
+        <div style={styles.card}>
+          <h2>{mode === "categories" && currentCard?.name}</h2>
+          {mode === "categories" && (
+            <p style={styles.description}>
+              Category: {currentCard.name || "No name"}
+            </p>
+          )}
+
+          {mode === "subcategories" && (
+            <>
+              <h2>{currentCard?.name}</h2>
+              <p style={styles.description}>
+                Subcategory: {currentCard.name || "No name"}
+              </p>
+            </>
+          )}
+
+          {mode === "places" && (
+            <>
+              <h2>{currentCard?.name}</h2>
+              <p style={styles.description}>
+                Location/Activity: {currentCard.name || "No name"}
+              </p>
+            </>
+          )}
+        </div>
       )}
 
-      <h2>Places</h2>
-      {places.length > 0 ? (
-        <pre>{JSON.stringify(places, null, 2)}</pre>
-      ) : (
-        <p>Loading places...</p>
-      )}
-
-      <h2>Subcategories</h2>
-      {subcategories.length > 0 ? (
-        <pre>{JSON.stringify(subcategories, null, 2)}</pre>
-      ) : (
-        <p>Loading subcategories...</p>
-      )}
+      <div style={styles.buttonRow}>
+        <button onClick={handleNo} style={styles.noButton}>
+          No
+        </button>
+        <button onClick={handleYes} style={styles.yesButton}>
+          Yes
+        </button>
+      </div>
     </div>
   );
 }
+
+// -------------------
+//     STYLES
+// -------------------
+const styles = {
+  container: {
+    maxWidth: "500px",
+    margin: "40px auto",
+    fontFamily: "sans-serif",
+    textAlign: "center",
+  },
+  title: {
+    marginBottom: "20px",
+  },
+  card: {
+    border: "1px solid #ccc",
+    borderRadius: "10px",
+    padding: "20px",
+    marginBottom: "20px",
+    backgroundColor: "#fff",
+  },
+  description: {
+    color: "#555",
+    fontSize: "16px",
+  },
+  buttonRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "20px",
+  },
+  yesButton: {
+    backgroundColor: "#4CAF50",
+    color: "#fff",
+    border: "none",
+    padding: "10px 20px",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  noButton: {
+    backgroundColor: "#f44336",
+    color: "#fff",
+    border: "none",
+    padding: "10px 20px",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+};
