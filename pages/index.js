@@ -1,282 +1,297 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// ---------------------------------------------------
 // 1) SUPABASE CLIENT
-// ---------------------------------------------------
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function Home() {
-  // --------------------------
-  // 2) STATE: Data & Workflow
-  // --------------------------
-  const [categories, setCategories] = useState([]);
-  const [subcategories, setSubcategories] = useState([]);
+  // ---------------------------------------------------
+  // A) MAIN STATE: the 3-layer indexes & data arrays
+  // ---------------------------------------------------
+  const [categories, setCategories] = useState([]);  // All categories from DB
+  const [subcategories, setSubcategories] = useState([]); // All subcategories from DB
 
-  // We do NOT store all places at once; we fetch them on demand for each subcategory.
-  const [mode, setMode] = useState("categories"); // "categories" | "subcategories" | "places" | "matchDeck"
-  const [currentList, setCurrentList] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // For the "places" layer, we fetch them on demand for the chosen subcategory
+  const [places, setPlaces] = useState([]); // The current subcategory’s places
 
-  // Selected category/subcategory for breadcrumb
+  // We track the user’s position in each layer
+  const [catIndex, setCatIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [placeIndex, setPlaceIndex] = useState(0);
+
+  // Flow control: "categories" | "subcategories" | "places" | "matchDeck"
+  const [mode, setMode] = useState("categories");
+
+  // For “Yes” decisions, we store the current selected category & subcategory
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches & Favorites
+  // Matches (final step) & favorites
   const [matches, setMatches] = useState([]);
   const [favorites, setFavorites] = useState([]);
 
-  // Celebration
+  // For a celebratory animation after final match
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Error handling
+  // For error display
   const [errorMsg, setErrorMsg] = useState(null);
 
   // ---------------------------------------------------
-  // 3) SKIP TRACKING: No repeats even after "Yes."
+  // B) INITIAL FETCH: Load categories & subcategories
   // ---------------------------------------------------
-  // We store IDs that we've "used" (Yes or No) so they never show again in that layer.
-  const [usedCategories, setUsedCategories] = useState([]);
-  const [usedSubcategories, setUsedSubcategories] = useState([]);
-  const [usedPlaces, setUsedPlaces] = useState([]);
-
-  // --------------------------
-  // 4) INITIAL DATA FETCH
-  // --------------------------
   useEffect(() => {
-    const fetchData = async () => {
+    const loadData = async () => {
       try {
         // 1) Load categories
-        const { data: catData, error: catError } = await supabase
+        const { data: catData, error: catErr } = await supabase
           .from("categories")
           .select("*")
-          .order("weight", { ascending: false });
-        if (catError) throw catError;
+          .order("weight", { ascending: false }); // top recommended categories first
+        if (catErr) throw catErr;
 
         // 2) Load subcategories
-        const { data: subData, error: subError } = await supabase
+        const { data: subData, error: subErr } = await supabase
           .from("subcategories")
           .select("*")
           .order("weight", { ascending: false });
-        if (subError) throw subError;
+        if (subErr) throw subErr;
 
         setCategories(catData || []);
         setSubcategories(subData || []);
-
-        // Start with categories (filter out used ones if any)
-        const filteredCats = (catData || []).filter(
-          (c) => !usedCategories.includes(c.id)
-        );
-        setMode("categories");
-        setCurrentList(filteredCats);
-        setCurrentIndex(0);
       } catch (err) {
         setErrorMsg(err.message);
       }
     };
 
-    fetchData();
+    loadData();
   }, []);
 
-  // --------------------------
-  // 5) HELPER: GO TO SUBCATEGORIES
-  // --------------------------
-  const goToSubcategories = (category) => {
-    // Filter subcategories for this category, removing used ones
-    const filteredSubs = subcategories
-      .filter((sub) => sub.category_id === category.id)
-      .filter((sub) => !usedSubcategories.includes(sub.id));
+  // ---------------------------------------------------
+  // C) HELPER: get current category or subcategory or place
+  // ---------------------------------------------------
+  const currentCategory = categories[catIndex] || null;
 
+  // subcategories for the currently selected category (once we pick it)
+  function getCurrentSubcategories() {
+    if (!selectedCategory) return [];
+    const catId = selectedCategory.id;
+    // filter the full subcategories array
+    return subcategories.filter((s) => s.category_id === catId);
+  }
+
+  // the current subcategory in that filtered array
+  const subcatsForCategory = getCurrentSubcategories();
+  const currentSubcategory = subcatsForCategory[subIndex] || null;
+
+  // the current place from the "places" array
+  const currentPlace = places[placeIndex] || null;
+
+  // ---------------------------------------------------
+  // D) LAYER ACTIONS
+  // ---------------------------------------------------
+
+  // 1) In categories layer:
+  //    - Yes => pick this category, go subcategories
+  //    - No => catIndex++
+  function handleYesCategory() {
+    // select this category
+    const cat = currentCategory;
+    if (!cat) return; // safety check
+
+    // store it so subIndex = 0, load subcategories flow
+    setSelectedCategory(cat);
+    setSubIndex(0);
     setMode("subcategories");
-    setCurrentList(filteredSubs);
-    setCurrentIndex(0);
-  };
+  }
 
-  // --------------------------
-  // 6) HELPER: GO TO PLACES (bridging)
-  // --------------------------
-  const goToPlaces = async (subcategory) => {
+  function handleNoCategory() {
+    // go to the next category
+    const next = catIndex + 1;
+    if (next >= categories.length) {
+      // no more categories to show
+      alert("No more categories left!");
+    } else {
+      setCatIndex(next);
+    }
+  }
+
+  // 2) In subcategories layer:
+  //    - Yes => pick this subcategory, go places
+  //    - No => subIndex++
+  async function handleYesSubcategory() {
+    const subcat = currentSubcategory;
+    if (!subcat) return;
+
+    setSelectedSubcategory(subcat);
+
+    // fetch places bridging from place_subcategories => places(*)
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
         .select("place_id, places(*)")
-        .eq("subcategory_id", subcategory.id);
+        .eq("subcategory_id", subcat.id);
       if (error) throw error;
+      // map bridging rows to pure place objects
+      const placeItems = data.map((row) => row.places);
 
-      // Map bridging rows to place objects
-      let placeItems = data
-        .map((row) => row.places)
-        .filter((pl) => pl && !usedPlaces.includes(pl.id));
+      // sort by weight descending
+      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
-      // Sort by weight descending
-      placeItems = placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-
+      setPlaces(placeItems);
+      setPlaceIndex(0);
       setMode("places");
-      setCurrentList(placeItems);
-      setCurrentIndex(0);
     } catch (err) {
       setErrorMsg(err.message);
     }
-  };
+  }
 
-  // --------------------------
-  // 7) HELPER: GO TO CATEGORIES
-  // --------------------------
-  const goToCategories = () => {
-    const filteredCats = categories.filter(
-      (c) => !usedCategories.includes(c.id)
-    );
-    setMode("categories");
-    setCurrentList(filteredCats);
-    setCurrentIndex(0);
-  };
+  function handleNoSubcategory() {
+    const next = subIndex + 1;
+    if (next >= subcatsForCategory.length) {
+      // done with subcategories for this category
+      // move to next category
+      const nextCat = catIndex + 1;
+      if (nextCat >= categories.length) {
+        alert("No more categories left!");
+      } else {
+        setCatIndex(nextCat);
+        setMode("categories");
+      }
+    } else {
+      // show next subcategory
+      setSubIndex(next);
+    }
+  }
 
-  // --------------------------
-  // 8) NAVIGATION: GO BACK, RESHUFFLE, SHOW MATCHES
-  // --------------------------
-  const handleGoBack = async () => {
-    if (mode === "places") {
-      // Return to subcategories for selectedCategory
-      if (!selectedCategory) {
-        alert("No selected category. Going back to categories...");
-        goToCategories();
+  // 3) In places layer (final match):
+  //    - Yes => match & next place
+  //    - No => next place
+  function handleYesPlace() {
+    const plc = currentPlace;
+    if (!plc) return;
+
+    // final match
+    setShowCelebration(true);
+    setTimeout(() => setShowCelebration(false), 2000);
+
+    setMatches((prev) => [
+      ...prev,
+      {
+        ...plc,
+        rating: 0,
+      },
+    ]);
+
+    // next place
+    const next = placeIndex + 1;
+    if (next >= places.length) {
+      // done with places in this subcategory
+      moveToNextSubcategory();
+    } else {
+      setPlaceIndex(next);
+    }
+  }
+
+  function handleNoPlace() {
+    const next = placeIndex + 1;
+    if (next >= places.length) {
+      moveToNextSubcategory();
+    } else {
+      setPlaceIndex(next);
+    }
+  }
+
+  // after finishing places in a subcategory (Yes or No for all),
+  // go to subIndex++ or next category if subcategories are exhausted
+  function moveToNextSubcategory() {
+    const nextSub = subIndex + 1;
+    if (nextSub >= subcatsForCategory.length) {
+      // done with subcategories for this category
+      const nextCat = catIndex + 1;
+      if (nextCat >= categories.length) {
+        alert("No more categories left!");
+        setMode("categories");
         return;
       }
-      goToSubcategories(selectedCategory);
-    } else if (mode === "subcategories") {
-      setSelectedSubcategory(null);
-      goToCategories();
-    } else if (mode === "matchDeck") {
-      // Return to categories from match deck
-      setSelectedCategory(null);
-      setSelectedSubcategory(null);
-      goToCategories();
+      setCatIndex(nextCat);
+      setMode("categories");
     } else {
-      alert("You're already at the top-level categories!");
+      // next subcategory
+      setSubIndex(nextSub);
+      setMode("subcategories");
     }
-  };
+  }
 
-  const handleReshuffle = async () => {
-    // Clear all used arrays
-    setUsedCategories([]);
-    setUsedSubcategories([]);
-    setUsedPlaces([]);
+  // ---------------------------------------------------
+  // E) GO BACK / RESHUFFLE / MATCH DECK
+  // ---------------------------------------------------
+  function handleGoBack() {
+    if (mode === "places") {
+      // go back to subcategories
+      setMode("subcategories");
+    } else if (mode === "subcategories") {
+      // go back to categories
+      setMode("categories");
+    } else if (mode === "matchDeck") {
+      // go back to places? or subcategories? 
+      // We'll just default to categories for simplicity
+      setMode("categories");
+    } else {
+      alert("Already at categories layer!");
+    }
+  }
+
+  function handleReshuffle() {
+    // start over from the first category
+    setCatIndex(0);
+    setSubIndex(0);
+    setPlaceIndex(0);
     setSelectedCategory(null);
     setSelectedSubcategory(null);
-    // If you want to keep matches, comment these out:
+    setPlaces([]);
+    // If you also want to clear matches/favorites, uncomment:
     // setMatches([]);
     // setFavorites([]);
 
-    // Reload categories
-    const filteredCats = categories.filter(
-      (c) => !usedCategories.includes(c.id)
-    );
     setMode("categories");
-    setCurrentList(filteredCats);
-    setCurrentIndex(0);
-  };
+  }
 
-  const handleShowMatches = () => {
+  function handleShowMatches() {
     setMode("matchDeck");
-  };
+  }
 
-  // --------------------------
-  // 9) SWIPE LOGIC: YES / NO
-  // --------------------------
-  const handleYes = async () => {
-    const currentItem = currentList[currentIndex];
-    if (!currentItem) return;
-
-    if (mode === "categories") {
-      // We skip it from this list so it won't appear again
-      setUsedCategories((prev) => [...prev, currentItem.id]);
-
-      setSelectedCategory(currentItem);
-      goToSubcategories(currentItem);
-    } else if (mode === "subcategories") {
-      setUsedSubcategories((prev) => [...prev, currentItem.id]);
-
-      setSelectedSubcategory(currentItem);
-      await goToPlaces(currentItem);
-    } else if (mode === "places") {
-      // final match
-      setUsedPlaces((prev) => [...prev, currentItem.id]);
-
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 2000);
-
-      setMatches((prev) => [
-        ...prev,
-        {
-          ...currentItem,
-          rating: 0, // default rating
-        },
-      ]);
-
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < currentList.length) {
-        setCurrentIndex(nextIndex);
-      } else {
-        alert("You’ve matched all places in this subcategory!");
-      }
-    }
-  };
-
-  const handleNo = () => {
-    const currentItem = currentList[currentIndex];
-    if (!currentItem) return;
-
-    // If user says No, also skip it from this layer
-    if (mode === "categories") {
-      setUsedCategories((prev) => [...prev, currentItem.id]);
-    } else if (mode === "subcategories") {
-      setUsedSubcategories((prev) => [...prev, currentItem.id]);
-    } else if (mode === "places") {
-      setUsedPlaces((prev) => [...prev, currentItem.id]);
-    }
-
-    // Move to next
-    const nextIndex = currentIndex + 1;
-    if (nextIndex < currentList.length) {
-      setCurrentIndex(nextIndex);
-    } else {
-      alert(`No more ${mode} left!`);
-    }
-  };
-
-  // --------------------------
-  // 10) MATCH DECK LOGIC
-  // --------------------------
-  const handleRateMatch = (placeId, newRating) => {
+  // ---------------------------------------------------
+  // F) MATCH DECK: rating & favorites
+  // ---------------------------------------------------
+  function handleRateMatch(placeId, newRating) {
     setMatches((prev) =>
       prev.map((m) => (m.id === placeId ? { ...m, rating: newRating } : m))
     );
-  };
+  }
 
-  const handleArchive = (placeId) => {
-    const placeToArchive = matches.find((m) => m.id === placeId);
-    if (placeToArchive) {
-      setFavorites((prev) => [...prev, placeToArchive]);
+  function handleArchive(placeId) {
+    const matched = matches.find((m) => m.id === placeId);
+    if (matched) {
+      setFavorites((prev) => [...prev, matched]);
     }
-    // optionally remove from matches
+    // Optionally remove from matches
     // setMatches((prev) => prev.filter((m) => m.id !== placeId));
-  };
+  }
 
-  // --------------------------
-  // 11) RENDERING
-  // --------------------------
+  // ---------------------------------------------------
+  // G) RENDERING
+  // ---------------------------------------------------
   if (mode === "matchDeck") {
-    // ---- MATCH DECK MODE ----
+    // =========== MATCH DECK ===========
     return (
       <div style={styles.container}>
         <h1 style={styles.title}>dialN — Match Deck</h1>
         <button onClick={handleGoBack} style={styles.goBackButton}>
           Go Back
         </button>
-
         {matches.length === 0 ? (
           <p>You have no matches yet.</p>
         ) : (
@@ -312,9 +327,9 @@ export default function Home() {
           <div style={styles.favoritesBar}>
             <h3>Favorites:</h3>
             <ul>
-              {favorites.map((fav) => (
-                <li key={fav.id}>
-                  {fav.name} (rated {fav.rating})
+              {favorites.map((f) => (
+                <li key={f.id}>
+                  {f.name} (rated {f.rating})
                 </li>
               ))}
             </ul>
@@ -324,20 +339,17 @@ export default function Home() {
     );
   }
 
-  // ---- MAIN SWIPE MODES ----
-  const currentItem = currentList[currentIndex];
+  // =========== MAIN SWIPE PAGE ===========
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>dialN</h1>
-
-      {/* Matches Button */}
       <button style={styles.matchesBtn} onClick={handleShowMatches}>
         Matches ({matches.length})
       </button>
 
-      {errorMsg && <p style={{ color: "red" }}>Error: {errorMsg}</p>}
+      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
-      {/* Breadcrumb */}
+      {/* BREADCRUMB */}
       <div style={styles.breadcrumb}>
         {selectedCategory && (
           <p style={styles.smallText}>Category: {selectedCategory.name}</p>
@@ -347,49 +359,35 @@ export default function Home() {
         )}
       </div>
 
-      {currentItem ? (
-        <div style={styles.card}>
-          <h2>{currentItem.name}</h2>
-          {mode === "categories" && (
-            <p style={styles.description}>Category: {currentItem.name}</p>
-          )}
-          {mode === "subcategories" && (
-            <p style={styles.description}>Subcategory: {currentItem.name}</p>
-          )}
-          {mode === "places" && (
-            <>
-              <p style={styles.description}>
-                Activity: {currentItem.description || currentItem.name}
-              </p>
-              <p style={styles.description}>
-                Address: {currentItem.address || "N/A"}
-              </p>
-              {currentItem.website_url && (
-                <p>
-                  <a
-                    href={currentItem.website_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Visit Website
-                  </a>
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      ) : (
-        <p>No more {mode} to show!</p>
+      {/* LAYER-SPECIFIC RENDER */}
+      {mode === "categories" && (
+        <CategoryLayer
+          currentCategory={currentCategory}
+          onYes={handleYesCategory}
+          onNo={handleNoCategory}
+        />
       )}
 
-      <div style={styles.buttonRow}>
-        <button onClick={handleNo} style={styles.noButton}>
-          No
-        </button>
-        <button onClick={handleYes} style={styles.yesButton}>
-          Yes
-        </button>
-      </div>
+      {mode === "subcategories" && (
+        <SubcategoryLayer
+          currentSubcategory={currentSubcategory}
+          onYes={handleYesSubcategory}
+          onNo={handleNoSubcategory}
+        />
+      )}
+
+      {mode === "places" && (
+        <PlacesLayer
+          currentPlace={currentPlace}
+          onYes={handleYesPlace}
+          onNo={handleNoPlace}
+        />
+      )}
+
+      {/* If we have no more items in a layer, show a message */}
+      {mode === "categories" && !currentCategory && <p>No more categories!</p>}
+      {mode === "subcategories" && !currentSubcategory && <p>No more subcategories!</p>}
+      {mode === "places" && !currentPlace && <p>No more places!</p>}
 
       <div style={styles.navRow}>
         <button onClick={handleGoBack} style={styles.goBackButton}>
@@ -406,7 +404,90 @@ export default function Home() {
 }
 
 // ---------------------------------------------------
-// Celebration popup
+// H) SUB-COMPONENTS FOR RENDERING LAYERS
+// ---------------------------------------------------
+function CategoryLayer({ currentCategory, onYes, onNo }) {
+  if (!currentCategory) {
+    return <p>No more categories to show!</p>;
+  }
+  return (
+    <div style={styles.card}>
+      <h2>{currentCategory.name}</h2>
+      <p style={styles.description}>
+        This is a category: {currentCategory.name}
+      </p>
+      <div style={styles.buttonRow}>
+        <button onClick={onNo} style={styles.noButton}>
+          No
+        </button>
+        <button onClick={onYes} style={styles.yesButton}>
+          Yes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SubcategoryLayer({ currentSubcategory, onYes, onNo }) {
+  if (!currentSubcategory) {
+    return <p>No more subcategories to show!</p>;
+  }
+  return (
+    <div style={styles.card}>
+      <h2>{currentSubcategory.name}</h2>
+      <p style={styles.description}>
+        This is a subcategory: {currentSubcategory.name}
+      </p>
+      <div style={styles.buttonRow}>
+        <button onClick={onNo} style={styles.noButton}>
+          No
+        </button>
+        <button onClick={onYes} style={styles.yesButton}>
+          Yes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PlacesLayer({ currentPlace, onYes, onNo }) {
+  if (!currentPlace) {
+    return <p>No more places to show!</p>;
+  }
+  return (
+    <div style={styles.card}>
+      <h2>{currentPlace.name}</h2>
+      <p style={styles.description}>
+        Activity: {currentPlace.description || currentPlace.name}
+      </p>
+      <p style={styles.description}>
+        Address: {currentPlace.address || "N/A"}
+      </p>
+      {currentPlace.website_url && (
+        <p>
+          <a
+            href={currentPlace.website_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Visit Website
+          </a>
+        </p>
+      )}
+      <div style={styles.buttonRow}>
+        <button onClick={onNo} style={styles.noButton}>
+          No
+        </button>
+        <button onClick={onYes} style={styles.yesButton}>
+          Yes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------
+// I) CELEBRATION POPUP
 // ---------------------------------------------------
 function CelebrationAnimation() {
   return (
@@ -420,7 +501,7 @@ function CelebrationAnimation() {
 }
 
 // ---------------------------------------------------
-// STYLES
+// J) STYLES
 // ---------------------------------------------------
 const styles = {
   container: {
@@ -456,7 +537,6 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     gap: "20px",
-    marginBottom: "20px",
   },
   yesButton: {
     backgroundColor: "#4CAF50",
