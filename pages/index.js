@@ -12,43 +12,46 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Flow logic
+  // Flow
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
-  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
+  const [mode, setMode] = useState("categories"); // "categories" | "subcategories" | "places"
 
-  // Selections
+  // Current selections
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches
+  // Matches & deck
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Match deck overlay
+  // For the match deck overlay
   const [matchDeckOpen, setMatchDeckOpen] = useState(false);
+  // If a new match occurs while deck is closed, we increment newMatchesCount
   const [newMatchesCount, setNewMatchesCount] = useState(0);
 
-  // Subcategory search
+  // Subcategory search (like “food”)
   const [searchTerm, setSearchTerm] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  // Load categories & subcategories on mount
+  // Load data on mount
   useEffect(() => {
     loadBaseData();
   }, []);
 
   async function loadBaseData() {
     try {
+      // categories
       const { data: catData, error: catErr } = await supabase
         .from("categories")
         .select("*")
         .order("weight", { ascending: false });
       if (catErr) throw catErr;
 
+      // subcategories
       const { data: subData, error: subErr } = await supabase
         .from("subcategories")
         .select("*")
@@ -62,28 +65,32 @@ export default function Home() {
     }
   }
 
-  // Search logic: combine categories + subcategories
+  // Search: combine categories + subcategories for suggestions
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
       return;
     }
     const lower = searchTerm.toLowerCase();
+
     const catMatches = categories
       .filter((c) => c.name.toLowerCase().includes(lower))
       .map((c) => ({ type: "category", name: c.name, id: c.id }));
+
     const subMatches = subcategories
       .filter((s) => s.name.toLowerCase().includes(lower))
       .map((s) => ({ type: "subcategory", name: s.name, id: s.id }));
+
     const combined = [...catMatches, ...subMatches];
     setSearchSuggestions(combined.slice(0, 5));
   }, [searchTerm, categories, subcategories]);
 
-  // Pick search suggestion => jump user
   function pickSearchSuggestion(sug) {
     setSearchTerm(sug.name);
     setShowSearchSuggestions(false);
+
     if (sug.type === "category") {
+      // find cat index, jump user
       const idx = categories.findIndex((c) => c.id === sug.id);
       if (idx !== -1) {
         setCatIndex(idx);
@@ -111,7 +118,6 @@ export default function Home() {
     }
   }
 
-  // Override "Yes" for direct jump
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -124,6 +130,8 @@ export default function Home() {
     const subObj = subcategories.find((x) => x.id === subId);
     if (!subObj) return;
     setSelectedSubcategory(subObj);
+
+    // bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -174,7 +182,6 @@ export default function Home() {
     }
     return null;
   }
-
   function getBackgroundImage(url) {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
@@ -200,6 +207,8 @@ export default function Home() {
   async function handleYesSubcategory() {
     if (!currentSubcat) return;
     setSelectedSubcategory(currentSubcat);
+
+    // bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -219,7 +228,6 @@ export default function Home() {
   function handleNoSubcategory() {
     const next = subIndex + 1;
     if (next >= scList.length) {
-      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -276,7 +284,7 @@ export default function Home() {
     }
   }
 
-  // Go back & Reshuffle
+  // Go back & reshuffle
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -300,7 +308,7 @@ export default function Home() {
     setMatchDeckOpen(false);
   }
 
-  // Current card
+  // The current card
   const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
@@ -313,22 +321,20 @@ export default function Home() {
       </div>
     );
   }
-  const bgImage = getBackgroundImage(currentCard.image_url);
 
-  // Render
+  const bgImage = getBackgroundImage(currentCard.image_url);
+  const currentPlace = places[placeIndex] || null;
+
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* Top row => Subcategory search on left, match deck on right */}
+
+        {/* TOP ROW: MATCHES button in center, "USA -> Baltimore" text & search bar on the right */}
         <div style={styles.topRow}>
-          <SubcategorySearchBar
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            suggestions={searchSuggestions}
-            showSuggestions={showSearchSuggestions}
-            setShowSuggestions={setShowSearchSuggestions}
-            onPick={pickSearchSuggestion}
-          />
+          {/* blank left side */}
+          <div style={styles.topLeftEmpty}></div>
+
+          {/* matches button in center */}
           <MatchedDeckButton
             matches={matches}
             newMatchesCount={newMatchesCount}
@@ -336,11 +342,24 @@ export default function Home() {
             setMatchDeckOpen={setMatchDeckOpen}
             setNewMatchesCount={setNewMatchesCount}
           />
+
+          {/* right side => "USA->Baltimore" + subcategory search below it */}
+          <div style={styles.topRightArea}>
+            <div style={styles.usaBaltimoreText}>USA -> Baltimore</div>
+            <SubcategorySearchBar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              suggestions={searchSuggestions}
+              showSuggestions={showSearchSuggestions}
+              setShowSuggestions={setShowSearchSuggestions}
+              onPick={pickSearchSuggestion}
+            />
+          </div>
         </div>
 
         <div style={styles.centerContent}></div>
 
-        {/* Bottom row => card name, possibly place neighborhood, yes/no */}
+        {/* Bottom row => card name, maybe place neighborhood, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
           {mode === "places" && currentPlace?.neighborhood && (
@@ -364,7 +383,6 @@ export default function Home() {
           Reshuffle
         </button>
 
-        {/* If match deck open => overlay */}
         {matchDeckOpen && (
           <MatchDeckOverlay
             matches={matches}
@@ -385,7 +403,7 @@ export default function Home() {
     </div>
   );
 
-  // unify no / yes
+  // unify "No"/"Yes"
   function handleNo() {
     if (mode === "places") {
       handleNoPlace();
@@ -406,14 +424,14 @@ export default function Home() {
   }
 }
 
-// SubcategorySearchBar
+// SUBCATEGORY SEARCH
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
   suggestions,
   showSuggestions,
   setShowSuggestions,
-  onPick,
+  onPick
 }) {
   function handleFocus() {
     if (searchTerm) setShowSuggestions(true);
@@ -423,7 +441,6 @@ function SubcategorySearchBar({
       setShowSuggestions(false);
     }, 200);
   }
-
   return (
     <div style={styles.searchBarContainer}>
       <input
@@ -457,13 +474,13 @@ function SubcategorySearchBar({
   );
 }
 
-// Matched Deck button
+// MATCHED DECK BUTTON
 function MatchedDeckButton({
   matches,
   newMatchesCount,
   matchDeckOpen,
   setMatchDeckOpen,
-  setNewMatchesCount,
+  setNewMatchesCount
 }) {
   return (
     <div style={styles.matchDeckBtnContainer}>
@@ -480,7 +497,7 @@ function MatchedDeckButton({
   );
 }
 
-// Match deck overlay
+// MATCH DECK OVERLAY
 function MatchDeckOverlay({ matches, onClose }) {
   return (
     <div style={styles.matchDeckOverlay}>
@@ -506,7 +523,7 @@ function MatchDeckOverlay({ matches, onClose }) {
   );
 }
 
-// "MATCH!" celebration
+// "MATCH" CELEBRATION
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -527,7 +544,7 @@ const styles = {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
     position: "relative",
-    fontFamily: "sans-serif",
+    fontFamily: "sans-serif"
   },
   overlay: {
     width: "100%",
@@ -536,42 +553,32 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    position: "relative",
+    position: "relative"
   },
   topRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: "10px 20px",
+    padding: "10px 20px"
   },
-  searchBarContainer: {
-    position: "relative",
+  topLeftEmpty: {
+    width: "20%", // just blank
+    minWidth: "100px"
   },
-  searchInput: {
-    width: "220px",
-    padding: "6px",
-    borderRadius: "4px",
-    border: "1px solid #888",
+  topRightArea: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end"
   },
-  suggestionList: {
-    position: "absolute",
-    top: "36px",
-    left: 0,
-    width: "220px",
-    backgroundColor: "#333",
-    borderRadius: "4px",
-    zIndex: 9999,
-    maxHeight: "140px",
-    overflowY: "auto",
-  },
-  suggestionItem: {
-    padding: "5px",
-    color: "#fff",
-    cursor: "pointer",
-    borderBottom: "1px solid #555",
+  usaBaltimoreText: {
+    color: "#ffd700",
+    fontSize: "1.2em",
+    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+    marginBottom: "8px"
   },
   matchDeckBtnContainer: {
-    position: "relative",
+    width: "60%", 
+    textAlign: "center"
   },
   matchDeckButton: {
     backgroundColor: "#ff9800",
@@ -580,20 +587,47 @@ const styles = {
     padding: "8px 16px",
     borderRadius: "5px",
     cursor: "pointer",
+    fontSize: "1em"
+  },
+  searchBarContainer: {
+    position: "relative"
+  },
+  searchInput: {
+    width: "220px",
+    padding: "6px",
+    borderRadius: "4px",
+    border: "1px solid #888"
+  },
+  suggestionList: {
+    position: "absolute",
+    top: "35px",
+    left: 0,
+    width: "220px",
+    backgroundColor: "#333",
+    borderRadius: "4px",
+    zIndex: 9999,
+    maxHeight: "140px",
+    overflowY: "auto"
+  },
+  suggestionItem: {
+    padding: "5px",
+    color: "#fff",
+    cursor: "pointer",
+    borderBottom: "1px solid #555"
   },
   centerContent: {
-    flexGrow: 1,
+    flexGrow: 1
   },
   bottomTextRow: {
     textAlign: "center",
-    marginBottom: "70px",
+    marginBottom: "70px"
   },
   currentCardName: {
     color: "#fff",
     fontSize: "3em",
     textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
     margin: 0,
-    textTransform: "uppercase",
+    textTransform: "uppercase"
   },
   neighborhoodText: {
     color: "#FFD700",
@@ -601,13 +635,13 @@ const styles = {
     fontStyle: "italic",
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     marginTop: "10px",
-    marginBottom: "15px",
+    marginBottom: "15px"
   },
   yesNoRow: {
     marginTop: "20px",
     display: "flex",
     justifyContent: "center",
-    gap: "40px",
+    gap: "40px"
   },
   noButton: {
     backgroundColor: "#f44336",
@@ -616,7 +650,7 @@ const styles = {
     padding: "12px 24px",
     borderRadius: "5px",
     fontSize: "1.1em",
-    cursor: "pointer",
+    cursor: "pointer"
   },
   yesButton: {
     backgroundColor: "#4CAF50",
@@ -625,7 +659,7 @@ const styles = {
     padding: "12px 24px",
     borderRadius: "5px",
     fontSize: "1.1em",
-    cursor: "pointer",
+    cursor: "pointer"
   },
   goBackButton: {
     position: "absolute",
@@ -636,7 +670,7 @@ const styles = {
     color: "#fff",
     border: "none",
     borderRadius: "5px",
-    cursor: "pointer",
+    cursor: "pointer"
   },
   reshuffleButton: {
     position: "absolute",
@@ -647,7 +681,7 @@ const styles = {
     color: "#fff",
     border: "none",
     borderRadius: "5px",
-    cursor: "pointer",
+    cursor: "pointer"
   },
   matchDeckOverlay: {
     position: "fixed",
@@ -659,7 +693,7 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10000,
+    zIndex: 10000
   },
   matchDeckBox: {
     backgroundColor: "#fff",
@@ -668,7 +702,7 @@ const styles = {
     width: "300px",
     maxHeight: "70vh",
     overflowY: "auto",
-    position: "relative",
+    position: "relative"
   },
   closeDeckButton: {
     position: "absolute",
@@ -679,7 +713,7 @@ const styles = {
     border: "none",
     padding: "5px 10px",
     borderRadius: "4px",
-    cursor: "pointer",
+    cursor: "pointer"
   },
   celebrationOverlay: {
     position: "fixed",
@@ -691,12 +725,12 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 9999,
+    zIndex: 9999
   },
   celebrationBox: {
     backgroundColor: "#fff",
     padding: "30px",
     borderRadius: "10px",
-    textAlign: "center",
-  },
+    textAlign: "center"
+  }
 };
