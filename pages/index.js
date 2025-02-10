@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Create the Supabase client from env variables
+// Initialize the Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -9,70 +9,72 @@ const supabase = createClient(
 
 export default function Home() {
   // -------------------
-  //      DATA STATE
+  //   State: data arrays
   // -------------------
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
-  const [places, setPlaces] = useState([]);
 
-  // 'mode' controls the current layer: "categories", "subcategories", "places", or "matchDeck"
+  // We do NOT store all places in state. Instead, we fetch places for a subcategory on demand.
+
+  // Current layer: "categories", "subcategories", "places", or "matchDeck"
   const [mode, setMode] = useState("categories");
 
-  // Current list of items to swipe through + current index
+  // The items we’re currently swiping through
   const [currentList, setCurrentList] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Track user’s chosen Category/Subcategory for breadcrumbs
+  // User-chosen items for breadcrumbs
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches array: places user said "Yes" to (final step)
+  // For final “matched” places, plus favorites
   const [matches, setMatches] = useState([]);
-
-  // Favorites array: items user archives from the match deck
   const [favorites, setFavorites] = useState([]);
 
-  // Show/hide the celebratory animation
+  // Celebration animation
   const [showCelebration, setShowCelebration] = useState(false);
 
   // Error messaging
   const [errorMsg, setErrorMsg] = useState(null);
 
   // -------------------
-  //   SKIP TRACKING
+  //   Skip Tracking
   // -------------------
-  // We store IDs of items the user clicked "No" on so they don't reappear.
+  // So we don't repeat an item after "No," we store IDs here:
   const [skippedCategories, setSkippedCategories] = useState([]);
   const [skippedSubcategories, setSkippedSubcategories] = useState([]);
   const [skippedPlaces, setSkippedPlaces] = useState([]);
 
   // -------------------
-  //    FETCH DATA
+  //   Initial Fetch of Categories & Subcategories
   // -------------------
   useEffect(() => {
-    const fetchTables = async () => {
+    const fetchCategoriesAndSubs = async () => {
       try {
-        // Fetch all tables in parallel
-        const [catRes, subRes, placesRes] = await Promise.all([
-          supabase.from("categories").select("*"),
-          supabase.from("subcategories").select("*"),
-          supabase.from("places").select("*"),
-        ]);
+        // Get all categories
+        const { data: catData, error: catError } = await supabase
+          .from("categories")
+          .select("*")
+          .order("weight", { ascending: false }); // Highest weight first
 
-        if (catRes.error) throw catRes.error;
-        if (subRes.error) throw subRes.error;
-        if (placesRes.error) throw placesRes.error;
+        if (catError) throw catError;
 
-        setCategories(catRes.data || []);
-        setSubcategories(subRes.data || []);
-        setPlaces(placesRes.data || []);
+        // Get all subcategories
+        const { data: subData, error: subError } = await supabase
+          .from("subcategories")
+          .select("*")
+          .order("weight", { ascending: false });
 
-        // Start with categories
-        setMode("categories");
-        // Filter out any skipped categories (none yet, but let's be consistent)
-        const filteredCats = (catRes.data || []).filter(
+        if (subError) throw subError;
+
+        setCategories(catData || []);
+        setSubcategories(subData || []);
+
+        // Start swiping on categories (filter out any skipped, if any)
+        const filteredCats = (catData || []).filter(
           (c) => !skippedCategories.includes(c.id)
         );
+        setMode("categories");
         setCurrentList(filteredCats);
         setCurrentIndex(0);
       } catch (error) {
@@ -80,72 +82,53 @@ export default function Home() {
       }
     };
 
-    fetchTables();
-  }, []);
+    fetchCategoriesAndSubs();
+  }, []); // run once on mount
 
   // -------------------
   //   NAVIGATION
   // -------------------
-  const handleGoBack = () => {
+  // GO BACK
+  const handleGoBack = async () => {
     if (mode === "places") {
-      // Return to subcategories
-      if (selectedCategory) {
-        // Filter subcategories for this category, excluding any we skipped
-        const filteredSubs = subcategories
-          .filter((sub) => sub.category_id === selectedCategory.id)
-          .filter((sub) => !skippedSubcategories.includes(sub.id));
-
-        setMode("subcategories");
-        setCurrentList(filteredSubs);
-        setCurrentIndex(0);
+      // Go back to subcategories for the selectedCategory
+      if (!selectedCategory) {
+        alert("No selected category found. Returning to categories...");
+        goToCategories();
+        return;
       }
+      goToSubcategories(selectedCategory);
     } else if (mode === "subcategories") {
-      // Return to categories, excluding skipped
-      const filteredCats = categories.filter(
-        (c) => !skippedCategories.includes(c.id)
-      );
-      setMode("categories");
-      setCurrentList(filteredCats);
-      setCurrentIndex(0);
-      // We keep the selectedSubcategory null because we're back at categories
+      // Go back to categories
+      goToCategories();
       setSelectedSubcategory(null);
     } else if (mode === "matchDeck") {
-      // Leaving match deck -> return to categories (or subcategories if you prefer)
-      const filteredCats = categories.filter(
-        (c) => !skippedCategories.includes(c.id)
-      );
-      setMode("categories");
-      setCurrentList(filteredCats);
-      setCurrentIndex(0);
+      // Return to categories or subcategories if you want, but let's go categories
+      goToCategories();
       setSelectedCategory(null);
       setSelectedSubcategory(null);
     } else {
-      // Already at categories
       alert("You're already at the top-level categories!");
     }
   };
 
-  // Reset everything (including skip arrays)
-  const handleReshuffle = () => {
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setMode("categories");
-    setErrorMsg(null);
-    setCurrentIndex(0);
-    // Clear skip arrays
+  // RESHUFFLE everything (clear skip arrays, go back to categories)
+  const handleReshuffle = async () => {
     setSkippedCategories([]);
     setSkippedSubcategories([]);
     setSkippedPlaces([]);
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setMode("categories");
+    setMatches([]);
+    setFavorites([]);
 
-    // Reset the matches & favorites? (optional)
-    // setMatches([]);
-    // setFavorites([]);
-
-    // Refresh the filtered categories
+    // refetch categories from state (since we already loaded them once)
     const filteredCats = categories.filter(
       (c) => !skippedCategories.includes(c.id)
     );
     setCurrentList(filteredCats);
+    setCurrentIndex(0);
   };
 
   // Show the match deck
@@ -154,46 +137,88 @@ export default function Home() {
   };
 
   // -------------------
-  //    SWIPE LOGIC
+  //   HELPER: Go to Categories
   // -------------------
-  const handleYes = () => {
-    if (mode === "categories") {
-      // Chose a category
-      const acceptedCategory = currentList[currentIndex];
-      setSelectedCategory(acceptedCategory);
+  const goToCategories = () => {
+    setMode("categories");
+    const filteredCats = categories.filter(
+      (c) => !skippedCategories.includes(c.id)
+    );
+    setCurrentList(filteredCats);
+    setCurrentIndex(0);
+  };
 
-      // Filter subcategories for that category, excluding skipped
-      const filteredSubs = subcategories
-        .filter((sub) => sub.category_id === acceptedCategory.id)
-        .filter((sub) => !skippedSubcategories.includes(sub.id));
+  // -------------------
+  //   HELPER: Go to Subcategories
+  // -------------------
+  const goToSubcategories = (category) => {
+    // filter subcategories by category_id
+    const filteredSubs = subcategories
+      .filter((sub) => sub.category_id === category.id)
+      .filter((sub) => !skippedSubcategories.includes(sub.id));
 
-      setMode("subcategories");
-      setCurrentList(filteredSubs);
-      setCurrentIndex(0);
-    } else if (mode === "subcategories") {
-      // Chose a subcategory
-      const acceptedSub = currentList[currentIndex];
-      setSelectedSubcategory(acceptedSub);
+    setMode("subcategories");
+    setCurrentList(filteredSubs);
+    setCurrentIndex(0);
+  };
 
-      // Filter places for that subcategory, excluding skipped
-      const filteredPlaces = places
-        .filter((pl) => pl.subcategory_id === acceptedSub.id)
-        .filter((pl) => !skippedPlaces.includes(pl.id));
+  // -------------------
+  //   HELPER: Fetch & Go to Places for a Subcategory
+  // -------------------
+  const goToPlaces = async (subcategory) => {
+    try {
+      // We do a bridging query: place_subcategories -> places(*)
+      // Using the Supabase "foreign table" syntax: "places(*)"
+      const { data, error } = await supabase
+        .from("place_subcategories")
+        .select("place_id, places(*)")
+        .eq("subcategory_id", subcategory.id);
+
+      if (error) throw error;
+
+      // `data` is an array of { place_id, places: {...} } objects
+      // Map them to just the place object, ignoring any that are in skippedPlaces
+      const placeItems = data
+        .map((row) => row.places)
+        .filter((pl) => pl && !skippedPlaces.includes(pl.id));
+
+      // Sort by weight descending (optional)
+      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
       setMode("places");
-      setCurrentList(filteredPlaces);
+      setCurrentList(placeItems);
       setCurrentIndex(0);
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  // -------------------
+  //   SWIPE LOGIC: Yes / No
+  // -------------------
+  const handleYes = async () => {
+    const currentItem = currentList[currentIndex];
+    if (!currentItem) return;
+
+    if (mode === "categories") {
+      // user chose this category
+      setSelectedCategory(currentItem);
+      // go to subcategories
+      goToSubcategories(currentItem);
+    } else if (mode === "subcategories") {
+      // user chose this subcategory
+      setSelectedSubcategory(currentItem);
+      // fetch places for this subcategory
+      await goToPlaces(currentItem);
     } else if (mode === "places") {
-      // Final match scenario
-      const matchedPlace = currentList[currentIndex];
+      // final match
+      const matchedPlace = currentItem;
 
-      // 1) Show celebration animation
+      // show celebration
       setShowCelebration(true);
-      setTimeout(() => {
-        setShowCelebration(false);
-      }, 2000);
+      setTimeout(() => setShowCelebration(false), 2000);
 
-      // 2) Add to matches deck
+      // add to matches
       setMatches((prev) => [
         ...prev,
         {
@@ -202,7 +227,7 @@ export default function Home() {
         },
       ]);
 
-      // 3) Move to next place card
+      // move to next place
       const nextIndex = currentIndex + 1;
       if (nextIndex < currentList.length) {
         setCurrentIndex(nextIndex);
@@ -213,19 +238,19 @@ export default function Home() {
   };
 
   const handleNo = () => {
-    if (!currentList[currentIndex]) return;
-    const itemId = currentList[currentIndex].id;
+    const currentItem = currentList[currentIndex];
+    if (!currentItem) return;
 
-    // Mark this item as skipped
+    // Mark item as skipped
     if (mode === "categories") {
-      setSkippedCategories((prev) => [...prev, itemId]);
+      setSkippedCategories((prev) => [...prev, currentItem.id]);
     } else if (mode === "subcategories") {
-      setSkippedSubcategories((prev) => [...prev, itemId]);
+      setSkippedSubcategories((prev) => [...prev, currentItem.id]);
     } else if (mode === "places") {
-      setSkippedPlaces((prev) => [...prev, itemId]);
+      setSkippedPlaces((prev) => [...prev, currentItem.id]);
     }
 
-    // Move to the next item
+    // Move to next
     const nextIndex = currentIndex + 1;
     if (nextIndex < currentList.length) {
       setCurrentIndex(nextIndex);
@@ -234,31 +259,11 @@ export default function Home() {
     }
   };
 
+  // Current card
   const currentCard = currentList[currentIndex];
 
   // -------------------
-  //   MATCH DECK LOGIC
-  // -------------------
-  const handleRateMatch = (placeId, newRating) => {
-    setMatches((prevMatches) =>
-      prevMatches.map((m) =>
-        m.id === placeId ? { ...m, rating: newRating } : m
-      )
-    );
-  };
-
-  const handleArchive = (placeId) => {
-    // Move the matched place to "favorites"
-    const placeToArchive = matches.find((m) => m.id === placeId);
-    if (placeToArchive) {
-      setFavorites((prev) => [...prev, placeToArchive]);
-    }
-    // Optionally remove from matches
-    // setMatches(prev => prev.filter(m => m.id !== placeId));
-  };
-
-  // -------------------
-  //   RENDER MODES
+  //   MATCH DECK VIEW
   // -------------------
   if (mode === "matchDeck") {
     return (
@@ -267,6 +272,7 @@ export default function Home() {
         <button onClick={handleGoBack} style={styles.goBackButton}>
           Go Back
         </button>
+
         {matches.length === 0 ? (
           <p>You have no matches yet.</p>
         ) : (
@@ -283,12 +289,11 @@ export default function Home() {
                     value={m.rating || 0}
                     onChange={(e) => handleRateMatch(m.id, Number(e.target.value))}
                   >
-                    <option value={0}>0</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3</option>
-                    <option value={4}>4</option>
-                    <option value={5}>5</option>
+                    {[0, 1, 2, 3, 4, 5].map((val) => (
+                      <option value={val} key={val}>
+                        {val}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <button onClick={() => handleArchive(m.id)} style={styles.archiveButton}>
@@ -299,7 +304,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Favorites bar */}
         {favorites.length > 0 && (
           <div style={styles.favoritesBar}>
             <h3>Favorites:</h3>
@@ -317,18 +321,17 @@ export default function Home() {
   }
 
   // -------------------
-  //  MAIN SWIPE PAGE
+  //   MAIN SWIPE PAGE
   // -------------------
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>dialN</h1>
 
-      {/* Notification-style Matches Button */}
+      {/* Matches button with count */}
       <button style={styles.matchesBtn} onClick={handleShowMatches}>
         Matches ({matches.length})
       </button>
 
-      {/* Show error if any */}
       {errorMsg && <p style={{ color: "red" }}>Error: {errorMsg}</p>}
 
       {/* Breadcrumb */}
@@ -341,31 +344,37 @@ export default function Home() {
         )}
       </div>
 
-      {/* Current card */}
+      {/* Current Card */}
       {currentCard ? (
         <div style={styles.card}>
+          <h2>{currentCard.name}</h2>
           {mode === "categories" && (
-            <>
-              <h2>{currentCard.name}</h2>
-              <p style={styles.description}>
-                This is a category: {currentCard.name}
-              </p>
-            </>
+            <p style={styles.description}>This is a category: {currentCard.name}</p>
           )}
           {mode === "subcategories" && (
-            <>
-              <h2>{currentCard.name}</h2>
-              <p style={styles.description}>
-                This is a subcategory: {currentCard.name}
-              </p>
-            </>
+            <p style={styles.description}>
+              This is a subcategory: {currentCard.name}
+            </p>
           )}
           {mode === "places" && (
             <>
-              <h2>{currentCard.name}</h2>
               <p style={styles.description}>
-                Location/Activity: {currentCard.name}
+                Activity: {currentCard.description || currentCard.name}
               </p>
+              <p style={styles.description}>
+                Address: {currentCard.address || "N/A"}
+              </p>
+              {currentCard.website_url && (
+                <p>
+                  <a
+                    href={currentCard.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Visit Website
+                  </a>
+                </p>
+              )}
             </>
           )}
         </div>
@@ -393,15 +402,14 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Celebration Animation */}
       {showCelebration && <CelebrationAnimation />}
     </div>
   );
 }
 
-// -------------------
-// CELEBRATION POPUP
-// -------------------
+// ---------------------------------------------------
+// Celebration popup
+// ---------------------------------------------------
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -413,9 +421,35 @@ function CelebrationAnimation() {
   );
 }
 
-// -------------------
-//     STYLES
-// -------------------
+// ---------------------------------------------------
+// Additional Handlers for Matches
+// ---------------------------------------------------
+function handleRateMatch(placeId, newRating) {
+  // `this` is outside component scope, so we define inside the component
+  // Moved into the main component above: see "const handleRateMatch = ..."
+}
+
+// We'll define them directly in the main component for scoping:
+
+// But let's define them in the main component:
+
+/* Pseudocode:
+function handleRateMatch(placeId, newRating) {
+  setMatches(prevMatches =>
+    prevMatches.map(m =>
+      m.id === placeId ? { ...m, rating: newRating } : m
+    )
+  );
+}
+
+function handleArchive(placeId) {
+  // Move from matches to favorites, if desired
+}
+*/
+
+// ---------------------------------------------------
+//   STYLES
+// ---------------------------------------------------
 const styles = {
   container: {
     maxWidth: "600px",
@@ -518,7 +552,6 @@ const styles = {
     padding: "30px",
     borderRadius: "10px",
     textAlign: "center",
-    animation: "popIn 0.5s ease",
   },
   matchCard: {
     backgroundColor: "#eee",
