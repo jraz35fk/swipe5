@@ -9,77 +9,85 @@ const supabase = createClient(
 
 export default function HomePage() {
   const [categories, setCategories] = useState([]);
-  const [selectedPath, setSelectedPath] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [selectionPath, setSelectionPath] = useState([]);
   const [currentSelection, setCurrentSelection] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
+    // Fetch top-level categories on load
     const fetchCategories = async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("categories").select("*");
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .order("ranking_score", { ascending: false });
+      
       if (error) {
         setErrorMessage("Failed to load categories.");
         console.error("Error fetching categories:", error);
       } else {
         setCategories(data);
-        setCurrentSelection(data[0]); // Show first category initially
+        setCurrentSelection(data[0]);
       }
       setLoading(false);
     };
-
-    if (typeof window !== "undefined") {
-      fetchCategories();
-    }
+    fetchCategories();
   }, []);
 
-  // Handle "Yes" selection (Drill Down)
+  // Handle "Yes" selection to drill down further
   const handleYes = async () => {
     if (!currentSelection) return;
 
-    setSelectedPath((prev) => [...prev, currentSelection]);
+    setSelectionPath((prev) => [...prev, currentSelection]);
 
-    const { data: subcategories, error } = await supabase
-      .from("categories")
+    const { data: subcategories, error: subcatError } = await supabase
+      .from("subcategories")
       .select("*")
-      .eq("parent_id", currentSelection.id);
+      .eq("category_id", currentSelection.id)
+      .order("ranking_score", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching subcategories:", error);
+    if (subcatError) {
+      console.error("Error fetching subcategories:", subcatError);
     } else if (subcategories.length > 0) {
-      setCategories(subcategories);
-      setCurrentSelection(subcategories[0]); // Show first subcategory
-    } else {
-      const { data: places, error: placesError } = await supabase
-        .from("places")
-        .select("*")
-        .eq("category_id", currentSelection.id);
+      setSubcategories(subcategories);
+      setCurrentSelection(subcategories[0]);
+      return;
+    }
 
-      if (placesError) {
-        console.error("Error fetching places:", placesError);
-      } else {
-        setCategories(places);
-        setCurrentSelection(places[0]); // Show first place if no subcategories
-      }
+    // If no subcategories, fetch activities
+    const { data: activities, error: actError } = await supabase
+      .from("places")
+      .select("*")
+      .eq("subcategory_id", currentSelection.id)
+      .order("ranking_score", { ascending: false });
+
+    if (actError) {
+      console.error("Error fetching activities:", actError);
+    } else {
+      setActivities(activities);
+      setCurrentSelection(activities[0]);
     }
   };
 
-  // Handle "No" selection (Skip to next category)
+  // Handle "No" selection to skip
   const handleNo = () => {
     if (!categories.length || !currentSelection) return;
     const currentIndex = categories.findIndex((c) => c.id === currentSelection.id);
     if (currentIndex < categories.length - 1) {
-      setCurrentSelection(categories[currentIndex + 1]); // Move to next category
+      setCurrentSelection(categories[currentIndex + 1]);
     } else {
       setErrorMessage("No more options available.");
     }
   };
 
-  // Handle "Go Back" action
+  // Handle "Go Back"
   const handleGoBack = () => {
-    if (selectedPath.length > 0) {
-      const prevSelection = selectedPath[selectedPath.length - 1];
-      setSelectedPath((prev) => prev.slice(0, -1));
+    if (selectionPath.length > 0) {
+      const prevSelection = selectionPath.pop();
+      setSelectionPath([...selectionPath]);
       setCurrentSelection(prevSelection);
     }
   };
@@ -88,9 +96,9 @@ export default function HomePage() {
     <div className="h-screen flex flex-col items-center justify-center p-4">
       {/* Breadcrumb Navigation */}
       <div className="text-left w-full max-w-md mb-2">
-        {selectedPath.length > 0 && (
+        {selectionPath.length > 0 && (
           <p className="text-gray-600 text-sm">
-            {selectedPath.map((p, index) => (
+            {selectionPath.map((p, index) => (
               <span key={index}>{p.name} &gt; </span>
             ))}
           </p>
@@ -119,7 +127,7 @@ export default function HomePage() {
         <button
           className="bg-gray-500 text-white px-4 py-2 rounded"
           onClick={handleGoBack}
-          disabled={selectedPath.length === 0}
+          disabled={selectionPath.length === 0}
         >
           Go Back
         </button>
