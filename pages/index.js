@@ -12,32 +12,31 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Flow
+  // Flow logic
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
   const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
 
-  // Current selections
+  // Selections
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches & deck
+  // Matches
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // "Match Deck" UI
+  // Match deck overlay
   const [matchDeckOpen, setMatchDeckOpen] = useState(false);
-  const [newMatchesCount, setNewMatchesCount] = useState(0); 
-  // Increments whenever a new match is found and the deck is not currently open
+  const [newMatchesCount, setNewMatchesCount] = useState(0);
 
   // Subcategory search
   const [searchTerm, setSearchTerm] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  // On mount, load categories + subcategories
+  // Load categories & subcategories on mount
   useEffect(() => {
     loadBaseData();
   }, []);
@@ -63,7 +62,7 @@ export default function Home() {
     }
   }
 
-  // searchTerm => suggestions from categories + subcategories
+  // Search logic: combine categories + subcategories
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
@@ -73,34 +72,29 @@ export default function Home() {
     const catMatches = categories
       .filter((c) => c.name.toLowerCase().includes(lower))
       .map((c) => ({ type: "category", name: c.name, id: c.id }));
-
     const subMatches = subcategories
       .filter((s) => s.name.toLowerCase().includes(lower))
       .map((s) => ({ type: "subcategory", name: s.name, id: s.id }));
-
     const combined = [...catMatches, ...subMatches];
-    // just 5 suggestions
     setSearchSuggestions(combined.slice(0, 5));
   }, [searchTerm, categories, subcategories]);
 
-  // When user picks a suggestion
+  // Pick search suggestion => jump user
   function pickSearchSuggestion(sug) {
     setSearchTerm(sug.name);
     setShowSearchSuggestions(false);
     if (sug.type === "category") {
-      // find index in categories
       const idx = categories.findIndex((c) => c.id === sug.id);
       if (idx !== -1) {
         setCatIndex(idx);
         setMode("categories");
-        // then do "Yes" on that category
         handleYesCategoryOverride(idx);
       }
-    } else if (sug.type === "subcategory") {
-      // we find subcat's category => jump them
-      const subcatObj = subcategories.find((x) => x.id === sug.id);
-      if (!subcatObj) return;
-      const catId = subcatObj.category_id;
+    } else {
+      // subcategory
+      const subObj = subcategories.find((x) => x.id === sug.id);
+      if (!subObj) return;
+      const catId = subObj.category_id;
       const catIdx = categories.findIndex((c) => c.id === catId);
       if (catIdx !== -1) {
         setCatIndex(catIdx);
@@ -111,14 +105,13 @@ export default function Home() {
         const scIdx = scList.findIndex((x) => x.id === sug.id);
         if (scIdx !== -1) {
           setSubIndex(scIdx);
-          // then do "Yes" logic on subcategory
-          handleYesSubcategoryOverride(catId, sug.id);
+          handleYesSubcategoryOverride(scList[scIdx].id);
         }
       }
     }
   }
 
-  // Overridden "Yes" logic to jump directly
+  // Override "Yes" for direct jump
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -127,12 +120,10 @@ export default function Home() {
     setPlaceIndex(0);
     setMode("subcategories");
   }
-  async function handleYesSubcategoryOverride(catId, subId) {
-    const subObj = subcategories.find((s) => s.id === subId);
+  async function handleYesSubcategoryOverride(subId) {
+    const subObj = subcategories.find((x) => x.id === subId);
     if (!subObj) return;
     setSelectedSubcategory(subObj);
-
-    // fetch bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -141,7 +132,6 @@ export default function Home() {
       if (error) throw error;
 
       const placeItems = (data || []).map((row) => row.places);
-      // sort by weight desc
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
       setPlaces(placeItems);
@@ -160,10 +150,8 @@ export default function Home() {
   }
   const scList = getSubcatsForCategory(selectedCategory);
   const currentSubcat = scList[subIndex] || null;
-
   const currentPlace = places[placeIndex] || null;
 
-  // Return card data
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
@@ -191,6 +179,7 @@ export default function Home() {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
+  // Category layer
   function handleYesCategory() {
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
@@ -201,16 +190,16 @@ export default function Home() {
   function handleNoCategory() {
     const next = catIndex + 1;
     if (next >= categories.length) {
-      alert("No more categories left");
+      alert("No more categories left!");
     } else {
       setCatIndex(next);
     }
   }
 
+  // Subcategory layer
   async function handleYesSubcategory() {
     if (!currentSubcat) return;
     setSelectedSubcategory(currentSubcat);
-    // bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -230,9 +219,10 @@ export default function Home() {
   function handleNoSubcategory() {
     const next = subIndex + 1;
     if (next >= scList.length) {
+      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
-        alert("No more categories");
+        alert("No more categories left!");
         setMode("categories");
       } else {
         setCatIndex(nextCat);
@@ -243,14 +233,13 @@ export default function Home() {
     }
   }
 
+  // Places layer
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    // We add to matches
     setMatches((prev) => [...prev, currentPlace]);
-    // increment newMatchesCount if the deck is not open
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
     }
@@ -275,7 +264,7 @@ export default function Home() {
     if (next >= scList.length) {
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
-        alert("No more categories!");
+        alert("No more categories left!");
         setMode("categories");
       } else {
         setCatIndex(nextCat);
@@ -287,6 +276,7 @@ export default function Home() {
     }
   }
 
+  // Go back & Reshuffle
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -304,16 +294,13 @@ export default function Home() {
     setSelectedSubcategory(null);
     setPlaces([]);
     setMode("categories");
-    // Clear search
     setSearchTerm("");
     setSearchSuggestions([]);
     setShowSearchSuggestions(false);
-    // close deck
     setMatchDeckOpen(false);
-    // no changes to matches though
   }
 
-  // The current card
+  // Current card
   const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
@@ -326,28 +313,13 @@ export default function Home() {
       </div>
     );
   }
-
   const bgImage = getBackgroundImage(currentCard.image_url);
 
-  // Left text: subcategories or places breadcrumb
-  function getLeftText() {
-    if (mode === "subcategories" && selectedCategory) {
-      return selectedCategory.name;
-    }
-    if (mode === "places" && selectedCategory && selectedSubcategory) {
-      return `${selectedCategory.name} -> ${selectedSubcategory.name}`;
-    }
-    return "";
-  }
-  const leftText = getLeftText();
-
-  // no top bar, just a search bar on the top-left, match deck top-right
-  // We'll place the search bar top-left, match deck button top-right
-  // We'll keep "USA -> Baltimore" text out for now or place it near the match deck
+  // Render
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* TOP ROW: search bar on left, match deck box on right */}
+        {/* Top row => Subcategory search on left, match deck on right */}
         <div style={styles.topRow}>
           <SubcategorySearchBar
             searchTerm={searchTerm}
@@ -357,24 +329,21 @@ export default function Home() {
             setShowSuggestions={setShowSearchSuggestions}
             onPick={pickSearchSuggestion}
           />
-          <div style={styles.topRightArea}>
-            <div style={styles.usaBaltimoreText}>USA -> Baltimore</div>
-            <MatchedDeckButton
-              matches={matches}
-              newMatchesCount={newMatchesCount}
-              matchDeckOpen={matchDeckOpen}
-              setMatchDeckOpen={setMatchDeckOpen}
-              setNewMatchesCount={setNewMatchesCount}
-            />
-          </div>
+          <MatchedDeckButton
+            matches={matches}
+            newMatchesCount={newMatchesCount}
+            matchDeckOpen={matchDeckOpen}
+            setMatchDeckOpen={setMatchDeckOpen}
+            setNewMatchesCount={setNewMatchesCount}
+          />
         </div>
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM ROW: card name, maybe place, yes/no */}
+        {/* Bottom row => card name, possibly place neighborhood, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
-          {(mode === "places" && currentPlace?.neighborhood) && (
+          {mode === "places" && currentPlace?.neighborhood && (
             <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
           )}
 
@@ -395,13 +364,13 @@ export default function Home() {
           Reshuffle
         </button>
 
-        {/* If matchDeckOpen => overlay with matches */}
+        {/* If match deck open => overlay */}
         {matchDeckOpen && (
           <MatchDeckOverlay
             matches={matches}
             onClose={() => {
               setMatchDeckOpen(false);
-              setNewMatchesCount(0); 
+              setNewMatchesCount(0);
             }}
           />
         )}
@@ -437,31 +406,30 @@ export default function Home() {
   }
 }
 
-// Subcategory search bar
+// SubcategorySearchBar
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
   suggestions,
   showSuggestions,
   setShowSuggestions,
-  onPick
+  onPick,
 }) {
   function handleFocus() {
-    if (searchTerm) {
-      setShowSuggestions(true);
-    }
+    if (searchTerm) setShowSuggestions(true);
   }
   function handleBlur() {
     setTimeout(() => {
       setShowSuggestions(false);
     }, 200);
   }
+
   return (
     <div style={styles.searchBarContainer}>
       <input
         style={styles.searchInput}
         type="text"
-        placeholder="Type something e.g. 'food'..."
+        placeholder="Type e.g. 'food'..."
         value={searchTerm}
         onChange={(e) => {
           setSearchTerm(e.target.value);
@@ -478,7 +446,9 @@ function SubcategorySearchBar({
               style={styles.suggestionItem}
               onClick={() => onPick(sug)}
             >
-              {sug.type === "category" ? `Category: ${sug.name}` : `Subcat: ${sug.name}`}
+              {sug.type === "category"
+                ? `Category: ${sug.name}`
+                : `Subcat: ${sug.name}`}
             </div>
           ))}
         </div>
@@ -493,7 +463,7 @@ function MatchedDeckButton({
   newMatchesCount,
   matchDeckOpen,
   setMatchDeckOpen,
-  setNewMatchesCount
+  setNewMatchesCount,
 }) {
   return (
     <div style={styles.matchDeckBtnContainer}>
@@ -510,20 +480,22 @@ function MatchedDeckButton({
   );
 }
 
-// Match Deck overlay
+// Match deck overlay
 function MatchDeckOverlay({ matches, onClose }) {
   return (
     <div style={styles.matchDeckOverlay}>
       <div style={styles.matchDeckBox}>
         <h2>Match Deck</h2>
-        <button onClick={onClose} style={styles.closeDeckButton}>Close</button>
+        <button onClick={onClose} style={styles.closeDeckButton}>
+          Close
+        </button>
         {matches.length === 0 ? (
           <p>No matches yet.</p>
         ) : (
           <ul>
             {matches.map((m, i) => (
               <li key={i}>
-                <strong>{m.name}</strong> 
+                <strong>{m.name}</strong>
                 {m.neighborhood && ` - ${m.neighborhood}`}
               </li>
             ))}
@@ -534,6 +506,7 @@ function MatchDeckOverlay({ matches, onClose }) {
   );
 }
 
+// "MATCH!" celebration
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -582,7 +555,7 @@ const styles = {
   },
   suggestionList: {
     position: "absolute",
-    top: "35px",
+    top: "36px",
     left: 0,
     width: "220px",
     backgroundColor: "#333",
@@ -597,16 +570,16 @@ const styles = {
     cursor: "pointer",
     borderBottom: "1px solid #555",
   },
-  topRightArea: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
+  matchDeckBtnContainer: {
+    position: "relative",
   },
-  usaBaltimoreText: {
-    color: "#ffd700",
-    fontSize: "1.2em",
-    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-    marginBottom: "8px",
+  matchDeckButton: {
+    backgroundColor: "#ff9800",
+    color: "#fff",
+    border: "none",
+    padding: "8px 16px",
+    borderRadius: "5px",
+    cursor: "pointer",
   },
   centerContent: {
     flexGrow: 1,
@@ -676,17 +649,6 @@ const styles = {
     borderRadius: "5px",
     cursor: "pointer",
   },
-  matchDeckBtnContainer: {
-    position: "relative",
-  },
-  matchDeckButton: {
-    backgroundColor: "#ff9800",
-    color: "#fff",
-    border: "none",
-    padding: "8px 16px",
-    borderRadius: "5px",
-    cursor: "pointer",
-  },
   matchDeckOverlay: {
     position: "fixed",
     top: 0,
@@ -706,9 +668,12 @@ const styles = {
     width: "300px",
     maxHeight: "70vh",
     overflowY: "auto",
+    position: "relative",
   },
   closeDeckButton: {
-    float: "right",
+    position: "absolute",
+    top: "10px",
+    right: "10px",
     backgroundColor: "#444",
     color: "#fff",
     border: "none",
