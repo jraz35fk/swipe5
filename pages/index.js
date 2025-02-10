@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// 1) Supabase Client
+// 1) Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -18,14 +18,14 @@ export default function Home() {
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
 
-  // Flow: "categories" | "subcategories" | "places" | "matchDeck"
+  // Flow modes: "categories" | "subcategories" | "places" | "matchDeck"
   const [mode, setMode] = useState("categories");
 
-  // Selected cat/subcat for breadcrumbs
+  // Current "selected" items for breadcrumb
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches & Favorites
+  // Matches & favorites
   const [matches, setMatches] = useState([]);
   const [favorites, setFavorites] = useState([]);
 
@@ -33,22 +33,22 @@ export default function Home() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // FETCH CATEGORIES (ordered by weight DESC) + SUBCATEGORIES
+  // FETCH data on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 1) Load categories with weight descending
+        // 1) Load categories
         const { data: catData, error: catErr } = await supabase
           .from("categories")
           .select("*")
+          // You can order by weight if you want the heaviest categories first
           .order("weight", { ascending: false });
         if (catErr) throw catErr;
 
         // 2) Load subcategories
         const { data: subData, error: subErr } = await supabase
           .from("subcategories")
-          .select("*")
-          .order("name", { ascending: true }); // or by subcategory weight
+          .select("*");
         if (subErr) throw subErr;
 
         setCategories(catData || []);
@@ -60,49 +60,51 @@ export default function Home() {
     loadData();
   }, []);
 
-  // Helper: subcats for the chosen category
-  function getCurrentSubcats() {
-    if (!selectedCategory) return [];
-    return subcategories.filter((s) => s.category_id === selectedCategory.id);
+  // HELPER: subcats for the chosen category
+  function getSubcatsForCategory(cat) {
+    if (!cat) return [];
+    return subcategories.filter((s) => s.category_id === cat.id);
   }
-  const subcatsForCategory = getCurrentSubcats();
-  const currentSubcategory = subcatsForCategory[subIndex] || null;
 
+  // Identify the current items
   const currentCategory = categories[catIndex] || null;
+  const subcatsForCategory = getSubcatsForCategory(selectedCategory);
+  const currentSubcategory = subcatsForCategory[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // LAYER LOGIC
-
-  // ============ CATEGORIES ============
+  // ============= CATEGORIES LAYER =============
   function handleYesCategory() {
+    // user picks this category => go to subcategories
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
     setSubIndex(0);
+    setPlaceIndex(0);
     setMode("subcategories");
   }
   function handleNoCategory() {
-    const nextCat = catIndex + 1;
-    if (nextCat >= categories.length) {
+    // move to next category
+    const next = catIndex + 1;
+    if (next >= categories.length) {
       alert("No more categories left!");
     } else {
-      setCatIndex(nextCat);
+      setCatIndex(next);
     }
   }
 
-  // ============ SUBCATEGORIES ============
+  // ============= SUBCATEGORIES LAYER =============
   async function handleYesSubcategory() {
     if (!currentSubcategory) return;
     setSelectedSubcategory(currentSubcategory);
-    // fetch places bridging
+
+    // fetch bridging places
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
         .select("place_id, places(*)")
         .eq("subcategory_id", currentSubcategory.id);
       if (error) throw error;
+
       const placeItems = data.map((row) => row.places);
-      // maybe sort by places.weight descending if you want
-      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       setPlaces(placeItems);
       setPlaceIndex(0);
       setMode("places");
@@ -111,51 +113,56 @@ export default function Home() {
     }
   }
   function handleNoSubcategory() {
-    const nextSub = subIndex + 1;
-    if (nextSub >= subcatsForCategory.length) {
+    // next subcategory
+    const next = subIndex + 1;
+    if (next >= subcatsForCategory.length) {
       // move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
+        setMode("categories");
       } else {
         setCatIndex(nextCat);
         setMode("categories");
       }
     } else {
-      setSubIndex(nextSub);
+      setSubIndex(next);
     }
   }
 
-  // ============ PLACES ============
+  // ============= PLACES LAYER =============
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    setMatches((prev) => [
-      ...prev,
-      { ...currentPlace, rating: 0 },
-    ]);
+    setMatches((prev) => [...prev, { ...currentPlace, rating: 0 }]);
 
-    const nextPlace = placeIndex + 1;
-    if (nextPlace >= places.length) {
+    // next place
+    const next = placeIndex + 1;
+    if (next >= places.length) {
+      // done with this subcategory
       moveToNextSubcategory();
     } else {
-      setPlaceIndex(nextPlace);
+      setPlaceIndex(next);
     }
   }
   function handleNoPlace() {
-    const nextPlace = placeIndex + 1;
-    if (nextPlace >= places.length) {
+    // skip this place
+    const next = placeIndex + 1;
+    if (next >= places.length) {
       moveToNextSubcategory();
     } else {
-      setPlaceIndex(nextPlace);
+      setPlaceIndex(next);
     }
   }
+
   function moveToNextSubcategory() {
-    const nextSub = subIndex + 1;
-    if (nextSub >= subcatsForCategory.length) {
-      // no more subcats => next category
+    // go to next subcategory in the current selectedCategory
+    const next = subIndex + 1;
+    const subcats = getSubcatsForCategory(selectedCategory);
+    if (next >= subcats.length) {
+      // done subcategories => next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -165,12 +172,12 @@ export default function Home() {
         setMode("categories");
       }
     } else {
-      setSubIndex(nextSub);
+      setSubIndex(next);
       setMode("subcategories");
     }
   }
 
-  // GO BACK, RESHUFFLE, MATCH DECK
+  // MATCH DECK + NAV
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -179,17 +186,18 @@ export default function Home() {
     } else if (mode === "matchDeck") {
       setMode("categories");
     } else {
-      alert("Already at categories layer!");
+      alert("Already at the top layer!");
     }
   }
   function handleReshuffle() {
+    // fully reset
     setCatIndex(0);
     setSubIndex(0);
     setPlaceIndex(0);
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setPlaces([]);
-    // if you want to reset matches/favorites, uncomment:
+    // if you want to clear matches/favorites, uncomment:
     // setMatches([]);
     // setFavorites([]);
     setMode("categories");
@@ -198,16 +206,16 @@ export default function Home() {
     setMode("matchDeck");
   }
 
-  // MATCH DECK
+  // Rate & Archive
   function handleRateMatch(placeId, newRating) {
     setMatches((prev) =>
       prev.map((m) => (m.id === placeId ? { ...m, rating: newRating } : m))
     );
   }
   function handleArchive(placeId) {
-    const matched = matches.find((m) => m.id === placeId);
-    if (matched) {
-      setFavorites((prev) => [...prev, matched]);
+    const match = matches.find((m) => m.id === placeId);
+    if (match) {
+      setFavorites((prev) => [...prev, match]);
     }
   }
 
@@ -268,14 +276,33 @@ export default function Home() {
 
       {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
+      {/* Breadcrumb */}
       <div style={styles.breadcrumb}>
         {selectedCategory && <p style={styles.smallText}>Category: {selectedCategory.name}</p>}
         {selectedSubcategory && <p style={styles.smallText}>Subcategory: {selectedSubcategory.name}</p>}
       </div>
 
-      {mode === "categories" && <CategoryCard cat={currentCategory} onYes={handleYesCategory} onNo={handleNoCategory} />}
-      {mode === "subcategories" && <SubcategoryCard subcat={currentSubcategory} onYes={handleYesSubcategory} onNo={handleNoSubcategory} />}
-      {mode === "places" && <PlaceCard plc={currentPlace} onYes={handleYesPlace} onNo={handleNoPlace} />}
+      {mode === "categories" && (
+        <CategoryLayer
+          cat={currentCategory}
+          onYes={handleYesCategory}
+          onNo={handleNoCategory}
+        />
+      )}
+      {mode === "subcategories" && (
+        <SubcategoryLayer
+          subcat={currentSubcategory}
+          onYes={handleYesSubcategory}
+          onNo={handleNoSubcategory}
+        />
+      )}
+      {mode === "places" && (
+        <PlacesLayer
+          plc={currentPlace}
+          onYes={handleYesPlace}
+          onNo={handleNoPlace}
+        />
+      )}
 
       <div style={styles.navRow}>
         <button onClick={handleGoBack} style={styles.goBackButton}>Go Back</button>
@@ -287,12 +314,13 @@ export default function Home() {
   );
 }
 
-function CategoryCard({ cat, onYes, onNo }) {
+// Category layer
+function CategoryLayer({ cat, onYes, onNo }) {
   if (!cat) return <p>No more categories left!</p>;
   return (
     <div style={styles.card}>
       <h2>{cat.name}</h2>
-      <p style={styles.description}>Category: {cat.name} (weight: {cat.weight})</p>
+      <p style={styles.description}>Category: {cat.name}</p>
       <div style={styles.buttonRow}>
         <button onClick={onNo} style={styles.noButton}>No</button>
         <button onClick={onYes} style={styles.yesButton}>Yes</button>
@@ -301,7 +329,8 @@ function CategoryCard({ cat, onYes, onNo }) {
   );
 }
 
-function SubcategoryCard({ subcat, onYes, onNo }) {
+// Subcategory layer
+function SubcategoryLayer({ subcat, onYes, onNo }) {
   if (!subcat) return <p>No more subcategories left!</p>;
   return (
     <div style={styles.card}>
@@ -315,20 +344,13 @@ function SubcategoryCard({ subcat, onYes, onNo }) {
   );
 }
 
-function PlaceCard({ plc, onYes, onNo }) {
+// Places layer
+function PlacesLayer({ plc, onYes, onNo }) {
   if (!plc) return <p>No more places left!</p>;
   return (
     <div style={styles.card}>
       <h2>{plc.name}</h2>
       <p style={styles.description}>Activity: {plc.description || plc.name}</p>
-      <p style={styles.description}>Address: {plc.address || "N/A"}</p>
-      {plc.website_url && (
-        <p>
-          <a href={plc.website_url} target="_blank" rel="noopener noreferrer">
-            Visit Website
-          </a>
-        </p>
-      )}
       <div style={styles.buttonRow}>
         <button onClick={onNo} style={styles.noButton}>No</button>
         <button onClick={onYes} style={styles.yesButton}>Yes</button>
@@ -337,6 +359,7 @@ function PlaceCard({ plc, onYes, onNo }) {
   );
 }
 
+// Celebration popup
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -348,6 +371,7 @@ function CelebrationAnimation() {
   );
 }
 
+// Styles
 const styles = {
   container: {
     maxWidth: "600px",
