@@ -10,52 +10,53 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  // ---------------------------------------------------
-  // 2) STATE: Data Arrays, Current Flow, Matches, etc.
-  // ---------------------------------------------------
+  // --------------------------
+  // 2) STATE: Data & Workflow
+  // --------------------------
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
 
-  // We do NOT store all places at once. We fetch them on demand for each subcategory.
-  const [mode, setMode] = useState("categories"); // can be "categories", "subcategories", "places", or "matchDeck"
+  // We do NOT store all places at once; we fetch them on demand for each subcategory.
+  const [mode, setMode] = useState("categories"); // "categories" | "subcategories" | "places" | "matchDeck"
   const [currentList, setCurrentList] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Selected category/subcategory for breadcrumbs
+  // Selected category/subcategory for breadcrumb
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // For final matches and favorites
+  // Matches & Favorites
   const [matches, setMatches] = useState([]);
   const [favorites, setFavorites] = useState([]);
 
-  // Show/hide celebration animation
+  // Celebration
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Error messaging
+  // Error handling
   const [errorMsg, setErrorMsg] = useState(null);
 
   // ---------------------------------------------------
-  // 3) SKIP TRACKING (No repeats)
+  // 3) SKIP TRACKING: No repeats even after "Yes."
   // ---------------------------------------------------
-  const [skippedCategories, setSkippedCategories] = useState([]);
-  const [skippedSubcategories, setSkippedSubcategories] = useState([]);
-  const [skippedPlaces, setSkippedPlaces] = useState([]);
+  // We store IDs that we've "used" (Yes or No) so they never show again in that layer.
+  const [usedCategories, setUsedCategories] = useState([]);
+  const [usedSubcategories, setUsedSubcategories] = useState([]);
+  const [usedPlaces, setUsedPlaces] = useState([]);
 
-  // ---------------------------------------------------
-  // 4) INITIAL DATA FETCH: Categories & Subcategories
-  // ---------------------------------------------------
+  // --------------------------
+  // 4) INITIAL DATA FETCH
+  // --------------------------
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchData = async () => {
       try {
-        // Fetch categories (ordered by weight descending, so high weight appears first)
+        // 1) Load categories
         const { data: catData, error: catError } = await supabase
           .from("categories")
           .select("*")
           .order("weight", { ascending: false });
         if (catError) throw catError;
 
-        // Fetch subcategories
+        // 2) Load subcategories
         const { data: subData, error: subError } = await supabase
           .from("subcategories")
           .select("*")
@@ -65,54 +66,52 @@ export default function Home() {
         setCategories(catData || []);
         setSubcategories(subData || []);
 
-        // Start with categories (filter out any that were previously skipped, if any)
+        // Start with categories (filter out used ones if any)
         const filteredCats = (catData || []).filter(
-          (cat) => !skippedCategories.includes(cat.id)
+          (c) => !usedCategories.includes(c.id)
         );
-        setCurrentList(filteredCats);
         setMode("categories");
+        setCurrentList(filteredCats);
         setCurrentIndex(0);
       } catch (err) {
         setErrorMsg(err.message);
       }
     };
 
-    fetchInitialData();
+    fetchData();
   }, []);
 
-  // ---------------------------------------------------
-  // 5) HELPER FUNCTIONS TO LOAD THE NEXT "LAYER"
-  // ---------------------------------------------------
-  // Move from categories to subcategories
+  // --------------------------
+  // 5) HELPER: GO TO SUBCATEGORIES
+  // --------------------------
   const goToSubcategories = (category) => {
-    // Filter subcategories by category_id
+    // Filter subcategories for this category, removing used ones
     const filteredSubs = subcategories
       .filter((sub) => sub.category_id === category.id)
-      .filter((sub) => !skippedSubcategories.includes(sub.id));
+      .filter((sub) => !usedSubcategories.includes(sub.id));
 
     setMode("subcategories");
     setCurrentList(filteredSubs);
     setCurrentIndex(0);
   };
 
-  // Move from subcategories to places (bridging table)
+  // --------------------------
+  // 6) HELPER: GO TO PLACES (bridging)
+  // --------------------------
   const goToPlaces = async (subcategory) => {
     try {
-      // place_subcategories -> places(*)
-      // So if a place belongs to multiple subcategories, it can appear in multiple flows
       const { data, error } = await supabase
         .from("place_subcategories")
         .select("place_id, places(*)")
         .eq("subcategory_id", subcategory.id);
-
       if (error) throw error;
 
-      // `data` = array of { place_id, places: { ...placeRow } }
+      // Map bridging rows to place objects
       let placeItems = data
         .map((row) => row.places)
-        .filter((pl) => pl && !skippedPlaces.includes(pl.id));
+        .filter((pl) => pl && !usedPlaces.includes(pl.id));
 
-      // Sort by weight descending (optional: highest priority first)
+      // Sort by weight descending
       placeItems = placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
       setMode("places");
@@ -123,34 +122,35 @@ export default function Home() {
     }
   };
 
-  // Go back to top-level categories
+  // --------------------------
+  // 7) HELPER: GO TO CATEGORIES
+  // --------------------------
   const goToCategories = () => {
     const filteredCats = categories.filter(
-      (cat) => !skippedCategories.includes(cat.id)
+      (c) => !usedCategories.includes(c.id)
     );
     setMode("categories");
     setCurrentList(filteredCats);
     setCurrentIndex(0);
   };
 
-  // ---------------------------------------------------
-  // 6) NAVIGATION: Go Back, Reshuffle, Show Matches
-  // ---------------------------------------------------
+  // --------------------------
+  // 8) NAVIGATION: GO BACK, RESHUFFLE, SHOW MATCHES
+  // --------------------------
   const handleGoBack = async () => {
     if (mode === "places") {
-      // Go back to subcategories for the selectedCategory
+      // Return to subcategories for selectedCategory
       if (!selectedCategory) {
-        alert("No selected category. Returning to categories...");
+        alert("No selected category. Going back to categories...");
         goToCategories();
         return;
       }
       goToSubcategories(selectedCategory);
     } else if (mode === "subcategories") {
-      // Go back to categories
       setSelectedSubcategory(null);
       goToCategories();
     } else if (mode === "matchDeck") {
-      // Return to categories from the match deck
+      // Return to categories from match deck
       setSelectedCategory(null);
       setSelectedSubcategory(null);
       goToCategories();
@@ -159,20 +159,20 @@ export default function Home() {
     }
   };
 
-  // Reshuffle: clears skip arrays, resets matches/favorites if you want
   const handleReshuffle = async () => {
-    setSkippedCategories([]);
-    setSkippedSubcategories([]);
-    setSkippedPlaces([]);
+    // Clear all used arrays
+    setUsedCategories([]);
+    setUsedSubcategories([]);
+    setUsedPlaces([]);
     setSelectedCategory(null);
     setSelectedSubcategory(null);
-    // If you want to keep matches/favorites, comment these out
+    // If you want to keep matches, comment these out:
     // setMatches([]);
     // setFavorites([]);
 
-    // Go back to categories
+    // Reload categories
     const filteredCats = categories.filter(
-      (cat) => !skippedCategories.includes(cat.id)
+      (c) => !usedCategories.includes(c.id)
     );
     setMode("categories");
     setCurrentList(filteredCats);
@@ -183,30 +183,35 @@ export default function Home() {
     setMode("matchDeck");
   };
 
-  // ---------------------------------------------------
-  // 7) SWIPE LOGIC: Yes / No
-  // ---------------------------------------------------
+  // --------------------------
+  // 9) SWIPE LOGIC: YES / NO
+  // --------------------------
   const handleYes = async () => {
-    const item = currentList[currentIndex];
-    if (!item) return;
+    const currentItem = currentList[currentIndex];
+    if (!currentItem) return;
 
     if (mode === "categories") {
-      // user accepted this category
-      setSelectedCategory(item);
-      goToSubcategories(item);
+      // We skip it from this list so it won't appear again
+      setUsedCategories((prev) => [...prev, currentItem.id]);
+
+      setSelectedCategory(currentItem);
+      goToSubcategories(currentItem);
     } else if (mode === "subcategories") {
-      // user accepted this subcategory
-      setSelectedSubcategory(item);
-      await goToPlaces(item);
+      setUsedSubcategories((prev) => [...prev, currentItem.id]);
+
+      setSelectedSubcategory(currentItem);
+      await goToPlaces(currentItem);
     } else if (mode === "places") {
       // final match
+      setUsedPlaces((prev) => [...prev, currentItem.id]);
+
       setShowCelebration(true);
       setTimeout(() => setShowCelebration(false), 2000);
 
       setMatches((prev) => [
         ...prev,
         {
-          ...item,
+          ...currentItem,
           rating: 0, // default rating
         },
       ]);
@@ -221,19 +226,19 @@ export default function Home() {
   };
 
   const handleNo = () => {
-    const item = currentList[currentIndex];
-    if (!item) return;
+    const currentItem = currentList[currentIndex];
+    if (!currentItem) return;
 
-    // Mark it as skipped
+    // If user says No, also skip it from this layer
     if (mode === "categories") {
-      setSkippedCategories((prev) => [...prev, item.id]);
+      setUsedCategories((prev) => [...prev, currentItem.id]);
     } else if (mode === "subcategories") {
-      setSkippedSubcategories((prev) => [...prev, item.id]);
+      setUsedSubcategories((prev) => [...prev, currentItem.id]);
     } else if (mode === "places") {
-      setSkippedPlaces((prev) => [...prev, item.id]);
+      setUsedPlaces((prev) => [...prev, currentItem.id]);
     }
 
-    // Move to next item
+    // Move to next
     const nextIndex = currentIndex + 1;
     if (nextIndex < currentList.length) {
       setCurrentIndex(nextIndex);
@@ -242,9 +247,9 @@ export default function Home() {
     }
   };
 
-  // ---------------------------------------------------
-  // 8) MATCH DECK: Rating & Archiving
-  // ---------------------------------------------------
+  // --------------------------
+  // 10) MATCH DECK LOGIC
+  // --------------------------
   const handleRateMatch = (placeId, newRating) => {
     setMatches((prev) =>
       prev.map((m) => (m.id === placeId ? { ...m, rating: newRating } : m))
@@ -256,15 +261,15 @@ export default function Home() {
     if (placeToArchive) {
       setFavorites((prev) => [...prev, placeToArchive]);
     }
-    // Optionally remove from matches if you want:
-    // setMatches(prev => prev.filter(m => m.id !== placeId));
+    // optionally remove from matches
+    // setMatches((prev) => prev.filter((m) => m.id !== placeId));
   };
 
-  // ---------------------------------------------------
-  // 9) RENDER MODES
-  // ---------------------------------------------------
-  // MATCH DECK VIEW
+  // --------------------------
+  // 11) RENDERING
+  // --------------------------
   if (mode === "matchDeck") {
+    // ---- MATCH DECK MODE ----
     return (
       <div style={styles.container}>
         <h1 style={styles.title}>dialN — Match Deck</h1>
@@ -319,19 +324,20 @@ export default function Home() {
     );
   }
 
-  // MAIN SWIPE PAGE
+  // ---- MAIN SWIPE MODES ----
   const currentItem = currentList[currentIndex];
-
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>dialN</h1>
 
+      {/* Matches Button */}
       <button style={styles.matchesBtn} onClick={handleShowMatches}>
         Matches ({matches.length})
       </button>
 
       {errorMsg && <p style={{ color: "red" }}>Error: {errorMsg}</p>}
 
+      {/* Breadcrumb */}
       <div style={styles.breadcrumb}>
         {selectedCategory && (
           <p style={styles.smallText}>Category: {selectedCategory.name}</p>
@@ -345,14 +351,10 @@ export default function Home() {
         <div style={styles.card}>
           <h2>{currentItem.name}</h2>
           {mode === "categories" && (
-            <p style={styles.description}>
-              This is a category: {currentItem.name}
-            </p>
+            <p style={styles.description}>Category: {currentItem.name}</p>
           )}
           {mode === "subcategories" && (
-            <p style={styles.description}>
-              This is a subcategory: {currentItem.name}
-            </p>
+            <p style={styles.description}>Subcategory: {currentItem.name}</p>
           )}
           {mode === "places" && (
             <>
@@ -404,7 +406,7 @@ export default function Home() {
 }
 
 // ---------------------------------------------------
-// 10) CELEBRATION COMPONENT
+// Celebration popup
 // ---------------------------------------------------
 function CelebrationAnimation() {
   return (
@@ -418,7 +420,7 @@ function CelebrationAnimation() {
 }
 
 // ---------------------------------------------------
-// 11) STYLES
+// STYLES
 // ---------------------------------------------------
 const styles = {
   container: {
