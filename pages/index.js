@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// 1) Supabase client
+// Create Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -13,7 +13,7 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Indexes for each layer
+  // Indexes for our three-layer flow
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
@@ -21,7 +21,7 @@ export default function Home() {
   // Flow modes: "categories" | "subcategories" | "places" | "matchDeck"
   const [mode, setMode] = useState("categories");
 
-  // Current "selected" items for breadcrumb
+  // Track what category / subcategory we've selected
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
@@ -33,19 +33,17 @@ export default function Home() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // FETCH data on mount
+  // Initial fetch of categories & subcategories
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 1) Load categories
+        // Load categories (with image_url)
         const { data: catData, error: catErr } = await supabase
           .from("categories")
-          .select("*")
-          // You can order by weight if you want the heaviest categories first
-          .order("weight", { ascending: false });
+          .select("*");
         if (catErr) throw catErr;
 
-        // 2) Load subcategories
+        // Load subcategories (with image_url)
         const { data: subData, error: subErr } = await supabase
           .from("subcategories")
           .select("*");
@@ -60,21 +58,22 @@ export default function Home() {
     loadData();
   }, []);
 
-  // HELPER: subcats for the chosen category
-  function getSubcatsForCategory(cat) {
+  // Helper: get subcats for selectedCategory
+  function getSubcatsForCat(cat) {
     if (!cat) return [];
     return subcategories.filter((s) => s.category_id === cat.id);
   }
 
-  // Identify the current items
+  // Identify current items
   const currentCategory = categories[catIndex] || null;
-  const subcatsForCategory = getSubcatsForCategory(selectedCategory);
-  const currentSubcategory = subcatsForCategory[subIndex] || null;
+  const subcats = getSubcatsForCat(selectedCategory);
+  const currentSubcategory = subcats[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // ============= CATEGORIES LAYER =============
+  // LAYER LOGIC
+
+  // ============ CATEGORIES ============
   function handleYesCategory() {
-    // user picks this category => go to subcategories
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
     setSubIndex(0);
@@ -82,7 +81,6 @@ export default function Home() {
     setMode("subcategories");
   }
   function handleNoCategory() {
-    // move to next category
     const next = catIndex + 1;
     if (next >= categories.length) {
       alert("No more categories left!");
@@ -91,12 +89,12 @@ export default function Home() {
     }
   }
 
-  // ============= SUBCATEGORIES LAYER =============
+  // ============ SUBCATEGORIES ============
   async function handleYesSubcategory() {
     if (!currentSubcategory) return;
     setSelectedSubcategory(currentSubcategory);
 
-    // fetch bridging places
+    // fetch places bridging
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -113,9 +111,8 @@ export default function Home() {
     }
   }
   function handleNoSubcategory() {
-    // next subcategory
     const next = subIndex + 1;
-    if (next >= subcatsForCategory.length) {
+    if (next >= subcats.length) {
       // move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
@@ -130,7 +127,7 @@ export default function Home() {
     }
   }
 
-  // ============= PLACES LAYER =============
+  // ============ PLACES ============
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
@@ -138,17 +135,14 @@ export default function Home() {
 
     setMatches((prev) => [...prev, { ...currentPlace, rating: 0 }]);
 
-    // next place
     const next = placeIndex + 1;
     if (next >= places.length) {
-      // done with this subcategory
       moveToNextSubcategory();
     } else {
       setPlaceIndex(next);
     }
   }
   function handleNoPlace() {
-    // skip this place
     const next = placeIndex + 1;
     if (next >= places.length) {
       moveToNextSubcategory();
@@ -156,13 +150,10 @@ export default function Home() {
       setPlaceIndex(next);
     }
   }
-
   function moveToNextSubcategory() {
-    // go to next subcategory in the current selectedCategory
     const next = subIndex + 1;
-    const subcats = getSubcatsForCategory(selectedCategory);
     if (next >= subcats.length) {
-      // done subcategories => next category
+      // move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -177,7 +168,7 @@ export default function Home() {
     }
   }
 
-  // MATCH DECK + NAV
+  // MATCH DECK & NAV
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -186,18 +177,18 @@ export default function Home() {
     } else if (mode === "matchDeck") {
       setMode("categories");
     } else {
-      alert("Already at the top layer!");
+      alert("Already at top layer!");
     }
   }
   function handleReshuffle() {
-    // fully reset
+    // reset everything
     setCatIndex(0);
     setSubIndex(0);
     setPlaceIndex(0);
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setPlaces([]);
-    // if you want to clear matches/favorites, uncomment:
+    // if you want to reset matches/favorites, uncomment:
     // setMatches([]);
     // setFavorites([]);
     setMode("categories");
@@ -206,27 +197,25 @@ export default function Home() {
     setMode("matchDeck");
   }
 
-  // Rate & Archive
+  // Rating & Archive
   function handleRateMatch(placeId, newRating) {
     setMatches((prev) =>
       prev.map((m) => (m.id === placeId ? { ...m, rating: newRating } : m))
     );
   }
   function handleArchive(placeId) {
-    const match = matches.find((m) => m.id === placeId);
-    if (match) {
-      setFavorites((prev) => [...prev, match]);
+    const found = matches.find((m) => m.id === placeId);
+    if (found) {
+      setFavorites((prev) => [...prev, found]);
     }
   }
 
-  // RENDER
+  // RENDER MATCH DECK
   if (mode === "matchDeck") {
     return (
       <div style={styles.container}>
-        <h1 style={styles.title}>DialN — Match Deck</h1>
-        <button onClick={handleGoBack} style={styles.goBackButton}>
-          Go Back
-        </button>
+        <h1 style={styles.title}>dialN — Match Deck</h1>
+        <button onClick={handleGoBack} style={styles.goBackButton}>Go Back</button>
         {matches.length === 0 ? (
           <p>No matches yet!</p>
         ) : (
@@ -234,7 +223,9 @@ export default function Home() {
             <h3>Your Matches:</h3>
             {matches.map((m) => (
               <div key={m.id} style={styles.matchCard}>
-                <p><strong>{m.name}</strong></p>
+                <p>
+                  <strong>{m.name}</strong>
+                </p>
                 <label>
                   Rating:{" "}
                   <select
@@ -242,7 +233,9 @@ export default function Home() {
                     onChange={(e) => handleRateMatch(m.id, Number(e.target.value))}
                   >
                     {[0,1,2,3,4,5].map((val) => (
-                      <option key={val} value={val}>{val}</option>
+                      <option key={val} value={val}>
+                        {val}
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -258,7 +251,9 @@ export default function Home() {
             <h3>Favorites:</h3>
             <ul>
               {favorites.map((f) => (
-                <li key={f.id}>{f.name} (rated {f.rating})</li>
+                <li key={f.id}>
+                  {f.name} (rated {f.rating})
+                </li>
               ))}
             </ul>
           </div>
@@ -267,41 +262,87 @@ export default function Home() {
     );
   }
 
+  // Identify the "current card" + parent text
+  let currentCard = null;
+  let parentText = "";
+  let currentImage = null;
+  let currentTitle = "";
+
+  if (mode === "categories") {
+    currentCard = currentCategory;
+    parentText = ""; // no parent for top-level categories
+    currentImage = currentCategory?.image_url || "";
+    currentTitle = currentCategory?.name || "";
+  } else if (mode === "subcategories") {
+    currentCard = currentSubcategory;
+    parentText = selectedCategory ? selectedCategory.name : "";
+    currentImage = currentSubcategory?.image_url || "";
+    currentTitle = currentSubcategory?.name || "";
+  } else if (mode === "places") {
+    currentCard = currentPlace;
+    parentText = selectedSubcategory ? selectedSubcategory.name : "";
+    currentImage = currentPlace?.image_url || "";
+    currentTitle = currentPlace?.name || "";
+  }
+
+  function handleYes() {
+    if (mode === "categories") handleYesCategory();
+    else if (mode === "subcategories") handleYesSubcategory();
+    else if (mode === "places") handleYesPlace();
+  }
+  function handleNo() {
+    if (mode === "categories") handleNoCategory();
+    else if (mode === "subcategories") handleNoSubcategory();
+    else if (mode === "places") handleNoPlace();
+  }
+
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>DialN</h1>
       <button style={styles.matchesBtn} onClick={handleShowMatches}>
         Matches ({matches.length})
       </button>
-
       {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
-      {/* Breadcrumb */}
-      <div style={styles.breadcrumb}>
-        {selectedCategory && <p style={styles.smallText}>Category: {selectedCategory.name}</p>}
-        {selectedSubcategory && <p style={styles.smallText}>Subcategory: {selectedSubcategory.name}</p>}
-      </div>
+      {currentCard ? (
+        <div
+          style={{
+            ...styles.cardBackground,
+            backgroundImage: `url(${currentImage})`
+          }}
+        >
+          {/* Parent text at top (if any) */}
+          {parentText && (
+            <div style={styles.parentText}>
+              {parentText}
+            </div>
+          )}
 
-      {mode === "categories" && (
-        <CategoryLayer
-          cat={currentCategory}
-          onYes={handleYesCategory}
-          onNo={handleNoCategory}
-        />
-      )}
-      {mode === "subcategories" && (
-        <SubcategoryLayer
-          subcat={currentSubcategory}
-          onYes={handleYesSubcategory}
-          onNo={handleNoSubcategory}
-        />
-      )}
-      {mode === "places" && (
-        <PlacesLayer
-          plc={currentPlace}
-          onYes={handleYesPlace}
-          onNo={handleNoPlace}
-        />
+          {/* Title at bottom center */}
+          <div style={styles.cardTitle}>
+            {currentTitle}
+          </div>
+
+          {/* "Click for info" overlay - optional */}
+          <div style={styles.infoOverlay}>
+            CLICK FOR INFO
+          </div>
+
+          {/* Thumbs down (no) / Thumbs up (yes) */}
+          <img
+            src="/thumbs_down_red.png"
+            alt="No"
+            onClick={handleNo}
+            style={styles.noThumb}
+          />
+          <img
+            src="/thumbs_up_green.png"
+            alt="Yes"
+            onClick={handleYes}
+            style={styles.yesThumb}
+          />
+        </div>
+      ) : (
+        <p>No more {mode} left!</p>
       )}
 
       <div style={styles.navRow}>
@@ -314,52 +355,7 @@ export default function Home() {
   );
 }
 
-// Category layer
-function CategoryLayer({ cat, onYes, onNo }) {
-  if (!cat) return <p>No more categories left!</p>;
-  return (
-    <div style={styles.card}>
-      <h2>{cat.name}</h2>
-      <p style={styles.description}>Category: {cat.name}</p>
-      <div style={styles.buttonRow}>
-        <button onClick={onNo} style={styles.noButton}>No</button>
-        <button onClick={onYes} style={styles.yesButton}>Yes</button>
-      </div>
-    </div>
-  );
-}
-
-// Subcategory layer
-function SubcategoryLayer({ subcat, onYes, onNo }) {
-  if (!subcat) return <p>No more subcategories left!</p>;
-  return (
-    <div style={styles.card}>
-      <h2>{subcat.name}</h2>
-      <p style={styles.description}>Subcategory: {subcat.name}</p>
-      <div style={styles.buttonRow}>
-        <button onClick={onNo} style={styles.noButton}>No</button>
-        <button onClick={onYes} style={styles.yesButton}>Yes</button>
-      </div>
-    </div>
-  );
-}
-
-// Places layer
-function PlacesLayer({ plc, onYes, onNo }) {
-  if (!plc) return <p>No more places left!</p>;
-  return (
-    <div style={styles.card}>
-      <h2>{plc.name}</h2>
-      <p style={styles.description}>Activity: {plc.description || plc.name}</p>
-      <div style={styles.buttonRow}>
-        <button onClick={onNo} style={styles.noButton}>No</button>
-        <button onClick={onYes} style={styles.yesButton}>Yes</button>
-      </div>
-    </div>
-  );
-}
-
-// Celebration popup
+// Celebration overlay
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -371,69 +367,96 @@ function CelebrationAnimation() {
   );
 }
 
-// Styles
+// STYLES
 const styles = {
   container: {
-    maxWidth: "600px",
-    margin: "40px auto",
-    fontFamily: "sans-serif",
-    textAlign: "center",
-    position: "relative",
-  },
-  title: {
-    marginBottom: "20px",
-  },
-  breadcrumb: {
-    marginBottom: "10px",
-  },
-  smallText: {
-    fontSize: "14px",
+    width: "100vw",
+    height: "100vh",
     margin: 0,
-    color: "#777",
+    padding: 0,
+    position: "relative",
+    fontFamily: "Arial, sans-serif",
+    overflow: "hidden",
   },
-  card: {
-    border: "1px solid #ccc",
-    borderRadius: "10px",
-    padding: "20px",
-    margin: "20px",
-    backgroundColor: "#fff",
-  },
-  description: {
-    color: "#555",
-    fontSize: "16px",
-  },
-  buttonRow: {
-    display: "flex",
-    justifyContent: "center",
-    gap: "20px",
-  },
-  yesButton: {
-    backgroundColor: "#4CAF50",
+  matchesBtn: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 9999,
+    backgroundColor: "#FF9800",
     color: "#fff",
+    padding: "8px 16px",
     border: "none",
-    padding: "10px 20px",
     borderRadius: "5px",
     cursor: "pointer",
   },
-  noButton: {
-    backgroundColor: "#f44336",
+  cardBackground: {
+    width: "100%",
+    height: "100%",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  parentText: {
+    marginTop: "20px",
+    marginLeft: "20px",
+    color: "#FFD700",
+    fontSize: "3rem",
+    textShadow: "2px 2px 4px #000",
+  },
+  cardTitle: {
     color: "#fff",
-    border: "none",
-    padding: "10px 20px",
-    borderRadius: "5px",
+    fontSize: "4rem",
+    textAlign: "center",
+    marginBottom: "40px",
+    textShadow: "3px 3px 6px #000",
+  },
+  infoOverlay: {
+    position: "absolute",
+    bottom: 0,
+    color: "#fff",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    padding: "10px",
+    fontSize: "1.5rem",
+    left: "50%",
+    transform: "translateX(-50%)",
+    marginBottom: "10rem",
+    textShadow: "2px 2px 4px #000",
+    cursor: "pointer",
+  },
+  noThumb: {
+    position: "absolute",
+    bottom: "20px",
+    left: "30px",
+    width: "80px",
+    height: "80px",
+    cursor: "pointer",
+  },
+  yesThumb: {
+    position: "absolute",
+    bottom: "20px",
+    right: "30px",
+    width: "80px",
+    height: "80px",
     cursor: "pointer",
   },
   navRow: {
+    position: "absolute",
+    bottom: "20px",
+    left: "50%",
+    transform: "translateX(-50%)",
     display: "flex",
-    justifyContent: "center",
     gap: "20px",
-    marginTop: "10px",
+    zIndex: 9999,
   },
   goBackButton: {
     backgroundColor: "#2196F3",
     color: "#fff",
     border: "none",
-    padding: "8px 16px",
+    padding: "10px 20px",
     borderRadius: "5px",
     cursor: "pointer",
   },
@@ -441,18 +464,7 @@ const styles = {
     backgroundColor: "#9C27B0",
     color: "#fff",
     border: "none",
-    padding: "8px 16px",
-    borderRadius: "5px",
-    cursor: "pointer",
-  },
-  matchesBtn: {
-    position: "absolute",
-    right: "20px",
-    top: "20px",
-    backgroundColor: "#FF9800",
-    color: "#fff",
-    border: "none",
-    padding: "8px 16px",
+    padding: "10px 20px",
     borderRadius: "5px",
     cursor: "pointer",
   },
@@ -466,14 +478,23 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 9999,
+    zIndex: 99999,
   },
   celebrationBox: {
     backgroundColor: "#fff",
     padding: "30px",
     borderRadius: "10px",
     textAlign: "center",
+    animation: "popIn 0.5s ease",
   },
+  title: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    fontSize: "1px", // We'll hide it but keep the structure if needed
+    color: "#fff",
+  },
+  // Match deck styles
   matchCard: {
     backgroundColor: "#eee",
     padding: "10px",
