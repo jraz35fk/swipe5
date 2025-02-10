@@ -30,9 +30,7 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState(null);
 
   // NEIGHBORHOOD UI
-  // For each category, we fetch distinct neighborhoods that have places in that category
   const [allNeighborhoodsForCategory, setAllNeighborhoodsForCategory] = useState([]);
-  // Which neighborhoods are "enabled"? By default, all are enabled
   const [enabledNeighborhoods, setEnabledNeighborhoods] = useState([]);
 
   // 1) On mount, fetch categories & subcategories
@@ -60,7 +58,7 @@ export default function Home() {
     loadData();
   }, []);
 
-  // Helper: filter subcats for category
+  // HELPER: subcats for a category
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
     return subcategories.filter((s) => s.category_id === cat.id);
@@ -72,7 +70,7 @@ export default function Home() {
   const currentSubcategory = subcatsForCategory[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // Return { name, image_url } for the current item
+  // Get card data
   function getCurrentCardData() {
     if (mode === "categories") {
       return currentCategory
@@ -99,7 +97,6 @@ export default function Home() {
     return null;
   }
 
-  // Fallback image
   function getBackgroundImage(url) {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
@@ -115,7 +112,7 @@ export default function Home() {
     return "";
   }
 
-  // Right text: If places mode & place has neighborhood => "USA -> Baltimore -> Neighborhood"
+  // Right text (places mode => "USA -> Baltimore -> neighborhood")
   function getRightNeighborhood() {
     if (mode === "places" && currentPlace && currentPlace.neighborhood) {
       return `USA -> Baltimore -> ${currentPlace.neighborhood}`;
@@ -123,12 +120,7 @@ export default function Home() {
     return "";
   }
 
-  // ============= NEIGHBORHOOD LOGIC =============
-  // We only show the NeighborhoodSelector in "categories" mode (the first layer).
-  // Then the user picks a category, we gather neighborhoods for that category's places.
-  // All are enabled by default. If user toggles them, we reorder the places in subcategory -> places step.
-
-  // 1) If we are in categories mode, load the neighborhoods for the current category
+  // NEIGHBORHOOD CHECKBOXES LOGIC
   useEffect(() => {
     if (mode === "categories" && currentCategory) {
       fetchNeighborhoodsForCategory(currentCategory.id);
@@ -137,11 +129,6 @@ export default function Home() {
 
   async function fetchNeighborhoodsForCategory(categoryId) {
     try {
-      // We want distinct neighborhoods for all places that belong to subcategories of this category
-      // We'll do a bridging query: subcategories -> place_subcategories -> places
-      // But let's do a simpler approach: get subcategories => get place_subcategories => ...
-      // Or we can do a custom RPC. For demonstration, let's do a simpler approach:
-
       const { data: subcatData, error: scErr } = await supabase
         .from("subcategories")
         .select("id")
@@ -156,7 +143,7 @@ export default function Home() {
 
       const subcatIds = subcatData.map((s) => s.id);
 
-      // Now fetch place_subcategories for those subcatIds
+      // bridging
       const { data: bridgingData, error: brErr } = await supabase
         .from("place_subcategories")
         .select("place_id, places(*)")
@@ -164,52 +151,43 @@ export default function Home() {
 
       if (brErr) throw brErr;
 
-      // from bridgingData, gather distinct neighborhoods
       const neighborhoodsSet = new Set();
+      const countMap = {};
+
       bridgingData.forEach((row) => {
-        if (row.places.neighborhood) {
-          neighborhoodsSet.add(row.places.neighborhood);
+        const nb = row.places.neighborhood;
+        if (nb) {
+          neighborhoodsSet.add(nb);
+          countMap[nb] = (countMap[nb] || 0) + 1;
         }
       });
 
-      const neighborhoodsArray = Array.from(neighborhoodsSet);
-
-      // We can order them by place_count if we want. Let's do that quickly:
-      // We'll count how many places are in each neighborhood
-      const countMap = {};
-      bridgingData.forEach((row) => {
-        const nb = row.places.neighborhood;
-        if (!nb) return;
-        countMap[nb] = (countMap[nb] || 0) + 1;
-      });
+      let neighborhoodsArray = Array.from(neighborhoodsSet);
+      // sort by place count desc
       neighborhoodsArray.sort((a, b) => (countMap[b] || 0) - (countMap[a] || 0));
 
       setAllNeighborhoodsForCategory(neighborhoodsArray);
-      setEnabledNeighborhoods(neighborhoodsArray); // by default, ALL are enabled
-    } catch (error) {
-      console.error("fetchNeighborhoodsForCategory error:", error);
+      setEnabledNeighborhoods(neighborhoodsArray); // all enabled
+    } catch (err) {
+      console.error("fetchNeighborhoodsForCategory error:", err);
     }
   }
 
-  // Toggle a neighborhood (enable/disable)
   function toggleNeighborhood(nb) {
     if (enabledNeighborhoods.includes(nb)) {
-      // remove it
       const newList = enabledNeighborhoods.filter((x) => x !== nb);
       setEnabledNeighborhoods(newList);
     } else {
-      // add it
       const newList = [...enabledNeighborhoods, nb];
       setEnabledNeighborhoods(newList);
     }
   }
 
-  // We'll reorder places to put "enabled" neighborhoods first. If a place's neighborhood is not in enabledNeighborhoods, it goes after.
-  // We'll do this reordering after we fetch subcategory -> places
   function reorderPlacesByNeighborhood(placesArray) {
-    // if no neighborhoods are disabled, we just keep as is
     if (!enabledNeighborhoods || enabledNeighborhoods.length === 0) {
-      return placesArray; // all are disabled?? means they'd all go last. But let's keep it simple
+      // none enabled => show them last or all last
+      // we'll just show them as is for simplicity
+      return placesArray;
     }
     // if all are enabled => no reorder
     if (
@@ -218,22 +196,19 @@ export default function Home() {
     ) {
       return placesArray;
     }
-
-    // separate into enabled vs. disabled
     const enabledSet = new Set(enabledNeighborhoods);
-    const enabledPlaces = [];
-    const disabledPlaces = [];
+    const enabledList = [];
+    const disabledList = [];
     placesArray.forEach((p) => {
       if (!p.neighborhood) {
-        // treat missing as disabled? or put it last
-        disabledPlaces.push(p);
+        disabledList.push(p);
       } else if (enabledSet.has(p.neighborhood)) {
-        enabledPlaces.push(p);
+        enabledList.push(p);
       } else {
-        disabledPlaces.push(p);
+        disabledList.push(p);
       }
     });
-    return [...enabledPlaces, ...disabledPlaces];
+    return [...enabledList, ...disabledList];
   }
 
   // ============= CATEGORIES LAYER =============
@@ -268,8 +243,7 @@ export default function Home() {
       let placeItems = data.map((row) => row.places);
       // sort by weight desc
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-
-      // now reorder by neighborhood preference
+      // reorder by neighborhoods
       placeItems = reorderPlacesByNeighborhood(placeItems);
 
       setPlaces(placeItems);
@@ -350,12 +324,11 @@ export default function Home() {
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setPlaces([]);
-    // re-enable all neighborhoods
     setEnabledNeighborhoods(allNeighborhoodsForCategory);
     setMode("categories");
   }
 
-  // Construct the current card for the UI
+  // The current card
   const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
@@ -368,29 +341,12 @@ export default function Home() {
       </div>
     );
   }
-
   const bgImage = getBackgroundImage(currentCard.image_url);
 
-  // Left breadcrumb
-  function getLeftBreadcrumb() {
-    if (mode === "subcategories" && selectedCategory) {
-      return selectedCategory.name;
-    }
-    if (mode === "places" && selectedCategory && selectedSubcategory) {
-      return `${selectedCategory.name} -> ${selectedSubcategory.name}`;
-    }
-    return "";
-  }
+  // top-left
   const leftText = getLeftBreadcrumb();
-
-  // Right text (only for places mode)
-  function getRightText() {
-    if (mode === "places" && currentPlace && currentPlace.neighborhood) {
-      return `USA -> Baltimore -> ${currentPlace.neighborhood}`;
-    }
-    return "";
-  }
-  const rightText = getRightText();
+  // top-right
+  const rightText = getRightNeighborhood();
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
@@ -400,7 +356,6 @@ export default function Home() {
         <div style={styles.topRow}>
           <div style={styles.leftText}>{leftText}</div>
 
-          {/* If we are in categories mode, show the NeighborhoodSelector. */}
           {mode === "categories" && currentCategory && (
             <NeighborhoodSelector
               neighborhoods={allNeighborhoodsForCategory}
@@ -414,10 +369,14 @@ export default function Home() {
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM ROW (CARD NAME + YES/NO) */}
+        {/* BOTTOM ROW (CARD NAME + NEIGHBORHOOD if places + YES/NO) */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
-          <p style={styles.clickForInfo}>Click for info</p>
+
+          {/* If in places mode, show the neighborhood below the card name (stylish) */}
+          {mode === "places" && currentPlace && currentPlace.neighborhood && (
+            <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
+          )}
 
           <div style={styles.yesNoRow}>
             <button
@@ -461,7 +420,7 @@ export default function Home() {
   );
 }
 
-// A simple multi-checkbox selector for neighborhoods
+// The multi-checkbox for neighborhoods
 function NeighborhoodSelector({ neighborhoods, enabledNeighborhoods, onToggle }) {
   return (
     <div style={styles.neighborhoodSelector}>
@@ -475,7 +434,7 @@ function NeighborhoodSelector({ neighborhoods, enabledNeighborhoods, onToggle })
               checked={isEnabled}
               onChange={() => onToggle(nb)}
             />
-            <label style={{ marginLeft: "5px", color: isEnabled ? "#0f0" : "#fff" }}>
+            <label style={{ marginLeft: "5px", color: isEnabled ? "#0f0" : "#ccc" }}>
               {nb}
             </label>
           </div>
@@ -550,11 +509,13 @@ const styles = {
     margin: 0,
     textTransform: "uppercase",
   },
-  clickForInfo: {
-    color: "#fff",
+  neighborhoodText: {
+    color: "#FFD700",
+    fontSize: "1.5em",
+    fontStyle: "italic",
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     marginTop: "10px",
-    fontSize: "1em",
+    marginBottom: "15px",
   },
   yesNoRow: {
     marginTop: "20px",
@@ -620,7 +581,6 @@ const styles = {
     borderRadius: "10px",
     textAlign: "center",
   },
-  // Neighborhood selector style
   neighborhoodSelector: {
     display: "flex",
     flexDirection: "column",
