@@ -12,13 +12,15 @@ const TABLES_TO_UPDATE = [
   "subcategories"
 ];
 
-// How many rows to process per chunk
-// (Use small number to avoid Vercel timeouts. 2 is very conservative.)
-const CHUNK_SIZE = 2;
+// Process exactly 1 row per chunk
+const CHUNK_SIZE = 1;
+
+// Only fetch 1 photo from Pexels to speed things up
+const PEXELS_PER_PAGE = 1;
 
 export default async function handler(req, res) {
   const debugLogs = [];
-  debugLogs.push("Starting /api/fetch-chunked-images-once route...");
+  debugLogs.push("Starting /api/fetch-chunked-images-once route (chunk_size=1, per_page=1).");
 
   try {
     // 1) Load environment variables
@@ -34,7 +36,10 @@ export default async function handler(req, res) {
 
     if (!PEXELS_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
       debugLogs.push("ERROR: Missing required environment variables!");
-      return res.status(500).json({ error: "Missing environment variables", debugLogs });
+      return res.status(500).json({
+        error: "Missing environment variables",
+        debugLogs
+      });
     }
 
     // 2) Create Supabase client
@@ -43,22 +48,25 @@ export default async function handler(req, res) {
 
     // Helper function to fetch an image from Pexels
     async function fetchImageUrlFromPexels(query) {
-      debugLogs.push(`Pexels search: "${query}"`);
+      debugLogs.push(`Pexels search: "${query}", per_page=${PEXELS_PER_PAGE}`);
       const response = await axios.get("https://api.pexels.com/v1/search", {
         headers: { Authorization: PEXELS_API_KEY },
-        params: { query, per_page: 5 }
+        params: {
+          query,
+          per_page: PEXELS_PER_PAGE
+        }
       });
       const { photos } = response.data;
       if (!photos || photos.length === 0) {
         debugLogs.push("No results from Pexels.");
         return null;
       }
-      const randIndex = Math.floor(Math.random() * photos.length);
-      const photo = photos[randIndex];
+      // Just pick the first photo (since we only have 1)
+      const photo = photos[0];
       return photo.src.large || photo.src.original;
     }
 
-    // 3) Process each table in small chunks
+    // 3) Process each table in single-row chunks
     for (const tableName of TABLES_TO_UPDATE) {
       debugLogs.push(`\n=== Table: "${tableName}" ===`);
 
@@ -72,17 +80,17 @@ export default async function handler(req, res) {
         continue;
       }
       if (!allRows || allRows.length === 0) {
-        debugLogs.push(`No rows in "${tableName}"—skipping.`);
+        debugLogs.push(`No rows in "${tableName}" — skipping.`);
         continue;
       }
       debugLogs.push(`Found ${allRows.length} rows in "${tableName}".`);
 
-      // B) Chunk the rows to avoid timeouts
+      // B) Chunk the rows: 1 row at a time
       for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
         const chunk = allRows.slice(i, i + CHUNK_SIZE);
-        debugLogs.push(`Chunk of size: ${chunk.length}, rows ${i+1} through ${i+chunk.length}.`);
+        debugLogs.push(`Chunk of size: ${chunk.length}, row index ${i+1}.`);
 
-        // C) Process each row in this chunk
+        // C) Process the single row in this chunk
         for (const row of chunk) {
           const rowId = row.id ?? "???";
           const rowName = row.name || "Untitled";
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
             continue;
           }
 
-          // iii) Create a subfolder path => "tableName/name_id.jpg"
+          // iii) Create a subfolder path => "<tableName>/<rowName>_<rowId>.jpg"
           const safeName = rowName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
           const remoteFileName = `${tableName}/${safeName}_${rowId}.jpg`;
           debugLogs.push(`Uploading to: ${SUPABASE_BUCKET}/${remoteFileName}`);
