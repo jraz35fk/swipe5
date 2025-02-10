@@ -1,76 +1,147 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// 1) Supabase Client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function Home() {
-  // MAIN STATE
+  // MAIN SWIPE STATE
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
 
-  // Index flow
+  // Indices for each layer
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
-  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
+
+  // "mode": "categories" | "subcategories" | "places"
+  const [mode, setMode] = useState("categories");
 
   // Selected category/subcategory
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  // Matches + Celebration
+  // For final matches
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Error
+  // Error handling
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // NEIGHBORHOOD UI
-  const [allNeighborhoodsForCategory, setAllNeighborhoodsForCategory] = useState([]);
+  // 2) NEIGHBORHOODS
+  // We fetch all distinct neighborhoods from "places" once, so user can enable/disable them at any layer.
+  const [allNeighborhoods, setAllNeighborhoods] = useState([]);
   const [enabledNeighborhoods, setEnabledNeighborhoods] = useState([]);
 
-  // 1) On mount, fetch categories & subcategories
+  // On mount, load categories/subcategories + all neighborhoods
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const { data: catData, error: catErr } = await supabase
-          .from("categories")
-          .select("*")
-          .order("weight", { ascending: false });
-        if (catErr) throw catErr;
-
-        const { data: subData, error: subErr } = await supabase
-          .from("subcategories")
-          .select("*")
-          .order("weight", { ascending: false });
-        if (subErr) throw subErr;
-
-        setCategories(catData || []);
-        setSubcategories(subData || []);
-      } catch (err) {
-        setErrorMsg(err.message);
-      }
-    };
-    loadData();
+    loadBaseData();
+    loadAllNeighborhoods();
   }, []);
 
-  // HELPER: subcats for a category
-  function getSubcatsForCategory(cat) {
-    if (!cat) return [];
-    return subcategories.filter((s) => s.category_id === cat.id);
+  async function loadBaseData() {
+    try {
+      // load categories
+      const { data: catData, error: catErr } = await supabase
+        .from("categories")
+        .select("*")
+        .order("weight", { ascending: false });
+      if (catErr) throw catErr;
+
+      // load subcategories
+      const { data: subData, error: subErr } = await supabase
+        .from("subcategories")
+        .select("*")
+        .order("weight", { ascending: false });
+      if (subErr) throw subErr;
+
+      setCategories(catData || []);
+      setSubcategories(subData || []);
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  }
+
+  async function loadAllNeighborhoods() {
+    try {
+      // Distinct neighborhoods from places
+      const { data, error } = await supabase
+        .from("places")
+        .select("neighborhood")
+        .neq("neighborhood", null);
+      if (error) throw error;
+
+      // gather unique
+      const nbSet = new Set();
+      data.forEach((row) => {
+        if (row.neighborhood) {
+          nbSet.add(row.neighborhood);
+        }
+      });
+      const nbArray = Array.from(nbSet);
+
+      // Optionally we can sort them alphabetically
+      nbArray.sort();
+
+      setAllNeighborhoods(nbArray);
+      setEnabledNeighborhoods(nbArray); // all enabled by default
+    } catch (err) {
+      console.error("Error loading neighborhoods:", err);
+    }
+  }
+
+  // Toggling neighborhoods persistent across all layers
+  function toggleNeighborhood(nb) {
+    if (enabledNeighborhoods.includes(nb)) {
+      // remove it
+      const newList = enabledNeighborhoods.filter((x) => x !== nb);
+      setEnabledNeighborhoods(newList);
+    } else {
+      // add it
+      setEnabledNeighborhoods([...enabledNeighborhoods, nb]);
+    }
+  }
+
+  // Helper to reorder places so "enabled" neighborhoods appear first, then disabled
+  function reorderPlacesByNeighborhood(placesArray) {
+    if (!placesArray || placesArray.length === 0) return placesArray;
+    // if all neighborhoods are enabled => no reorder
+    if (
+      enabledNeighborhoods.length === 0 ||
+      enabledNeighborhoods.length === allNeighborhoods.length
+    ) {
+      return placesArray;
+    }
+    const enabledSet = new Set(enabledNeighborhoods);
+    const enabledList = [];
+    const disabledList = [];
+    placesArray.forEach((p) => {
+      if (!p.neighborhood) {
+        // treat no neighborhood as disabled
+        disabledList.push(p);
+      } else if (enabledSet.has(p.neighborhood)) {
+        enabledList.push(p);
+      } else {
+        disabledList.push(p);
+      }
+    });
+    return [...enabledList, ...disabledList];
   }
 
   // Current items
   const currentCategory = categories[catIndex] || null;
-  const subcatsForCategory = getSubcatsForCategory(selectedCategory);
-  const currentSubcategory = subcatsForCategory[subIndex] || null;
+  const currentSubcategory = (() => {
+    if (!selectedCategory) return null;
+    const scList = subcategories.filter((s) => s.category_id === selectedCategory.id);
+    return scList[subIndex] || null;
+  })();
   const currentPlace = places[placeIndex] || null;
 
-  // Get card data
+  // Return the card name & image
   function getCurrentCardData() {
     if (mode === "categories") {
       return currentCategory
@@ -87,24 +158,24 @@ export default function Home() {
           }
         : null;
     } else if (mode === "places") {
-      return currentPlace
-        ? {
-            name: currentPlace.name,
-            image_url: currentPlace.image_url || "",
-          }
-        : null;
+      if (!currentPlace) return null;
+      return {
+        name: currentPlace.name,
+        image_url: currentPlace.image_url || "",
+      };
     }
     return null;
   }
 
+  // Fallback
   function getBackgroundImage(url) {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // Left breadcrumb
+  // Left breadcrumb (top-left)
   function getLeftBreadcrumb() {
-    if (mode === "subcategories" && selectedCategory) {
-      return selectedCategory.name;
+    if (mode === "subcategories" && currentCategory) {
+      return currentCategory.name; // e.g. "Food & Dining"
     }
     if (mode === "places" && selectedCategory && selectedSubcategory) {
       return `${selectedCategory.name} -> ${selectedSubcategory.name}`;
@@ -112,106 +183,13 @@ export default function Home() {
     return "";
   }
 
-  // Right text (places mode => "USA -> Baltimore -> neighborhood")
-  function getRightNeighborhood() {
-    if (mode === "places" && currentPlace && currentPlace.neighborhood) {
-      return `USA -> Baltimore -> ${currentPlace.neighborhood}`;
-    }
-    return "";
+  // Right text (top-right), we always show "USA -> Baltimore" text
+  // Then the user sees the multi-check for neighborhoods below it
+  function getRightText() {
+    return "USA -> Baltimore";
   }
 
-  // NEIGHBORHOOD CHECKBOXES LOGIC
-  useEffect(() => {
-    if (mode === "categories" && currentCategory) {
-      fetchNeighborhoodsForCategory(currentCategory.id);
-    }
-  }, [mode, catIndex]);
-
-  async function fetchNeighborhoodsForCategory(categoryId) {
-    try {
-      const { data: subcatData, error: scErr } = await supabase
-        .from("subcategories")
-        .select("id")
-        .eq("category_id", categoryId);
-
-      if (scErr) throw scErr;
-      if (!subcatData || subcatData.length === 0) {
-        setAllNeighborhoodsForCategory([]);
-        setEnabledNeighborhoods([]);
-        return;
-      }
-
-      const subcatIds = subcatData.map((s) => s.id);
-
-      // bridging
-      const { data: bridgingData, error: brErr } = await supabase
-        .from("place_subcategories")
-        .select("place_id, places(*)")
-        .in("subcategory_id", subcatIds);
-
-      if (brErr) throw brErr;
-
-      const neighborhoodsSet = new Set();
-      const countMap = {};
-
-      bridgingData.forEach((row) => {
-        const nb = row.places.neighborhood;
-        if (nb) {
-          neighborhoodsSet.add(nb);
-          countMap[nb] = (countMap[nb] || 0) + 1;
-        }
-      });
-
-      let neighborhoodsArray = Array.from(neighborhoodsSet);
-      // sort by place count desc
-      neighborhoodsArray.sort((a, b) => (countMap[b] || 0) - (countMap[a] || 0));
-
-      setAllNeighborhoodsForCategory(neighborhoodsArray);
-      setEnabledNeighborhoods(neighborhoodsArray); // all enabled
-    } catch (err) {
-      console.error("fetchNeighborhoodsForCategory error:", err);
-    }
-  }
-
-  function toggleNeighborhood(nb) {
-    if (enabledNeighborhoods.includes(nb)) {
-      const newList = enabledNeighborhoods.filter((x) => x !== nb);
-      setEnabledNeighborhoods(newList);
-    } else {
-      const newList = [...enabledNeighborhoods, nb];
-      setEnabledNeighborhoods(newList);
-    }
-  }
-
-  function reorderPlacesByNeighborhood(placesArray) {
-    if (!enabledNeighborhoods || enabledNeighborhoods.length === 0) {
-      // none enabled => show them last or all last
-      // we'll just show them as is for simplicity
-      return placesArray;
-    }
-    // if all are enabled => no reorder
-    if (
-      allNeighborhoodsForCategory.length > 0 &&
-      enabledNeighborhoods.length === allNeighborhoodsForCategory.length
-    ) {
-      return placesArray;
-    }
-    const enabledSet = new Set(enabledNeighborhoods);
-    const enabledList = [];
-    const disabledList = [];
-    placesArray.forEach((p) => {
-      if (!p.neighborhood) {
-        disabledList.push(p);
-      } else if (enabledSet.has(p.neighborhood)) {
-        enabledList.push(p);
-      } else {
-        disabledList.push(p);
-      }
-    });
-    return [...enabledList, ...disabledList];
-  }
-
-  // ============= CATEGORIES LAYER =============
+  // ============= SWIPE HANDLERS =============
   function handleYesCategory() {
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
@@ -228,11 +206,9 @@ export default function Home() {
     }
   }
 
-  // ============= SUBCATEGORIES LAYER =============
   async function handleYesSubcategory() {
     if (!currentSubcategory) return;
     setSelectedSubcategory(currentSubcategory);
-
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -254,8 +230,12 @@ export default function Home() {
     }
   }
   function handleNoSubcategory() {
+    if (!selectedCategory) return;
+    // get the subcategories for that category
+    const scList = subcategories.filter((s) => s.category_id === selectedCategory.id);
     const next = subIndex + 1;
-    if (next >= subcatsForCategory.length) {
+    if (next >= scList.length) {
+      // move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -268,7 +248,6 @@ export default function Home() {
     }
   }
 
-  // ============= PLACES LAYER =============
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
@@ -291,8 +270,11 @@ export default function Home() {
     }
   }
   function moveToNextSubcategory() {
+    if (!selectedCategory) return;
+    const scList = subcategories.filter((s) => s.category_id === selectedCategory.id);
     const next = subIndex + 1;
-    if (next >= subcatsForCategory.length) {
+    if (next >= scList.length) {
+      // move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -307,14 +289,13 @@ export default function Home() {
     }
   }
 
-  // Go Back & Reshuffle
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
     } else if (mode === "subcategories") {
       setMode("categories");
     } else {
-      alert("Already at top-level categories!");
+      alert("Already at the top-level categories!");
     }
   }
   function handleReshuffle() {
@@ -324,11 +305,12 @@ export default function Home() {
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setPlaces([]);
-    setEnabledNeighborhoods(allNeighborhoodsForCategory);
     setMode("categories");
+    // re-enable all neighborhoods
+    setEnabledNeighborhoods(allNeighborhoods);
   }
 
-  // The current card
+  // 3) RENDER
   const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
@@ -341,12 +323,10 @@ export default function Home() {
       </div>
     );
   }
-  const bgImage = getBackgroundImage(currentCard.image_url);
 
-  // top-left
+  const bgImage = getBackgroundImage(currentCard.image_url);
   const leftText = getLeftBreadcrumb();
-  // top-right
-  const rightText = getRightNeighborhood();
+  const rightText = getRightText();
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
@@ -355,25 +335,24 @@ export default function Home() {
         {/* TOP ROW */}
         <div style={styles.topRow}>
           <div style={styles.leftText}>{leftText}</div>
-
-          {mode === "categories" && currentCategory && (
+          <div style={styles.rightText}>
+            {rightText}
+            {/* NeighborhoodSelector always displayed below "USA -> Baltimore" */}
             <NeighborhoodSelector
-              neighborhoods={allNeighborhoodsForCategory}
+              allNeighborhoods={allNeighborhoods}
               enabledNeighborhoods={enabledNeighborhoods}
               onToggle={toggleNeighborhood}
             />
-          )}
-
-          <div style={styles.rightText}>{rightText}</div>
+          </div>
         </div>
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM ROW (CARD NAME + NEIGHBORHOOD if places + YES/NO) */}
+        {/* BOTTOM ROW: card name, neighborhood if places, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
 
-          {/* If in places mode, show the neighborhood below the card name (stylish) */}
+          {/* If we are in places mode, show the neighborhood below the name */}
           {mode === "places" && currentPlace && currentPlace.neighborhood && (
             <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
           )}
@@ -402,6 +381,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* BOTTOM CORNERS */}
         <button style={styles.goBackButton} onClick={handleGoBack}>
           Go Back
         </button>
@@ -420,21 +400,23 @@ export default function Home() {
   );
 }
 
-// The multi-checkbox for neighborhoods
-function NeighborhoodSelector({ neighborhoods, enabledNeighborhoods, onToggle }) {
+// NeighborhoodSelector: always visible in top-right below "USA -> Baltimore"
+function NeighborhoodSelector({ allNeighborhoods, enabledNeighborhoods, onToggle }) {
+  if (!allNeighborhoods || allNeighborhoods.length === 0) {
+    return null; // no neighborhoods at all
+  }
   return (
-    <div style={styles.neighborhoodSelector}>
-      <p style={{ margin: 0, color: "#fff" }}>Neighborhoods:</p>
-      {neighborhoods.map((nb) => {
+    <div style={styles.nbSelectorContainer}>
+      {allNeighborhoods.map((nb) => {
         const isEnabled = enabledNeighborhoods.includes(nb);
         return (
-          <div key={nb} style={styles.neighborhoodCheckRow}>
+          <div key={nb} style={styles.nbCheckRow}>
             <input
               type="checkbox"
               checked={isEnabled}
               onChange={() => onToggle(nb)}
             />
-            <label style={{ marginLeft: "5px", color: isEnabled ? "#0f0" : "#ccc" }}>
+            <label style={{ marginLeft: 5, color: isEnabled ? "#0f0" : "#fff" }}>
               {nb}
             </label>
           </div>
@@ -478,22 +460,39 @@ const styles = {
   topRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: "10px 20px",
   },
   leftText: {
     color: "#fff",
-    fontSize: "1.4em",
+    fontSize: "1.3em",
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     margin: 0,
     textTransform: "uppercase",
+    maxWidth: "40%",
   },
   rightText: {
-    color: "#ffdc00",
+    color: "#ffd700",
     fontSize: "1.2em",
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     margin: 0,
     textAlign: "right",
+    maxWidth: "60%",
+  },
+  nbSelectorContainer: {
+    marginTop: "8px",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: "8px",
+    borderRadius: "6px",
+    maxHeight: "150px",
+    overflowY: "auto",
+  },
+  nbCheckRow: {
+    display: "flex",
+    alignItems: "center",
+    marginBottom: "4px",
   },
   centerContent: {
     flexGrow: 1,
@@ -580,19 +579,5 @@ const styles = {
     padding: "30px",
     borderRadius: "10px",
     textAlign: "center",
-  },
-  neighborhoodSelector: {
-    display: "flex",
-    flexDirection: "column",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    padding: "10px",
-    borderRadius: "8px",
-    maxHeight: "200px",
-    overflowY: "auto",
-  },
-  neighborhoodCheckRow: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: "4px",
   },
 };
