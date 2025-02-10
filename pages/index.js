@@ -30,13 +30,16 @@ export default function Home() {
   // Error
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 2) NEIGHBORHOODS
-  // We'll fetch all distinct neighborhoods once, 
-  // then separate them into "within 5 miles" vs "outside city"
+  // 2) NEIGHBORHOOD AUTOCOMPLETE
+  // We'll fetch all distinct neighborhoods from `places`.
+  // By default, no neighborhood is selected => user sees no places if they proceed.
   const [allNeighborhoods, setAllNeighborhoods] = useState([]);
-  const [enabledNeighborhoods, setEnabledNeighborhoods] = useState([]);
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState(null); // e.g. "Federal Hill"
+  const [searchTerm, setSearchTerm] = useState(""); // user typing partial string
+  const [suggestions, setSuggestions] = useState([]); // array of matching neighborhoods
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // On mount: load categories/subcategories & neighborhoods
+  // On mount, load categories/subcategories + neighborhoods
   useEffect(() => {
     loadBaseData();
     loadAllNeighborhoods();
@@ -67,14 +70,12 @@ export default function Home() {
 
   async function loadAllNeighborhoods() {
     try {
-      // Distinct neighborhoods from places
       const { data, error } = await supabase
         .from("places")
         .select("neighborhood")
         .neq("neighborhood", null);
       if (error) throw error;
 
-      // gather unique
       const nbSet = new Set();
       data.forEach((row) => {
         if (row.neighborhood) {
@@ -82,53 +83,41 @@ export default function Home() {
         }
       });
       const nbArray = Array.from(nbSet);
-
-      // sort them alphabetically or some custom logic
-      nbArray.sort();
-
+      nbArray.sort(); // alphabetical
       setAllNeighborhoods(nbArray);
-      setEnabledNeighborhoods(nbArray); // all enabled
     } catch (err) {
       console.error("Error loading neighborhoods:", err);
     }
   }
 
-  // Toggling neighborhoods
-  function toggleNeighborhood(nb) {
-    if (enabledNeighborhoods.includes(nb)) {
-      // remove it
-      const newList = enabledNeighborhoods.filter((x) => x !== nb);
-      setEnabledNeighborhoods(newList);
-    } else {
-      // add it
-      setEnabledNeighborhoods([...enabledNeighborhoods, nb]);
+  // Autocomplete logic:
+  // 1) Whenever searchTerm changes, compute suggestions from allNeighborhoods
+  useEffect(() => {
+    if (!searchTerm) {
+      setSuggestions([]);
+      return;
     }
+    const lower = searchTerm.toLowerCase();
+    const matched = allNeighborhoods.filter((n) => n.toLowerCase().includes(lower));
+    setSuggestions(matched.slice(0, 5)); // up to 5 suggestions
+  }, [searchTerm, allNeighborhoods]);
+
+  // When user picks a suggestion
+  function pickNeighborhood(nb) {
+    setSelectedNeighborhood(nb);
+    setSearchTerm(nb);
+    setSuggestions([]);
+    setShowSuggestions(false);
   }
 
-  // reorder places => enabled neighborhoods first, then disabled
+  // reorder places => if no selectedNeighborhood => return empty => user sees no places
+  // else only places with p.neighborhood === selectedNeighborhood
   function reorderPlacesByNeighborhood(placesArray) {
-    if (!placesArray || placesArray.length === 0) return placesArray;
-    if (!enabledNeighborhoods || enabledNeighborhoods.length === 0) {
-      // if none are enabled => no special reorder
-      return placesArray;
+    if (!selectedNeighborhood) {
+      // user hasn't chosen => no places
+      return [];
     }
-    if (enabledNeighborhoods.length === allNeighborhoods.length) {
-      // if all enabled => no reorder
-      return placesArray;
-    }
-    const enabledSet = new Set(enabledNeighborhoods);
-    const enabledList = [];
-    const disabledList = [];
-    placesArray.forEach((p) => {
-      if (!p.neighborhood) {
-        disabledList.push(p);
-      } else if (enabledSet.has(p.neighborhood)) {
-        enabledList.push(p);
-      } else {
-        disabledList.push(p);
-      }
-    });
-    return [...enabledList, ...disabledList];
+    return placesArray.filter((p) => p.neighborhood === selectedNeighborhood);
   }
 
   // Current items
@@ -183,6 +172,7 @@ export default function Home() {
   }
 
   // Right text => "USA -> Baltimore"
+  // Then the user has a text input below it for searching neighborhoods
   function getRightText() {
     return "USA -> Baltimore";
   }
@@ -215,9 +205,9 @@ export default function Home() {
       if (error) throw error;
 
       let placeItems = data.map((row) => row.places);
-      // sort by weight
+      // sort by weight desc
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-      // reorder by neighborhoods
+      // reorder (or filter) by selectedNeighborhood
       placeItems = reorderPlacesByNeighborhood(placeItems);
 
       setPlaces(placeItems);
@@ -303,11 +293,14 @@ export default function Home() {
     setSelectedSubcategory(null);
     setPlaces([]);
     setMode("categories");
-    // re-enable all neighborhoods
-    setEnabledNeighborhoods(allNeighborhoods);
+    // Clear the selected neighborhood => no places
+    setSelectedNeighborhood(null);
+    setSearchTerm("");
+    setSuggestions([]);
+    setShowSuggestions(false);
   }
 
-  // 3) RENDER
+  // RENDER
   const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
@@ -328,25 +321,30 @@ export default function Home() {
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-
         {/* TOP ROW */}
         <div style={styles.topRow}>
           <div style={styles.leftText}>{leftText}</div>
 
           <div style={styles.rightText}>
             {rightText}
-            {/* NeighborhoodSelector below "USA -> Baltimore" */}
-            <NeighborhoodSelector
-              allNeighborhoods={allNeighborhoods}
-              enabledNeighborhoods={enabledNeighborhoods}
-              onToggle={toggleNeighborhood}
-            />
+            <div style={{ marginTop: "8px" }}>
+              <NeighborhoodSearch
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                suggestions={suggestions}
+                showSuggestions={showSuggestions}
+                setShowSuggestions={setShowSuggestions}
+                onPick={pickNeighborhood}
+                selectedNeighborhood={selectedNeighborhood}
+                allNeighborhoods={allNeighborhoods}
+              />
+            </div>
           </div>
         </div>
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM ROW: card name, maybe neighborhood if place, yes/no */}
+        {/* BOTTOM ROW: card name, neighborhood if in places, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
 
@@ -398,103 +396,63 @@ export default function Home() {
   );
 }
 
-// NeighborhoodSelector => splits neighborhoods into within 5 miles vs outside city
-function NeighborhoodSelector({ allNeighborhoods, enabledNeighborhoods, onToggle }) {
-  if (!allNeighborhoods || allNeighborhoods.length === 0) {
-    return null;
+// The NeighborhoodSearch component: text input + suggestion dropdown
+function NeighborhoodSearch({
+  searchTerm,
+  setSearchTerm,
+  suggestions,
+  showSuggestions,
+  setShowSuggestions,
+  onPick,
+  selectedNeighborhood,
+  allNeighborhoods,
+}) {
+  // If user clicks inside the box, show suggestions again
+  function handleFocus() {
+    if (searchTerm) {
+      setShowSuggestions(true);
+    }
   }
 
-  // Define your "within 5 miles" set manually:
-  const withinSet = new Set([
-    "Federal Hill",
-    "Fells Point",
-    "Canton",
-    "Mount Vernon",
-    "Locust Point",
-    "Remington",
-    "Hampden",
-    "Station North",
-    "Highlandtown",
-    "Little Italy",
-    "Patterson Park",
-    "Downtown",
-    "Harbor East",
-    "Inner Harbor",
-    "Woodberry",
-    "Hamilton",
-    "Charles Village",
-    "Upton",
-    "Poppleton",
-    "Old Goucher",
-    "Jonestown",
-    // add more as needed
-  ]);
-
-  const [showOutside, setShowOutside] = useState(false);
-
-  // separate them
-  const withinMiles = [];
-  const outsideCity = [];
-  allNeighborhoods.forEach((nb) => {
-    if (withinSet.has(nb)) {
-      withinMiles.push(nb);
-    } else {
-      outsideCity.push(nb);
-    }
-  });
-
-  // If you want "withinMiles" sorted by name or other logic, we can do:
-  withinMiles.sort();
-  outsideCity.sort();
+  function handleBlur() {
+    // slight timeout to allow picking
+    setTimeout(() => {
+      setShowSuggestions(false);
+    }, 200);
+  }
 
   return (
-    <div style={styles.nbSelectorContainer}>
-      <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Neighborhoods</div>
-
-      {/* Within city */}
-      {withinMiles.map((nb) => {
-        const isEnabled = enabledNeighborhoods.includes(nb);
-        return (
-          <div key={nb} style={styles.nbCheckRow}>
-            <input
-              type="checkbox"
-              checked={isEnabled}
-              onChange={() => onToggle(nb)}
-            />
-            <label style={{ marginLeft: 5, color: isEnabled ? "#0f0" : "#fff" }}>
-              {nb}
-            </label>
-          </div>
-        );
-      })}
-
-      {/* OUTSIDE CITY (collapsible) */}
-      <div style={{ marginTop: "8px" }}>
-        <button
-          style={styles.outsideToggleBtn}
-          onClick={() => setShowOutside(!showOutside)}
-        >
-          {showOutside ? "Hide Outside City" : "Show Outside City"}
-        </button>
-      </div>
-      {showOutside && (
-        <div style={{ marginTop: "5px" }}>
-          {outsideCity.map((nb) => {
-            const isEnabled = enabledNeighborhoods.includes(nb);
-            return (
-              <div key={nb} style={styles.nbCheckRow}>
-                <input
-                  type="checkbox"
-                  checked={isEnabled}
-                  onChange={() => onToggle(nb)}
-                />
-                <label style={{ marginLeft: 5, color: isEnabled ? "#0f0" : "#fff" }}>
-                  {nb}
-                </label>
-              </div>
-            );
-          })}
+    <div style={styles.nbSearchContainer}>
+      <label style={{ color: "#fff", fontSize: "0.9em" }}>Neighborhood:</label>
+      <input
+        style={styles.nbSearchInput}
+        type="text"
+        placeholder="Type an address or neighborhood..."
+        value={searchTerm}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setShowSuggestions(true);
+        }}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <div style={styles.nbSuggestionList}>
+          {suggestions.map((sug) => (
+            <div
+              key={sug}
+              style={styles.nbSuggestionItem}
+              onClick={() => onPick(sug)}
+            >
+              {sug}
+            </div>
+          ))}
         </div>
+      )}
+      {selectedNeighborhood && (
+        <p style={styles.nbSelectedText}>
+          Currently selected: <strong>{selectedNeighborhood}</strong>
+        </p>
       )}
     </div>
   );
@@ -553,28 +511,37 @@ const styles = {
     textAlign: "right",
     maxWidth: "60%",
   },
-  nbSelectorContainer: {
-    marginTop: "8px",
-    display: "flex",
-    flexDirection: "column",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    padding: "8px",
-    borderRadius: "6px",
-    maxHeight: "170px",
+  nbSearchContainer: {
+    position: "relative",
+    marginTop: "5px",
+  },
+  nbSearchInput: {
+    width: "220px",
+    padding: "5px",
+    borderRadius: "4px",
+    border: "1px solid #888",
+  },
+  nbSuggestionList: {
+    position: "absolute",
+    top: "33px",
+    left: 0,
+    width: "220px",
+    backgroundColor: "#333",
+    borderRadius: "4px",
+    zIndex: 999,
+    maxHeight: "140px",
     overflowY: "auto",
   },
-  nbCheckRow: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: "4px",
-  },
-  outsideToggleBtn: {
-    border: "none",
-    backgroundColor: "#444",
+  nbSuggestionItem: {
+    padding: "5px",
     color: "#fff",
-    padding: "5px 10px",
-    borderRadius: "4px",
     cursor: "pointer",
+    borderBottom: "1px solid #555",
+  },
+  nbSelectedText: {
+    color: "#fff",
+    fontSize: "0.8em",
+    marginTop: "3px",
   },
   centerContent: {
     flexGrow: 1,
