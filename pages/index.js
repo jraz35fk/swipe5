@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// 1) Supabase client
+// Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -21,7 +21,7 @@ export default function Home() {
   // "mode": "categories" | "subcategories" | "places"
   const [mode, setMode] = useState("categories");
 
-  // Selected category/subcategory for breadcrumb or top text
+  // Selected parent items
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
@@ -29,21 +29,19 @@ export default function Home() {
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Error
+  // Error handling
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 2) Fetch categories & subcategories on mount
+  // 1) Fetch categories & subcategories on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        // categories
         const { data: catData, error: catErr } = await supabase
           .from("categories")
           .select("*")
           .order("weight", { ascending: false });
         if (catErr) throw catErr;
 
-        // subcategories
         const { data: subData, error: subErr } = await supabase
           .from("subcategories")
           .select("*")
@@ -71,7 +69,7 @@ export default function Home() {
   const currentSubcategory = subcatsForCategory[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // Return { name, image_url } for the current item
+  // Return {name, image_url} for the current card
   function getCurrentCardData() {
     if (mode === "categories") {
       return currentCategory
@@ -103,18 +101,26 @@ export default function Home() {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // New function to show top-left text:
-  // - If in "subcategories", show the selectedCategory's name.
-  // - If in "places", show "Category → Subcategory".
-  // - If still in "categories", show nothing.
-  function getHeaderText() {
+  // Left side: Category -> Subcategory breadcrumb
+  // - If subcategories mode => show category name
+  // - If places mode => show "Category -> Subcategory"
+  function getLeftBreadcrumb() {
     if (mode === "subcategories" && selectedCategory) {
       return selectedCategory.name;
     }
     if (mode === "places" && selectedCategory && selectedSubcategory) {
-      return `${selectedCategory.name} → ${selectedSubcategory.name}`;
+      return `${selectedCategory.name} -> ${selectedSubcategory.name}`;
     }
-    return ""; // if mode === "categories", no parent
+    return "";
+  }
+
+  // Right side: "USA -> Baltimore -> Neighborhood" if we're in places mode
+  //   and the current place has a neighborhood
+  function getRightNeighborhood() {
+    if (mode === "places" && currentPlace && currentPlace.neighborhood) {
+      return `USA -> Baltimore -> ${currentPlace.neighborhood}`;
+    }
+    return "";
   }
 
   // ============= CATEGORIES LAYER =============
@@ -158,7 +164,7 @@ export default function Home() {
   function handleNoSubcategory() {
     const next = subIndex + 1;
     if (next >= subcatsForCategory.length) {
-      // next cat
+      // next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -178,6 +184,7 @@ export default function Home() {
     setTimeout(() => setShowCelebration(false), 2000);
 
     setMatches((prev) => [...prev, currentPlace]);
+
     const next = placeIndex + 1;
     if (next >= places.length) {
       moveToNextSubcategory();
@@ -242,29 +249,32 @@ export default function Home() {
       </div>
     );
   }
+
+  // Background image fallback
   const bgImage = getBackgroundImage(currentCard.image_url);
-  const headerText = getHeaderText();
+
+  // Build top-left + top-right text
+  const leftText = getLeftBreadcrumb();         // e.g. "Food & Dining -> Cafés"
+  const rightText = getRightNeighborhood();     // e.g. "USA -> Baltimore -> Fells Point"
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* Top-left text: Category or Category → Subcategory */}
-        <div style={styles.topTextRow}>
-          {headerText && (
-            <h2 style={styles.parentText}>
-              {headerText}
-            </h2>
-          )}
+
+        {/* Top row with left + right text */}
+        <div style={styles.topRow}>
+          <div style={styles.leftText}>{leftText}</div>
+          <div style={styles.rightText}>{rightText}</div>
         </div>
 
+        {/* Center content can remain empty or for future usage */}
         <div style={styles.centerContent}></div>
 
-        {/* Bottom text row with card name */}
+        {/* Bottom text row with card name, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
           <p style={styles.clickForInfo}>Click for info</p>
 
-          {/* Yes/No under card name */}
           <div style={styles.yesNoRow}>
             <button
               style={styles.noButton}
@@ -289,7 +299,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Go Back & Reshuffle bottom corners */}
+        {/* Bottom corners: Go Back + Reshuffle */}
         <button style={styles.goBackButton} onClick={handleGoBack}>
           Go Back
         </button>
@@ -339,14 +349,25 @@ const styles = {
     justifyContent: "space-between",
     position: "relative",
   },
-  topTextRow: {
+  topRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: "20px",
   },
-  parentText: {
+  leftText: {
     color: "#fff",
-    fontSize: "2em",
+    fontSize: "1.4em",
+    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
     margin: 0,
     textTransform: "uppercase",
+  },
+  rightText: {
+    color: "#ffdc00",
+    fontSize: "1.2em",
+    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+    margin: 0,
+    textAlign: "right",
   },
   centerContent: {
     flexGrow: 1,
