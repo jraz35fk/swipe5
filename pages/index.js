@@ -103,20 +103,19 @@ export default function Home() {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // Parent text if subcategory or place
-  function getParentText() {
+  // New function to show top-left text:
+  // - If in "subcategories", show the selectedCategory's name.
+  // - If in "places", show "Category → Subcategory".
+  // - If still in "categories", show nothing.
+  function getHeaderText() {
     if (mode === "subcategories" && selectedCategory) {
       return selectedCategory.name;
     }
-    if (mode === "places" && selectedSubcategory) {
-      return selectedSubcategory.name;
+    if (mode === "places" && selectedCategory && selectedSubcategory) {
+      return `${selectedCategory.name} → ${selectedSubcategory.name}`;
     }
-    return "";
+    return ""; // if mode === "categories", no parent
   }
-
-  // The "current card"
-  const currentCard = getCurrentCardData();
-  const parentText = getParentText();
 
   // ============= CATEGORIES LAYER =============
   function handleYesCategory() {
@@ -211,7 +210,7 @@ export default function Home() {
     }
   }
 
-  // Go Back & Reshuffle => now at bottom corners
+  // Go Back & Reshuffle => bottom corners
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -231,6 +230,7 @@ export default function Home() {
     setMode("categories");
   }
 
+  const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
       <div style={styles.container}>
@@ -242,17 +242,17 @@ export default function Home() {
       </div>
     );
   }
-
   const bgImage = getBackgroundImage(currentCard.image_url);
+  const headerText = getHeaderText();
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
+        {/* Top-left text: Category or Category → Subcategory */}
         <div style={styles.topTextRow}>
-          {/* If there's a parent category/subcategory */}
-          {parentText && (
+          {headerText && (
             <h2 style={styles.parentText}>
-              Explore <span style={styles.parentName}>{parentText}</span>
+              {headerText}
             </h2>
           )}
         </div>
@@ -264,7 +264,7 @@ export default function Home() {
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
           <p style={styles.clickForInfo}>Click for info</p>
 
-          {/* Now the YES/NO buttons appear under the card name */}
+          {/* Yes/No under card name */}
           <div style={styles.yesNoRow}>
             <button
               style={styles.noButton}
@@ -289,7 +289,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Go Back & Reshuffle in bottom-left & bottom-right corners */}
+        {/* Go Back & Reshuffle bottom corners */}
         <button style={styles.goBackButton} onClick={handleGoBack}>
           Go Back
         </button>
@@ -348,16 +348,12 @@ const styles = {
     margin: 0,
     textTransform: "uppercase",
   },
-  parentName: {
-    color: "#ffdc00",
-    fontSize: "1.2em",
-  },
   centerContent: {
     flexGrow: 1,
   },
   bottomTextRow: {
     textAlign: "center",
-    marginBottom: "70px", // space for bottom buttons
+    marginBottom: "70px", // space for bottom corners
   },
   currentCardName: {
     color: "#fff",
