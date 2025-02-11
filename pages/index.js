@@ -11,7 +11,7 @@ export default function Home() {
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
-  const [neighborhoods, setNeighborhoods] = useState([]); // NEW: to let users search neighborhoods
+  const [neighborhoods, setNeighborhoods] = useState([]); // For searching neighborhoods
 
   // Flow
   const [catIndex, setCatIndex] = useState(0);
@@ -32,12 +32,12 @@ export default function Home() {
   const [matchDeckOpen, setMatchDeckOpen] = useState(false);
   const [newMatchesCount, setNewMatchesCount] = useState(0);
 
-  // Subcategory/Neighborhood search
+  // Search
   const [searchTerm, setSearchTerm] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  // Load data on mount
+  // Load on mount
   useEffect(() => {
     loadBaseData();
   }, []);
@@ -60,7 +60,7 @@ export default function Home() {
         .order("weight", { ascending: false });
       if (subErr) throw subErr;
 
-      // 3) Filter subcategories to ensure they link to a place
+      // 3) Filter subcategories to ensure they reference places
       let { data: psData, error: psErr } = await supabase
         .from("place_subcategories")
         .select("subcategory_id");
@@ -69,11 +69,11 @@ export default function Home() {
       const validSubIds = new Set(psData.map((ps) => ps.subcategory_id));
       subData = subData.filter((s) => validSubIds.has(s.id));
 
-      // Keep only categories that have subcategories
+      // Keep only categories that still have subcategories
       const catWithSubs = new Set(subData.map((s) => s.category_id));
       catData = catData.filter((c) => catWithSubs.has(c.id));
 
-      // Sort them for a nice order
+      // Sort
       catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
@@ -94,7 +94,7 @@ export default function Home() {
     }
   }
 
-  // Combine categories + subcategories + neighborhoods for search
+  // Combine for search
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
@@ -102,17 +102,17 @@ export default function Home() {
     }
     const lower = searchTerm.toLowerCase();
 
-    // Categories
+    // Cat
     const catMatches = categories
       .filter((c) => c.name.toLowerCase().includes(lower))
       .map((c) => ({ type: "category", name: c.name, id: c.id }));
 
-    // Subcategories
+    // Sub
     const subMatches = subcategories
       .filter((s) => s.name.toLowerCase().includes(lower))
       .map((s) => ({ type: "subcategory", name: s.name, id: s.id }));
 
-    // Neighborhoods
+    // Hoods
     const hoodMatches = neighborhoods
       .filter((n) => n.name.toLowerCase().includes(lower))
       .map((n) => ({ type: "neighborhood", name: n.name, id: n.id }));
@@ -121,13 +121,12 @@ export default function Home() {
     setSearchSuggestions(combined.slice(0, 8));
   }, [searchTerm, categories, subcategories, neighborhoods]);
 
-  // Handle picking a suggestion
+  // Pick suggestion
   function pickSearchSuggestion(sug) {
     setSearchTerm(sug.name);
     setShowSearchSuggestions(false);
 
     if (sug.type === "category") {
-      // Jump to that category
       const idx = categories.findIndex((c) => c.id === sug.id);
       if (idx !== -1) {
         setCatIndex(idx);
@@ -135,7 +134,6 @@ export default function Home() {
         handleYesCategoryOverride(idx);
       }
     } else if (sug.type === "subcategory") {
-      // Jump to that subcategory
       const subObj = subcategories.find((x) => x.id === sug.id);
       if (!subObj) return;
       const catId = subObj.category_id;
@@ -152,12 +150,10 @@ export default function Home() {
         }
       }
     } else if (sug.type === "neighborhood") {
-      // Directly load places in that neighborhood
       loadPlacesByNeighborhood(sug.id);
     }
   }
 
-  // If user picks a neighborhood
   async function loadPlacesByNeighborhood(neighborhoodId) {
     try {
       const { data, error } = await supabase
@@ -180,7 +176,7 @@ export default function Home() {
     }
   }
 
-  // Jump to a category
+  // Jump to category
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -190,7 +186,7 @@ export default function Home() {
     setMode("subcategories");
   }
 
-  // Jump to a subcategory
+  // Jump to subcategory
   async function handleYesSubcategoryOverride(subId) {
     const subObj = subcategories.find((x) => x.id === subId);
     if (!subObj) return;
@@ -213,7 +209,7 @@ export default function Home() {
     }
   }
 
-  // Normal flow
+  // For normal flow
   const currentCategory = categories[catIndex] || null;
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
@@ -223,7 +219,7 @@ export default function Home() {
   const currentSubcat = scList[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // Build current card data
+  // Build current card
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
@@ -257,7 +253,7 @@ export default function Home() {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // Category
+  // Category yes/no
   function handleYesCategory() {
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
@@ -274,7 +270,7 @@ export default function Home() {
     }
   }
 
-  // Subcategory
+  // Subcategory yes/no
   async function handleYesSubcategory() {
     if (!currentSubcat) return;
     setSelectedSubcategory(currentSubcat);
@@ -311,12 +307,14 @@ export default function Home() {
     }
   }
 
-  // Places
+  // Places yes/no
   function handleYesPlace() {
+    // ONLY add final match if we are in 'places' mode => guaranteed here
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
+    // This is the only place we do setMatches => so only real places get added
     setMatches((prev) => [...prev, currentPlace]);
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
@@ -354,6 +352,26 @@ export default function Home() {
     }
   }
 
+  // unify no/yes
+  function handleNo() {
+    if (mode === "places") {
+      handleNoPlace();
+    } else if (mode === "subcategories") {
+      handleNoSubcategory();
+    } else {
+      handleNoCategory();
+    }
+  }
+  function handleYes() {
+    if (mode === "places") {
+      handleYesPlace();
+    } else if (mode === "subcategories") {
+      handleYesSubcategory();
+    } else {
+      handleYesCategory();
+    }
+  }
+
   // Navigation
   function handleGoBack() {
     if (mode === "places") {
@@ -378,26 +396,6 @@ export default function Home() {
     setMatchDeckOpen(false);
   }
 
-  // unify No / Yes
-  function handleNo() {
-    if (mode === "places") {
-      handleNoPlace();
-    } else if (mode === "subcategories") {
-      handleNoSubcategory();
-    } else {
-      handleNoCategory();
-    }
-  }
-  function handleYes() {
-    if (mode === "places") {
-      handleYesPlace();
-    } else if (mode === "subcategories") {
-      handleYesSubcategory();
-    } else {
-      handleYesCategory();
-    }
-  }
-
   // Current card
   const currentCard = getCurrentCardData();
   if (!currentCard) {
@@ -411,6 +409,7 @@ export default function Home() {
       </div>
     );
   }
+
   const bgImage = getBackgroundImage(currentCard.image_url);
 
   return (
@@ -420,7 +419,6 @@ export default function Home() {
         <div style={styles.topRow}>
           <div style={styles.topLeftEmpty}></div>
 
-          {/* Matches button */}
           <MatchedDeckButton
             matches={matches}
             newMatchesCount={newMatchesCount}
@@ -429,7 +427,6 @@ export default function Home() {
             setNewMatchesCount={setNewMatchesCount}
           />
 
-          {/* Right side => location text + search */}
           <div style={styles.topRightArea}>
             <div style={styles.usaBaltimoreText}>USA &rarr; Baltimore</div>
             <SubcategorySearchBar
@@ -445,9 +442,8 @@ export default function Home() {
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM row => neighborhood above name if place, then yes/no, then description if place */}
+        {/* Card Data => neighborhood (if places), name, yes/no, description if places */}
         <div style={styles.bottomTextRow}>
-          {/* If this is a place, show neighborhood above the name */}
           {mode === "places" && currentCard.neighborhood && (
             <p style={styles.neighborhoodText}>{currentCard.neighborhood}</p>
           )}
@@ -462,7 +458,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Description below yes/no if place */}
           {mode === "places" && currentCard.description && (
             <p style={styles.descriptionText}>{currentCard.description}</p>
           )}
@@ -475,7 +470,6 @@ export default function Home() {
           Reshuffle
         </button>
 
-        {/* MATCH DECK OVERLAY */}
         {matchDeckOpen && (
           <MatchDeckOverlay
             matches={matches}
