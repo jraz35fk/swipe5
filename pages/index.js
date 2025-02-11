@@ -29,7 +29,6 @@ export default function Home() {
 
   // For the match deck overlay
   const [matchDeckOpen, setMatchDeckOpen] = useState(false);
-  // If a new match occurs while deck is closed, increment newMatchesCount
   const [newMatchesCount, setNewMatchesCount] = useState(0);
 
   // Subcategory search
@@ -42,21 +41,71 @@ export default function Home() {
     loadBaseData();
   }, []);
 
+  /**
+   * STEP 1: Load top-level categories, subcategories, and neighborhoods.
+   * STEP 2: Filter out categories/subcategories that have zero places.
+   * STEP 3: Merge neighborhoods in as top-level categories (so they're never a subcategory).
+   */
   async function loadBaseData() {
     try {
-      const { data: catData, error: catErr } = await supabase
+      // 1. Load only is_active categories
+      let { data: catData, error: catErr } = await supabase
         .from("categories")
         .select("*")
+        .eq("is_active", true)
         .order("weight", { ascending: false });
       if (catErr) throw catErr;
 
-      const { data: subData, error: subErr } = await supabase
+      // 2. Load only is_active subcategories
+      let { data: subData, error: subErr } = await supabase
         .from("subcategories")
         .select("*")
+        .eq("is_active", true)
         .order("weight", { ascending: false });
       if (subErr) throw subErr;
 
-      setCategories(catData || []);
+      // 3. Load neighborhoods (treated as top-level "categories" in the UI)
+      let { data: hoodData, error: hoodErr } = await supabase
+        .from("neighborhoods")
+        .select("*")
+        .eq("is_active", true)
+        .order("weight", { ascending: false });
+      if (hoodErr) throw hoodErr;
+
+      // 4. Check which subcategories actually link to a place
+      //    We'll see which subcategory_id values appear in place_subcategories.
+      let { data: psData, error: psErr } = await supabase
+        .from("place_subcategories")
+        .select("subcategory_id");
+      if (psErr) throw psErr;
+      const validSubIds = new Set((psData || []).map((ps) => ps.subcategory_id));
+
+      // Filter subcategories -> keep only those referencing at least 1 place
+      subData = (subData || []).filter((s) => validSubIds.has(s.id));
+
+      // Now keep only categories that still have subcategories
+      // i.e. subcategories referencing places.
+      const catWithSubs = new Set(subData.map((s) => s.category_id));
+      catData = (catData || []).filter((c) => catWithSubs.has(c.id));
+
+      // 5. Transform neighborhoods into "fake categories"
+      //    so they show at top-level only.
+      const hoodCats = (hoodData || []).map((n) => ({
+        id: "hood-" + n.id,  // string ID so we can differentiate from normal cat IDs
+        name: n.name,
+        image_url: n.image_url,
+        weight: n.weight,
+        // We'll mark it so we know it's a neighborhood "category"
+        isNeighborhood: true
+      }));
+
+      // 6. Combine real categories + neighborhood categories
+      const finalCategories = [...catData, ...hoodCats];
+
+      // Sort them all by weight descending (just to unify the order)
+      finalCategories.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+
+      setCategories(finalCategories);
       setSubcategories(subData || []);
     } catch (err) {
       setErrorMsg(err.message);
@@ -99,6 +148,7 @@ export default function Home() {
       const subObj = subcategories.find((x) => x.id === sug.id);
       if (!subObj) return;
       const catId = subObj.category_id;
+      // which normal category is that?
       const catIdx = categories.findIndex((c) => c.id === catId);
       if (catIdx !== -1) {
         setCatIndex(catIdx);
@@ -117,11 +167,28 @@ export default function Home() {
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
+
+    // If it's a neighborhood category, skip subcategories & places flow
+    if (catObj.isNeighborhood) {
+      // (Option A) If you have logic to show places directly in a neighborhood,
+      //   you'd implement that here. Otherwise, we skip to next category:
+      const next = catIdx + 1;
+      if (next >= categories.length) {
+        alert("No more categories left!");
+        setMode("categories");
+      } else {
+        setCatIndex(next);
+      }
+      return;
+    }
+
+    // If it's a normal category
     setSelectedCategory(catObj);
     setSubIndex(0);
     setPlaceIndex(0);
     setMode("subcategories");
   }
+
   async function handleYesSubcategoryOverride(subId) {
     const subObj = subcategories.find((x) => x.id === subId);
     if (!subObj) return;
@@ -148,6 +215,10 @@ export default function Home() {
   const currentCategory = categories[catIndex] || null;
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
+    if (cat.isNeighborhood) {
+      // If it's a neighborhood, we have no subcategories for it
+      return [];
+    }
     return subcategories.filter((s) => s.category_id === cat.id);
   }
   const scList = getSubcatsForCategory(selectedCategory);
@@ -184,6 +255,19 @@ export default function Home() {
   // Category
   function handleYesCategory() {
     if (!currentCategory) return;
+
+    if (currentCategory.isNeighborhood) {
+      // Option A: do something special for neighborhoods (skip to next)
+      const next = catIndex + 1;
+      if (next >= categories.length) {
+        alert("No more categories left!");
+        setMode("categories");
+      } else {
+        setCatIndex(next);
+      }
+      return;
+    }
+
     setSelectedCategory(currentCategory);
     setSubIndex(0);
     setPlaceIndex(0);
