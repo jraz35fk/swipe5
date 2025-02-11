@@ -59,50 +59,12 @@ export default function Home() {
     }
   }
 
-  async function loadPlacesByTaxonomyNode(taxId) {
-    try {
-      let { data, error } = await supabase
-        .from("place_taxonomy")
-        .select("place_id, places(*)")
-        .eq("taxonomy_id", taxId);
-      if (error) throw error;
-      let placeItems = (data || []).map(row => row.places);
-      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-      setPlaces(placeItems);
-      setPlaceIndex(0);
-      setMode("places");
-    } catch (err) {
-      console.error("Error loading places:", err.message);
-      setErrorMsg("No places found for this category.");
-    }
-  }
-
-  function handleYes() {
-    if (mode === "places") {
-      setMatches([...matches, places[placeIndex]]);
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 2000);
-      setPlaceIndex((prev) => (prev + 1 < places.length ? prev + 1 : 0));
-    } else {
-      const selectedNode = taxonomyNodes[currentIndex];
-      setNodeStack([...nodeStack, { node: selectedNode, nodeArray: taxonomyNodes, arrayIndex: currentIndex }]);
-      fetchChildNodes(selectedNode.id);
-    }
-  }
-
-  function handleNo() {
-    if (mode === "places") {
-      setPlaceIndex((prev) => (prev + 1 < places.length ? prev + 1 : 0));
-    } else {
-      setCurrentIndex((prev) => (prev + 1 < taxonomyNodes.length ? prev + 1 : 0));
-    }
-  }
-
   return (
-    <div>
+    <div style={{ textAlign: "center", padding: "20px" }}>
       {isLoading && <p>Loading...</p>}
       {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
+      <h1>DialN</h1>
       <SearchBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -122,9 +84,6 @@ export default function Home() {
 
       {matchDeckOpen && <MatchDeckOverlay matches={matches} onClose={() => setMatchDeckOpen(false)} />}
       {showCelebration && <Celebration />}
-
-      <button onClick={handleYes}>Yes</button>
-      <button onClick={handleNo}>No</button>
     </div>
   );
 }
