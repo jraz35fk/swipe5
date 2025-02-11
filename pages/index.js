@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// SETUP
+/** SETUP: Connect to Supabase */
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -43,9 +43,9 @@ export default function Home() {
     loadBaseData();
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // 1) LOAD DATA
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // 1) LOAD DATA (with weight-based ordering)
+  // ------------------------------------------------------------
   async function loadBaseData() {
     try {
       // Load categories
@@ -53,7 +53,7 @@ export default function Home() {
         .from("categories")
         .select("*")
         .eq("is_active", true)
-        .order("weight", { ascending: false });
+        .order("weight", { ascending: false }); // highest weight first
       if (catErr) throw catErr;
 
       // Load subcategories
@@ -69,14 +69,15 @@ export default function Home() {
         .from("place_subcategories")
         .select("subcategory_id");
       if (psErr) throw psErr;
+
       const validSubIds = new Set(psData.map((ps) => ps.subcategory_id));
       subData = subData.filter((s) => validSubIds.has(s.id));
 
-      // Keep only categories that have subcategories
+      // Keep only categories that still have subcategories
       const catWithSubs = new Set(subData.map((s) => s.category_id));
       catData = catData.filter((c) => catWithSubs.has(c.id));
 
-      // Sort them
+      // Already ordered, but let's re-check sorting
       catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
@@ -97,9 +98,9 @@ export default function Home() {
     }
   }
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // 2) SEARCH (categories, subcategories, neighborhoods)
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
@@ -172,6 +173,7 @@ export default function Home() {
         alert("No places found in that neighborhood!");
         return;
       }
+      // Order by weight descending
       data.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       setPlaces(data);
       setPlaceIndex(0);
@@ -181,9 +183,9 @@ export default function Home() {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 3) NORMAL FLOW: categories -> subcategories -> places
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // 3) FLOW: categories -> subcategories -> places
+  // ------------------------------------------------------------
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -206,6 +208,7 @@ export default function Home() {
       if (error) throw error;
 
       const placeItems = (data || []).map((row) => row.places);
+      // Sort by weight descending
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       setPlaces(placeItems);
       setPlaceIndex(0);
@@ -215,7 +218,7 @@ export default function Home() {
     }
   }
 
-  // category-level yes/no
+  // Category-level yes/no
   const currentCategory = categories[catIndex] || null;
   function handleYesCategory() {
     if (!currentCategory) return;
@@ -233,8 +236,7 @@ export default function Home() {
     }
   }
 
-  // subcategory-level yes/no
-  // We'll define getSubcatsForCategory below
+  // Subcategory-level yes/no
   const currentSubcat = getSubcatsForCategory(selectedCategory)[subIndex] || null;
   function handleYesSubcategory() {
     if (!currentSubcat) return;
@@ -257,15 +259,14 @@ export default function Home() {
     }
   }
 
-  // places-level yes/no
+  // Places-level yes/no
   const currentPlace = places[placeIndex] || null;
-
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    // only places become final matches
+    // Add final match
     setMatches((prev) => [...prev, currentPlace]);
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
@@ -324,7 +325,7 @@ export default function Home() {
     }
   }
 
-  // navigation
+  // Navigation
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -348,7 +349,7 @@ export default function Home() {
     setMatchDeckOpen(false);
   }
 
-  // build current card
+  // Build current card data
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
@@ -382,7 +383,7 @@ export default function Home() {
     return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
   }
 
-  // missing helper function
+  // Helper to get subcats for the selected category
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
     return subcategories.filter((s) => s.category_id === cat.id);
@@ -408,7 +409,7 @@ export default function Home() {
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
 
-        {/* LEFT NAV: branching breadcrumb */}
+        {/* LEFT NAV: Branching design */}
         <LeftHierarchyNav
           mode={mode}
           selectedCategory={selectedCategory}
@@ -421,7 +422,7 @@ export default function Home() {
           }}
         />
 
-        {/* TOP ROW => Matches button + search */}
+        {/* TOP ROW => Matches + Search */}
         <div style={styles.topRow}>
           <MatchedDeckButton
             matches={matches}
@@ -447,6 +448,7 @@ export default function Home() {
 
         {/* BOTTOM => name, yes/no, etc. */}
         <div style={styles.bottomTextRow}>
+          {/* If in places mode, show neighborhood */}
           {mode === "places" && currentCard.neighborhood && (
             <p style={styles.neighborhoodText}>{currentCard.neighborhood}</p>
           )}
@@ -495,7 +497,7 @@ export default function Home() {
   );
 }
 
-/* LEFT NAV: Show branching layers. */
+/* LEFT NAV: Branching design with category → subcategory (no "Layers" heading). */
 function LeftHierarchyNav({
   mode,
   selectedCategory,
@@ -503,64 +505,67 @@ function LeftHierarchyNav({
   onGoToCategories,
   onGoToSubcategories
 }) {
-  // We'll show up to two items: Category + Subcategory
-  // If mode=places, user can click either category or subcategory to go back
-  // If mode=subcategories, user can click category to go back
-  // If mode=categories, we show nothing (or just "Categories")
+  // We'll show a mini "tree":
+  //  ● CategoryName
+  //    └─ ● SubcategoryName
+  // If we are in "places," subcategory is clickable.
+  // If we are in "subcategories," category is clickable.
+  // If mode=categories, we show nothing or minimal.
 
-  // Example display:
-  // CATEGORIES
-  //  -> Subcategories
-  //  -> Places
-
-  // Implementation:
-  const items = [];
-
+  const layers = [];
+  // If there's a chosen category, show it
   if (selectedCategory) {
-    items.push({
+    layers.push({
       label: selectedCategory.name,
-      clickable: mode !== "categories", // only clickable if we're deeper than categories
+      clickable: (mode !== "categories"), // only clickable if deeper than categories
       onClick: onGoToCategories
     });
   }
-
+  // If there's a chosen subcategory, show it
   if (selectedSubcategory) {
-    items.push({
+    layers.push({
       label: selectedSubcategory.name,
-      clickable: mode === "places", // only clickable if we're in places
+      clickable: (mode === "places"), // only clickable if we're in places
       onClick: onGoToSubcategories
     });
   }
 
-  // If you want to show current "mode" (like "PLACES") as text, you can add a final item:
-  // But typically the category/subcat is enough for a branching nav
-
   return (
     <div style={styles.leftNav}>
-      <h3 style={{ color: "#fff", marginBottom: "10px" }}>Layers</h3>
-      {items.length === 0 ? (
-        <p style={{ color: "#ccc", fontStyle: "italic" }}>Categories</p>
+      {layers.length === 0 ? (
+        <div style={{ color: "#ccc", fontStyle: "italic" }}>
+          {/* Could say "Categories" or leave blank */}
+        </div>
       ) : (
-        items.map((item, idx) => (
-          <div key={idx} style={styles.navLayerItem}>
-            {item.clickable ? (
-              <span
-                style={{ textDecoration: "underline", cursor: "pointer" }}
-                onClick={item.onClick}
-              >
-                {item.label}
-              </span>
-            ) : (
-              <span style={{ fontWeight: "bold" }}>{item.label}</span>
-            )}
-          </div>
-        ))
+        <div>
+          {layers.map((item, idx) => {
+            const isLast = idx === layers.length - 1;
+            return (
+              <div key={idx} style={styles.navBranchItem}>
+                {/* bullet */}
+                <span style={styles.branchBullet}>●</span>
+                {item.clickable ? (
+                  <span
+                    style={styles.branchClickable}
+                    onClick={item.onClick}
+                  >
+                    {item.label}
+                  </span>
+                ) : (
+                  <span style={styles.branchLabel}>{item.label}</span>
+                )}
+                {/* if not the last item, draw connector line */}
+                {!isLast && <div style={styles.branchConnectorLine}></div>}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-/* SUBCATEGORY SEARCH BAR */
+/* SEARCH BAR */
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
@@ -694,20 +699,41 @@ const styles = {
     position: "relative"
   },
 
-  // LEFT NAV (new)
+  /* LEFT NAV (branching) */
   leftNav: {
     position: "absolute",
     top: "10px",
     left: "10px",
-    width: "150px",
+    minWidth: "150px",
     backgroundColor: "rgba(0,0,0,0.5)",
     padding: "10px",
     borderRadius: "8px",
     color: "#fff",
     zIndex: 9999
   },
-  navLayerItem: {
-    marginBottom: "6px"
+  navBranchItem: {
+    position: "relative",
+    marginLeft: "20px",
+    marginBottom: "10px"
+  },
+  branchBullet: {
+    marginRight: "8px",
+    color: "#fff"
+  },
+  branchClickable: {
+    textDecoration: "underline",
+    cursor: "pointer"
+  },
+  branchLabel: {
+    fontWeight: "bold"
+  },
+  branchConnectorLine: {
+    position: "absolute",
+    width: "2px",
+    backgroundColor: "#ccc",
+    left: "6px",
+    top: "20px",
+    bottom: "-10px"
   },
 
   topRow: {
@@ -716,7 +742,6 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     paddingRight: "20px"
-    // left side is occupied by leftNav
   },
   topRightArea: {
     display: "flex",
@@ -843,6 +868,7 @@ const styles = {
     borderRadius: "5px",
     cursor: "pointer"
   },
+
   matchDeckOverlay: {
     position: "fixed",
     top: 0,
