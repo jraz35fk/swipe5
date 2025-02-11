@@ -1,16 +1,16 @@
 {
-  "projectName": "Swipe5",
-  "description": "A Next.js app using Supabase, Google Maps Embed API, and a 'swipe' mechanic to navigate from categories → subcategories → places. Each final 'place' card integrates with an embedded Google Map. There is also a search bar that merges categories, subcategories, and neighborhoods. The user can create a 'match deck' of final place cards they liked.",
+  "projectName": "Swipe5 (DialN Swipe Discovery)",
+  "description": "A Next.js + Supabase app where users swipe from categories → subcategories → places. Only final 'place' cards become matches. The user can search or skip. Google Maps iframe pins each place on a map at the places layer.",
   "status": "in-progress",
   "technologies": {
     "frontend": "Next.js (React)",
     "database": "Supabase (PostgreSQL)",
     "maps": "Google Maps Embed API",
-    "externalAPI": "Good Places API (planned or sample if needed)"
+    "externalAPI": "Good Places API (placeholder if needed)"
   },
   "environmentVariables": {
     "GOOD_PLACES_API_KEY": "Your Good Places API Key here",
-    "GOOGLE_MAPS_EMBED_API_KEY": "Your Maps Embed Key here (NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY)",
+    "NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY": "Your Google Maps Embed Key here",
     "NEXT_PUBLIC_SUPABASE_URL": "Your Supabase project URL here",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "Your Supabase anon key here"
   },
@@ -22,11 +22,9 @@
           { "id": "int4" },
           { "name": "text" },
           { "is_active": "boolean?" },
-          { "weight": "int4" },
-          { "image_url": "text" },
-          { "icon_url": "text (nullable)" }
+          { "weight": "int4?" }
         ],
-        "notes": "Stores the main categories for your app. 'is_active' can hide categories that have no subcategories or lead to dead ends."
+        "notes": "Top-level categories. 'is_active' helps avoid showing categories with no real subcategories. 'weight' can help sort for display."
       },
       {
         "name": "subcategories",
@@ -35,11 +33,9 @@
           { "category_id": "int4" },
           { "name": "text" },
           { "is_active": "boolean?" },
-          { "weight": "int4" },
-          { "image_url": "text" },
-          { "icon_url": "text (nullable)" }
+          { "weight": "int4?" }
         ],
-        "notes": "Subcategories linked to categories via category_id. 'is_active' can hide subcats with no places."
+        "notes": "Each subcategory references a category. 'is_active' hides subcategories with no places. 'weight' can help sorting."
       },
       {
         "name": "places",
@@ -49,30 +45,31 @@
           { "neighborhood_id": "int4 (nullable)" },
           { "latitude": "float8?" },
           { "longitude": "float8?" },
-          { "image_url": "text" },
-          { "description": "text" },
+          { "image_url": "text (nullable)" },
+          { "description": "text (nullable)" },
+          { "weight": "int4?" },
           { "is_active": "boolean?" }
         ],
-        "notes": "Final place cards. 'latitude'/'longitude' used for Google Maps embed. 'is_active' can hide incomplete places."
+        "notes": "Final 'swipe' cards. Only places get matched. 'latitude'/'longitude' for Google Maps embed; 'is_active' hides incomplete or deactivated places."
       },
       {
         "name": "neighborhoods",
         "schemaFields": [
           { "id": "int4" },
           { "name": "text" },
-          { "is_active": "boolean?" }
+          { "is_active": "boolean?" },
+          { "weight": "int4?" }
         ],
-        "notes": "Local areas. If user searches for a neighborhood, we can show places in that neighborhood."
+        "notes": "Neighborhoods. If user searches a neighborhood, we load places in that neighborhood. 'weight' for sorting, 'is_active' for validity."
       },
       {
         "name": "place_subcategories",
         "schemaFields": [
-          { "id": "int4" },
           { "place_id": "int4" },
           { "subcategory_id": "int4" },
           { "weight": "int4?" }
         ],
-        "notes": "Join table linking places to subcategories (many-to-many)."
+        "notes": "Join table linking places to subcategories. Potentially includes 'weight' or other metadata."
       },
       {
         "name": "reviews",
@@ -84,17 +81,17 @@
           { "comment": "text" },
           { "created_at": "timestamp" }
         ],
-        "notes": "Optional. User reviews/ratings if you plan to add them."
+        "notes": "If we enable user reviews, we store them here."
       },
       {
         "name": "food_categories",
         "schemaFields": [],
-        "notes": "Placeholder from screenshots. Possibly unify with subcategories or keep if you want specialized 'food' logic."
+        "notes": "Placeholder. Possibly unify with 'subcategories' if not needed."
       },
       {
         "name": "place_food_categories",
         "schemaFields": [],
-        "notes": "Another join table for food categories if needed."
+        "notes": "Placeholder join table for places to specialized 'food categories.'"
       }
     ],
     "buckets": [
@@ -106,16 +103,16 @@
           "downtown_3.jpg",
           "various_1.jpg"
         ],
-        "notes": "Images for categories, neighborhoods, etc."
+        "notes": "Images for categories or neighborhoods."
       },
       {
         "bucketName": "activity-images",
         "access": "Public",
         "storedFiles": [],
-        "notes": "Place/activity images as needed."
+        "notes": "Optional bucket for place/activity images."
       }
     ],
-    "notes": "From the screenshots, these are the existing tables & storage. We'll unify or remove duplicates as the schema evolves."
+    "notes": "We can filter out items (categories/subcategories/neighborhoods/places) by checking 'is_active' or by weighting them."
   },
   "repository": {
     "githubUrl": "https://github.com/jraz35fk/swipe5",
@@ -124,17 +121,17 @@
       {
         "name": "index.js",
         "location": "pages/index.js",
-        "notes": "Front page logic for category/subcategory/place swiping and Google Map embed."
+        "notes": "Handles logic for the category → subcategory → place swipe flow, embedded map, and search bar."
       },
       {
         "name": "MapContainer.js",
         "location": "components/MapContainer.js",
-        "notes": "Houses embedded Google Map (iframe)."
+        "notes": "Example container for Google Maps iframe logic."
       },
       {
         "name": ".env.local",
         "location": "root directory",
-        "notes": "Contains secrets/keys for Supabase and Google Maps."
+        "notes": "Contains Supabase and Google Maps keys."
       }
     ]
   },
@@ -142,69 +139,149 @@
     "os": "macOS",
     "codeEditing": "prefers copy/paste entire scripts",
     "experienceLevel": "beginner",
-    "deployment": "Vercel (connected environment variables)",
-    "notes": "Wants step-by-step instructions for code changes. Uses full script replacements rather than partial edits."
+    "deployment": "Vercel (with environment variables)",
+    "notes": "Wants step-by-step instructions for any code changes. Full script rewrites are preferred."
   },
   "previousSteps": [
     {
-      "date": "Previously (summary from older chat)",
-      "summary": "Created Next.js + Supabase app, set up environment variables on Vercel, tested Google Maps Embed API. Discussed categories → subcategories → places flow. No advanced user auth or complex design yet."
+      "date": "Earlier summary",
+      "summary": "We configured the Next.js + Supabase setup, created database tables, set environment variables on Vercel, tested the Google Maps Embed. We planned the category → subcategory → place structure with a yes/no 'swipe' mechanic and a search bar."
+    },
+    {
+      "date": "LegacyBotSummary",
+      "legacyBotSummary": {
+        "appName": "DialN Swipe Discovery",
+        "description": "A Next.js + Supabase app where users swipe through categories → subcategories → places, only final 'place' cards become matches. The user can search or skip. Google Maps embed pins each place on a map when user reaches the places layer.",
+        "supabaseSchema": {
+          "categories": {
+            "fields": ["id", "name", "is_active", "weight"],
+            "usage": "Top-level categories. Only categories referencing real subcategories remain active."
+          },
+          "subcategories": {
+            "fields": ["id", "category_id", "name", "is_active", "weight"],
+            "usage": "Each subcategory references a category; only subcategories with places remain active."
+          },
+          "places": {
+            "fields": [
+              "id",
+              "name",
+              "neighborhood_id",
+              "latitude",
+              "longitude",
+              "image_url",
+              "description",
+              "weight"
+            ],
+            "usage": "Final cards the user can match. Only 'places' are stored in the match deck."
+          },
+          "neighborhoods": {
+            "fields": ["id", "name", "is_active", "weight"],
+            "usage": "Stores local neighborhoods; active only if referencing real places. Allows user to search by neighborhood."
+          },
+          "place_subcategories": {
+            "fields": ["place_id", "subcategory_id"],
+            "usage": "A join table linking each place to its subcategories. Possibly includes weight or other metadata."
+          }
+        },
+        "frontEndFlow": {
+          "framework": "Next.js (React)",
+          "states": {
+            "catIndex": "Tracks current category index",
+            "subIndex": "Tracks current subcategory index",
+            "placeIndex": "Tracks current place index",
+            "mode": "Either 'categories', 'subcategories', or 'places'",
+            "selectedCategory": "Stores user-chosen category object",
+            "selectedSubcategory": "Stores user-chosen subcategory object",
+            "placesArray": "Holds the final loaded places for the chosen subcategory",
+            "matches": "Array of places the user has said 'Yes' to in places mode"
+          },
+          "flowLogic": {
+            "categories": {
+              "Yes": "Select category → move to subcategories mode",
+              "No": "Increment catIndex"
+            },
+            "subcategories": {
+              "Yes": "Load places for subcategory → move to places mode",
+              "No": "Increment subIndex"
+            },
+            "places": {
+              "Yes": "User matches the place (added to 'matches'), then next placeIndex",
+              "No": "Increment placeIndex"
+            }
+          },
+          "searchBar": {
+            "searchSuggestions": [
+              "categories",
+              "subcategories",
+              "neighborhoods"
+            ],
+            "matchingLogic": "User types → we filter items → user picks item → jump to that layer (or load places if neighborhood)"
+          },
+          "matchDeck": {
+            "overlayModal": "Shows all matched places. Closes on user command, new matches counted as (+N) if closed.",
+            "matchesArray": "Holds final matched places"
+          }
+        },
+        "googleMapsIntegration": {
+          "approach": "Google Maps Embed (iframe) with 'search' mode",
+          "envVariable": "NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY",
+          "urlExample": "https://www.google.com/maps/embed/v1/search?key=YOUR_KEY&zoom=14&q=LAT,LON",
+          "whereItAppears": "Places layer only, each place card has an iframe pinned to latitude/longitude"
+        },
+        "extraDetails": {
+          "isActiveFiltering": "Categories, subcategories, neighborhoods get is_active=FALSE if empty",
+          "weightSorting": "Places or subcategories can be sorted descending by weight",
+          "neighborhoodSearch": "User can pick a neighborhood from search → app loads places for that neighborhood",
+          "matchesAreOnlyPlaces": "Categories/subcategories never become matches, only final place cards"
+        },
+        "exampleIndexHighlights": [
+          "loadBaseData() from Supabase → categories, subcategories, neighborhoods",
+          "filter subcategories referencing places → filter categories referencing subcategories",
+          "Yes/No flow: handleYesCategory, handleYesSubcategory, handleYesPlace, etc.",
+          "Search merges categories, subcategories, neighborhoods → pickSearchSuggestion() handles jumps"
+        ]
+      }
     }
   ],
   "consolidatedProjectSummary": {
-    "concept": "A fun 'swipe' or yes/no interface that guides users from categories to subcategories to places. Final acceptance yields a 'match' stored in a match deck. Also has a search bar for categories, subcategories, or neighborhoods.",
-    "databaseSchema": {
-      "categories": "Stores top-level categories (Food & Dining, Nightlife, etc.). 'is_active' helps avoid dead ends.",
-      "subcategories": "Linked to categories. 'is_active' also used to filter out subcategories with no places.",
-      "places": "Actual places with lat/lon. Has 'description', 'image_url', 'neighborhood_id'. Final 'match' items.",
-      "neighborhoods": "For local search. 'id', 'name', 'is_active'.",
-      "place_subcategories": "Many-to-many link between places & subcategories. Weighted if needed."
-    },
+    "concept": "A Tinder-like or yes/no 'swipe' interface that leads the user through categories → subcategories → places. Only 'places' can be matched. There is also a search bar combining categories, subcategories, neighborhoods. On the final place card, we embed a Google Map pinned at lat/lon.",
+    "databaseSchema": "Uses Supabase with tables for categories, subcategories, places, neighborhoods, plus a join table (place_subcategories) to link them. We may filter items by 'is_active' or 'weight' to avoid empty leads.",
     "frontEndFlow": {
-      "modes": [
-        "categories",
-        "subcategories",
-        "places"
-      ],
-      "indexes": [
-        "catIndex",
-        "subIndex",
-        "placeIndex"
-      ],
-      "stateVars": [
-        "selectedCategory",
-        "selectedSubcategory",
-        "places array",
-        "matches array",
-        "mode"
-      ],
-      "yesNoLogic": {
-        "categoriesYes": "Sets mode='subcategories'",
+      "states": {
+        "catIndex": "Index into categories[]",
+        "subIndex": "Index into subcategories[]",
+        "placeIndex": "Index into places[]",
+        "mode": "'categories' | 'subcategories' | 'places'",
+        "selectedCategory": "Currently chosen category object",
+        "selectedSubcategory": "Currently chosen subcategory object",
+        "placesArray": "Holds loaded places for the selected subcategory (or neighborhood)",
+        "matches": "Array of final places that user said 'Yes' to"
+      },
+      "yesNoFlow": {
+        "categoriesYes": "Sets 'selectedCategory', transitions to subcategories mode",
         "categoriesNo": "Increment catIndex",
-        "subcatsYes": "Fetch places and set mode='places'",
-        "subcatsNo": "Increment subIndex",
-        "placesYes": "Add to matches, increment placeIndex",
+        "subcategoriesYes": "Loads places for that subcat, transitions to places mode",
+        "subcategoriesNo": "Increment subIndex",
+        "placesYes": "Adds place to matches, increments placeIndex",
         "placesNo": "Increment placeIndex"
       },
-      "searchBar": "Merges categories, subcategories, neighborhoods. If user picks a neighborhood, show places there. If user picks a category, jump to that. If subcategory, jump there."
+      "searchBar": "Merges categories, subcategories, neighborhoods in a single suggestion list. If user picks a neighborhood, load places in that neighborhood. If category or subcategory, jump to that flow. Clear search afterward."
     },
     "mapsIntegration": {
-      "type": "Google Maps Embed API (iframe)",
-      "urlFormat": "https://www.google.com/maps/embed/v1/search?key=EMBED_KEY&zoom=14&q=LAT,LNG",
-      "envVar": "NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY"
+      "method": "Google Maps Embed API with <iframe>",
+      "paramFormat": "https://www.google.com/maps/embed/v1/search?key=EMBED_KEY&zoom=14&q=LAT,LON"
     }
   },
   "openQuestions": [
-    "Which categories/subcategories to emphasize or unify?",
-    "User authentication vs. public usage?",
-    "Design style? Tinder-like swiping vs. simpler list?",
-    "Do we want more advanced search/filter logic or geolocation?"
+    "Do we integrate user authentication for reviews or matches, or keep it local?",
+    "Do we unify 'food_categories' or remove them entirely?",
+    "Any advanced design or styling changes needed next?"
   ],
-  "notes": "We will update this file with every major code or schema change. This 'consolidatedProjectSummary' merges all info from prior chats.",
+  "notes": "We keep everything in sync here. We'll update the 'index.js' code in 'files' with every new iteration.",
   "files": {
     "index.js": {
-      "purpose": "The main Next.js page to handle the category → subcategory → place flow, plus searching and Google Map embedding.",
-      "code": "// --- BEGIN index.js (Skeleton) ---\n\nimport { useEffect, useState } from 'react';\nimport { createClient } from '@supabase/supabase-js';\n\n// Initialize Supabase client (ENV VARS in .env.local)\nconst supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;\nconst supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;\nconst supabase = createClient(supabaseUrl, supabaseAnonKey);\n\nexport default function Home() {\n  // State variables\n  const [mode, setMode] = useState('categories'); // can be 'categories' | 'subcategories' | 'places'\n  const [catIndex, setCatIndex] = useState(0);\n  const [subIndex, setSubIndex] = useState(0);\n  const [placeIndex, setPlaceIndex] = useState(0);\n\n  const [categories, setCategories] = useState([]);\n  const [subcategories, setSubcategories] = useState([]);\n  const [places, setPlaces] = useState([]);\n\n  const [selectedCategory, setSelectedCategory] = useState(null);\n  const [selectedSubcategory, setSelectedSubcategory] = useState(null);\n  const [matches, setMatches] = useState([]);\n\n  // For search\n  const [searchTerm, setSearchTerm] = useState('');\n  const [searchResults, setSearchResults] = useState([]);\n\n  // Load initial data (categories, subcategories, neighborhoods)\n  useEffect(() => {\n    const loadBaseData = async () => {\n      // Fetch categories\n      const { data: cats } = await supabase\n        .from('categories')\n        .select('*')\n        .eq('is_active', true);\n\n      // Fetch subcategories\n      const { data: subs } = await supabase\n        .from('subcategories')\n        .select('*')\n        .eq('is_active', true);\n\n      // (Optional) Fetch neighborhoods if you want them in the search\n      const { data: hoods } = await supabase\n        .from('neighborhoods')\n        .select('*')\n        .eq('is_active', true);\n\n      // Filter out categories that have no subcategories\n      // (We can do this in logic or in the DB with a custom view)\n      // For now, assume all are valid\n\n      setCategories(cats || []);\n      setSubcategories(subs || []);\n      // We can store neighborhoods in a separate state if needed\n      // setNeighborhoods(hoods || []);\n    };\n\n    loadBaseData();\n  }, []);\n\n  // Handler for 'Yes' or 'No' in each mode\n  const handleYes = () => {\n    if (mode === 'categories') {\n      // Move to subcategories mode\n      const cat = categories[catIndex];\n      setSelectedCategory(cat);\n      setMode('subcategories');\n    } else if (mode === 'subcategories') {\n      const subcat = subcategories[subIndex];\n      setSelectedSubcategory(subcat);\n      // Load places for that subcategory\n      loadPlaces(subcat.id);\n    } else if (mode === 'places') {\n      // We match the current place\n      const place = places[placeIndex];\n      setMatches([...matches, place]);\n      // Go to next place\n      setPlaceIndex(placeIndex + 1);\n    }\n  };\n\n  const handleNo = () => {\n    if (mode === 'categories') {\n      // Skip to next category\n      setCatIndex(catIndex + 1);\n    } else if (mode === 'subcategories') {\n      // Skip to next subcategory\n      setSubIndex(subIndex + 1);\n    } else if (mode === 'places') {\n      // Skip to next place\n      setPlaceIndex(placeIndex + 1);\n    }\n  };\n\n  // Load places for a subcategory or neighborhood\n  const loadPlaces = async (subcatId) => {\n    // Example: fetch from place_subcategories\n    const { data: placeSubs } = await supabase\n      .from('place_subcategories')\n      .select('place_id')\n      .eq('subcategory_id', subcatId);\n\n    if (!placeSubs || placeSubs.length === 0) {\n      // No places found => might skip or handle differently\n      // For now, just set places = []\n      setPlaces([]);\n      return;\n    }\n\n    // Extract place IDs\n    const placeIds = placeSubs.map(ps => ps.place_id);\n\n    // Fetch actual place data\n    const { data: fetchedPlaces } = await supabase\n      .from('places')\n      .select('*')\n      .in('id', placeIds)\n      .eq('is_active', true);\n\n    setPlaces(fetchedPlaces || []);\n    setPlaceIndex(0);\n    setMode('places');\n  };\n\n  // Search logic (very basic example)\n  const handleSearch = async (term) => {\n    setSearchTerm(term);\n    if (!term) {\n      setSearchResults([]);\n      return;\n    }\n\n    // We can combine categories, subcategories, neighborhoods in one array\n    // For simplicity, let's just do categories + subcategories\n\n    const { data: catResults } = await supabase\n      .from('categories')\n      .select('id, name')\n      .ilike('name', `%${term}%`)\n      .eq('is_active', true);\n\n    const { data: subResults } = await supabase\n      .from('subcategories')\n      .select('id, name')\n      .ilike('name', `%${term}%`)\n      .eq('is_active', true);\n\n    const { data: hoodResults } = await supabase\n      .from('neighborhoods')\n      .select('id, name')\n      .ilike('name', `%${term}%`)\n      .eq('is_active', true);\n\n    // Mark them so we know the type\n    const combined = [];\n    if (catResults) {\n      combined.push(...catResults.map(c => ({ ...c, type: 'category' })));\n    }\n    if (subResults) {\n      combined.push(...subResults.map(s => ({ ...s, type: 'subcategory' })));\n    }\n    if (hoodResults) {\n      combined.push(...hoodResults.map(h => ({ ...h, type: 'neighborhood' })));\n    }\n\n    setSearchResults(combined);\n  };\n\n  // User picks a search item\n  const handleSelectSearch = async (item) => {\n    // Clear search\n    setSearchTerm('');\n    setSearchResults([]);\n\n    // If category, jump directly to that category\n    if (item.type === 'category') {\n      const indexOfCat = categories.findIndex(c => c.id === item.id);\n      if (indexOfCat >= 0) {\n        setCatIndex(indexOfCat);\n        setMode('categories');\n      }\n    } else if (item.type === 'subcategory') {\n      const indexOfSubcat = subcategories.findIndex(sc => sc.id === item.id);\n      if (indexOfSubcat >= 0) {\n        setSubIndex(indexOfSubcat);\n        setMode('subcategories');\n      }\n    } else if (item.type === 'neighborhood') {\n      // If neighborhood, fetch places in that neighborhood\n      const { data: hoodPlaces } = await supabase\n        .from('places')\n        .select('*')\n        .eq('neighborhood_id', item.id)\n        .eq('is_active', true);\n\n      setPlaces(hoodPlaces || []);\n      setPlaceIndex(0);\n      setMode('places');\n    }\n  };\n\n  // Render logic\n  let currentCard = null;\n\n  if (mode === 'categories') {\n    currentCard = categories[catIndex];\n  } else if (mode === 'subcategories') {\n    currentCard = subcategories[subIndex];\n  } else if (mode === 'places') {\n    currentCard = places[placeIndex];\n  }\n\n  // Example Google Maps embed if 'mode === places'\n  const mapEmbedUrl = currentCard && mode === 'places' && currentCard.latitude && currentCard.longitude\n    ? `https://www.google.com/maps/embed/v1/search?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY}&zoom=14&q=${currentCard.latitude},${currentCard.longitude}`\n    : '';\n\n  return (\n    <div style={{ padding: '20px' }}>\n      <h1>Swipe5</h1>\n\n      {/* Search Bar */}\n      <div>\n        <input\n          type=\"text\"\n          value={searchTerm}\n          onChange={(e) => handleSearch(e.target.value)}\n          placeholder=\"Search...\"\n        />\n        {searchResults.length > 0 && (\n          <ul>\n            {searchResults.map(item => (\n              <li key={`${item.type}-${item.id}`} onClick={() => handleSelectSearch(item)}>\n                {item.name} ({item.type})\n              </li>\n            ))}\n          </ul>\n        )}\n      </div>\n\n      {/* Current Card Display */}\n      {currentCard ? (\n        <div style={{ border: '1px solid #ccc', padding: '10px', margin: '10px 0' }}>\n          <h2>{currentCard.name}</h2>\n          {/* If this is a place, optionally show the embed map */}\n          {mode === 'places' && currentCard.latitude && currentCard.longitude && (\n            <iframe\n              width=\"600\"\n              height=\"450\"\n              style={{ border: 0 }}\n              loading=\"lazy\"\n              allowFullScreen\n              src={mapEmbedUrl}\n            />\n          )}\n        </div>\n      ) : (\n        <p>No more {mode} to show!</p>\n      )}\n\n      {/* Yes/No Buttons */}\n      <div>\n        <button onClick={handleYes}>Yes</button>\n        <button onClick={handleNo}>No</button>\n      </div>\n\n      {/* Matches Deck */}\n      <div style={{ marginTop: '20px' }}>\n        <h3>Matches</h3>\n        {matches.map((m, idx) => (\n          <div key={m.id || idx}>\n            {m.name} (Place ID: {m.id})\n          </div>\n        ))}\n      </div>\n    </div>\n  );\n}\n\n// --- END index.js ---\n"
+      "purpose": "The main Next.js page for category → subcategory → place flow, plus searching and Google Map embed.",
+      "code": "// [Will be replaced or updated as you share your actual index.js code next.]"
     }
   }
 }
