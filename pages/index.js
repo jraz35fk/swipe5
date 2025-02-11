@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+// Make sure you've installed react-swipeable: npm install react-swipeable
 import { useSwipeable } from "react-swipeable";
 
 const supabase = createClient(
@@ -12,6 +13,7 @@ export default function Home() {
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
+  const [neighborhoods, setNeighborhoods] = useState([]); // NEW
 
   // Flow
   const [catIndex, setCatIndex] = useState(0);
@@ -44,7 +46,7 @@ export default function Home() {
 
   async function loadBaseData() {
     try {
-      // 1. Load only is_active categories
+      // 1) Load categories
       let { data: catData, error: catErr } = await supabase
         .from("categories")
         .select("*")
@@ -52,7 +54,7 @@ export default function Home() {
         .order("weight", { ascending: false });
       if (catErr) throw catErr;
 
-      // 2. Load only is_active subcategories
+      // 2) Load subcategories
       let { data: subData, error: subErr } = await supabase
         .from("subcategories")
         .select("*")
@@ -60,33 +62,42 @@ export default function Home() {
         .order("weight", { ascending: false });
       if (subErr) throw subErr;
 
-      // 3. Check which subcategories actually link to a place
+      // 3) Filter subcategories by only those referencing a place
       let { data: psData, error: psErr } = await supabase
         .from("place_subcategories")
         .select("subcategory_id");
       if (psErr) throw psErr;
 
-      const validSubIds = new Set((psData || []).map((ps) => ps.subcategory_id));
+      const validSubIds = new Set(psData.map((ps) => ps.subcategory_id));
+      subData = subData.filter((s) => validSubIds.has(s.id));
 
-      // Filter subcategories -> keep only those that appear in place_subcategories
-      subData = (subData || []).filter((s) => validSubIds.has(s.id));
-
-      // Now keep only categories that still have subcategories
+      // Keep only categories that have subcategories
       const catWithSubs = new Set(subData.map((s) => s.category_id));
-      catData = (catData || []).filter((c) => catWithSubs.has(c.id));
+      catData = catData.filter((c) => catWithSubs.has(c.id));
 
-      // Sort them all by weight descending (optional)
+      // Sort them
       catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
-      setCategories(catData || []);
-      setSubcategories(subData || []);
+      setCategories(catData);
+
+      setSubcategories(subData);
+
+      // 4) Load neighborhoods
+      let { data: hoodData, error: hoodErr } = await supabase
+        .from("neighborhoods")
+        .select("*")
+        .eq("is_active", true)
+        .order("weight", { ascending: false });
+      if (hoodErr) throw hoodErr;
+
+      setNeighborhoods(hoodData || []);
     } catch (err) {
       setErrorMsg(err.message);
     }
   }
 
-  // Combine categories + subcategories for search
+  // Combine categories + subcategories + neighborhoods for search
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
@@ -94,31 +105,40 @@ export default function Home() {
     }
     const lower = searchTerm.toLowerCase();
 
+    // Categories
     const catMatches = categories
       .filter((c) => c.name.toLowerCase().includes(lower))
       .map((c) => ({ type: "category", name: c.name, id: c.id }));
 
+    // Subcategories
     const subMatches = subcategories
       .filter((s) => s.name.toLowerCase().includes(lower))
       .map((s) => ({ type: "subcategory", name: s.name, id: s.id }));
 
-    const combined = [...catMatches, ...subMatches];
-    setSearchSuggestions(combined.slice(0, 5));
-  }, [searchTerm, categories, subcategories]);
+    // Neighborhoods
+    const hoodMatches = neighborhoods
+      .filter((n) => n.name.toLowerCase().includes(lower))
+      .map((n) => ({ type: "neighborhood", name: n.name, id: n.id }));
 
+    const combined = [...catMatches, ...subMatches, ...hoodMatches];
+    setSearchSuggestions(combined.slice(0, 8)); // up to 8 suggestions
+  }, [searchTerm, categories, subcategories, neighborhoods]);
+
+  // Logic when user picks a suggestion
   function pickSearchSuggestion(sug) {
     setSearchTerm(sug.name);
     setShowSearchSuggestions(false);
 
     if (sug.type === "category") {
+      // Jump to that category
       const idx = categories.findIndex((c) => c.id === sug.id);
       if (idx !== -1) {
         setCatIndex(idx);
         setMode("categories");
         handleYesCategoryOverride(idx);
       }
-    } else {
-      // subcategory
+    } else if (sug.type === "subcategory") {
+      // Jump to that subcategory
       const subObj = subcategories.find((x) => x.id === sug.id);
       if (!subObj) return;
       const catId = subObj.category_id;
@@ -134,9 +154,40 @@ export default function Home() {
           handleYesSubcategoryOverride(scList[scIdx].id);
         }
       }
+    } else if (sug.type === "neighborhood") {
+      // Jump directly to "places" for this neighborhood
+      loadPlacesByNeighborhood(sug.id);
     }
   }
 
+  // If user selects a neighborhood from search, fetch places from that neighborhood
+  async function loadPlacesByNeighborhood(neighborhoodId) {
+    try {
+      const { data, error } = await supabase
+        .from("places")
+        .select("*")
+        .eq("neighborhood_id", neighborhoodId);
+      if (error) throw error;
+
+      // If no places found, show error or handle gracefully
+      if (!data || data.length === 0) {
+        alert("No places found in that neighborhood!");
+        return;
+      }
+
+      // Sort by weight if your places table has a 'weight' column
+      data.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+
+      // Go directly to "places" mode
+      setPlaces(data);
+      setPlaceIndex(0);
+      setMode("places");
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  }
+
+  // If user picks a category from suggestions
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -146,11 +197,11 @@ export default function Home() {
     setMode("subcategories");
   }
 
+  // If user picks a subcategory from suggestions
   async function handleYesSubcategoryOverride(subId) {
     const subObj = subcategories.find((x) => x.id === subId);
     if (!subObj) return;
     setSelectedSubcategory(subObj);
-
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -178,15 +229,15 @@ export default function Home() {
   const currentSubcat = scList[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // Build the data for the current card
+  // Build current card data
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
       return {
         name: currentCategory.name,
         image_url: currentCategory.image_url || "",
-        neighborhood: "", // Not relevant for categories
-        description: "" // Not relevant for categories
+        neighborhood: "",
+        description: ""
       };
     } else if (mode === "subcategories") {
       if (!currentSubcat) return null;
@@ -208,18 +259,17 @@ export default function Home() {
     return null;
   }
 
-  // Reusable swipeable card
+  /* SWIPE CARD COMPONENT */
   function DraggableCard({ cardData, onYes, onNo }) {
     const { name, image_url, neighborhood } = cardData;
 
-    // Handlers for swipe
+    // Setup swipe handlers
     const handlers = useSwipeable({
       onSwipedLeft: () => onNo(),
       onSwipedRight: () => onYes(),
       preventScrollOnSwipe: true
     });
 
-    // If there's an image, we fill the background. Otherwise, we show a "swipeBox".
     const hasImage = image_url && image_url.trim() !== "";
     const containerStyle = hasImage
       ? { ...styles.swipeContainer, backgroundImage: `url(${image_url})` }
@@ -230,7 +280,6 @@ export default function Home() {
         {!hasImage && (
           <div style={styles.swipeBox}>Swipe Left or Right</div>
         )}
-        {/* Show neighborhood above the card name ONLY if we have one */}
         {neighborhood && (
           <h3 style={styles.neighborhoodText}>{neighborhood}</h3>
         )}
@@ -239,7 +288,7 @@ export default function Home() {
     );
   }
 
-  // Card-level "No" / "Yes" logic
+  /* NO / YES HANDLERS */
   function handleNo() {
     if (mode === "places") {
       handleNoPlace();
@@ -280,7 +329,6 @@ export default function Home() {
   async function handleYesSubcategory() {
     if (!currentSubcat) return;
     setSelectedSubcategory(currentSubcat);
-
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -356,6 +404,7 @@ export default function Home() {
     }
   }
 
+  /* NAVIGATION */
   function handleGoBack() {
     if (mode === "places") {
       setMode("subcategories");
@@ -396,14 +445,10 @@ export default function Home() {
   return (
     <div style={styles.container}>
       <div style={styles.overlay}>
-
         {/* TOP ROW */}
         <div style={styles.topRow}>
-
-          {/* left side empty */}
           <div style={styles.topLeftEmpty}></div>
 
-          {/* Matches button in center */}
           <MatchedDeckButton
             matches={matches}
             newMatchesCount={newMatchesCount}
@@ -412,7 +457,6 @@ export default function Home() {
             setNewMatchesCount={setNewMatchesCount}
           />
 
-          {/* "USA → Baltimore" text, search bar below it */}
           <div style={styles.topRightArea}>
             <div style={styles.usaBaltimoreText}>USA &rarr; Baltimore</div>
             <SubcategorySearchBar
@@ -435,7 +479,7 @@ export default function Home() {
           />
         </div>
 
-        {/* BOTTOM => YES/NO + Optional Description */}
+        {/* BOTTOM => YES/NO */}
         <div style={styles.bottomTextRow}>
           <div style={styles.yesNoRow}>
             <button style={styles.noButton} onClick={handleNo}>
@@ -446,7 +490,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Description below Yes/No for places */}
+          {/* If it's a place, show description below Yes/No */}
           {mode === "places" && currentCard.description && (
             <p style={styles.descriptionText}>{currentCard.description}</p>
           )}
@@ -459,7 +503,7 @@ export default function Home() {
           Reshuffle
         </button>
 
-        {/* Match Deck Overlay */}
+        {/* MATCH DECK OVERLAY */}
         {matchDeckOpen && (
           <MatchDeckOverlay
             matches={matches}
@@ -481,7 +525,7 @@ export default function Home() {
   );
 }
 
-/* SEARCH BAR */
+/* SUBCATEGORY SEARCH BAR */
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
@@ -499,12 +543,13 @@ function SubcategorySearchBar({
       setShowSearchSuggestions(false);
     }, 200);
   }
+
   return (
     <div style={styles.searchBarContainer}>
       <input
         style={styles.searchInput}
         type="text"
-        placeholder="Type e.g. 'food'..."
+        placeholder="Type e.g. 'food' or 'Federal Hill'..."
         value={searchTerm}
         onChange={(e) => {
           setSearchTerm(e.target.value);
@@ -523,7 +568,9 @@ function SubcategorySearchBar({
             >
               {sug.type === "category"
                 ? `Category: ${sug.name}`
-                : `Subcat: ${sug.name}`}
+                : sug.type === "subcategory"
+                ? `Subcat: ${sug.name}`
+                : `Neighborhood: ${sug.name}`}
             </div>
           ))}
         </div>
@@ -532,7 +579,7 @@ function SubcategorySearchBar({
   );
 }
 
-/* MATCH DECK BUTTON */
+/* MATCHED DECK BUTTON */
 function MatchedDeckButton({
   matches,
   newMatchesCount,
@@ -581,7 +628,7 @@ function MatchDeckOverlay({ matches, onClose }) {
   );
 }
 
-/* CELEBRATION */
+/* CELEBRATION ANIMATION */
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -600,7 +647,7 @@ const styles = {
     height: "100vh",
     position: "relative",
     fontFamily: "sans-serif",
-    backgroundColor: "#aaa" // fallback background
+    backgroundColor: "#aaa"
   },
   overlay: {
     width: "100%",
@@ -779,7 +826,7 @@ const styles = {
     textAlign: "center"
   },
 
-  /* SWIPE STYLES */
+  // SWIPE STYLES
   swipeContainer: {
     width: "350px",
     height: "450px",
