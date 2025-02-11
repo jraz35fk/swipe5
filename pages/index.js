@@ -65,6 +65,7 @@ export default function Home() {
         .from("place_subcategories")
         .select("subcategory_id");
       if (psErr) throw psErr;
+
       const validSubIds = new Set((psData || []).map((ps) => ps.subcategory_id));
 
       // Filter subcategories -> keep only those that appear in place_subcategories
@@ -149,6 +150,7 @@ export default function Home() {
     const subObj = subcategories.find((x) => x.id === subId);
     if (!subObj) return;
     setSelectedSubcategory(subObj);
+
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -176,57 +178,61 @@ export default function Home() {
   const currentSubcat = scList[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
-  // This is what we show in the card
+  // Build the data for the current card
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
       return {
         name: currentCategory.name,
-        image_url: currentCategory.image_url || ""
+        image_url: currentCategory.image_url || "",
+        neighborhood: "", // Not relevant for categories
+        description: "" // Not relevant for categories
       };
     } else if (mode === "subcategories") {
       if (!currentSubcat) return null;
       return {
         name: currentSubcat.name,
-        image_url: currentSubcat.image_url || ""
+        image_url: currentSubcat.image_url || "",
+        neighborhood: "",
+        description: ""
       };
     } else if (mode === "places") {
       if (!currentPlace) return null;
       return {
         name: currentPlace.name,
-        image_url: currentPlace.image_url || ""
+        image_url: currentPlace.image_url || "",
+        neighborhood: currentPlace.neighborhood || "",
+        description: currentPlace.description || ""
       };
     }
     return null;
   }
 
-  // Reusable "Card" with swipe gestures
+  // Reusable swipeable card
   function DraggableCard({ cardData, onYes, onNo }) {
-    const { name, image_url } = cardData;
-    // Set up swipe handlers
+    const { name, image_url, neighborhood } = cardData;
+
+    // Handlers for swipe
     const handlers = useSwipeable({
       onSwipedLeft: () => onNo(),
       onSwipedRight: () => onYes(),
       preventScrollOnSwipe: true
     });
 
-    // If there's an image, we use the entire background as the swipe region.
-    // If not, we add a "swipeBox" in the center to highlight the swipe area.
+    // If there's an image, we fill the background. Otherwise, we show a "swipeBox".
     const hasImage = image_url && image_url.trim() !== "";
-
     const containerStyle = hasImage
-      ? {
-          ...styles.swipeContainer,
-          backgroundImage: `url(${image_url})`
-        }
-      : {
-          ...styles.swipeContainerNoImage
-        };
+      ? { ...styles.swipeContainer, backgroundImage: `url(${image_url})` }
+      : { ...styles.swipeContainerNoImage };
 
     return (
       <div {...handlers} style={containerStyle}>
         {!hasImage && (
           <div style={styles.swipeBox}>Swipe Left or Right</div>
+        )}
+        {/* Show neighborhood above the card name ONLY if we have one */}
+        {neighborhood && (
+          <h3 style={styles.neighborhoodText}>{neighborhood}</h3>
         )}
         <h1 style={styles.cardTitle}>{name}</h1>
       </div>
@@ -274,6 +280,7 @@ export default function Home() {
   async function handleYesSubcategory() {
     if (!currentSubcat) return;
     setSelectedSubcategory(currentSubcat);
+
     try {
       const { data, error } = await supabase
         .from("place_subcategories")
@@ -373,8 +380,8 @@ export default function Home() {
   }
 
   // Current card
-  const currentCardData = getCurrentCardData();
-  if (!currentCardData) {
+  const currentCard = getCurrentCardData();
+  if (!currentCard) {
     return (
       <div style={styles.container}>
         <h1>DialN</h1>
@@ -419,16 +426,16 @@ export default function Home() {
           </div>
         </div>
 
+        {/* CENTER => SWIPE CARD */}
         <div style={styles.centerContent}>
-          {/* The SWIPE-ENABLED CARD */}
           <DraggableCard
-            cardData={currentCardData}
+            cardData={currentCard}
             onYes={handleYes}
             onNo={handleNo}
           />
         </div>
 
-        {/* Bottom row => yes/no buttons */}
+        {/* BOTTOM => YES/NO + Optional Description */}
         <div style={styles.bottomTextRow}>
           <div style={styles.yesNoRow}>
             <button style={styles.noButton} onClick={handleNo}>
@@ -438,6 +445,11 @@ export default function Home() {
               Yes
             </button>
           </div>
+
+          {/* Description below Yes/No for places */}
+          {mode === "places" && currentCard.description && (
+            <p style={styles.descriptionText}>{currentCard.description}</p>
+          )}
         </div>
 
         <button style={styles.goBackButton} onClick={handleGoBack}>
@@ -469,7 +481,7 @@ export default function Home() {
   );
 }
 
-// SEARCH BAR
+/* SEARCH BAR */
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
@@ -520,7 +532,7 @@ function SubcategorySearchBar({
   );
 }
 
-// MATCH DECK BUTTON
+/* MATCH DECK BUTTON */
 function MatchedDeckButton({
   matches,
   newMatchesCount,
@@ -543,7 +555,7 @@ function MatchedDeckButton({
   );
 }
 
-// MATCH DECK OVERLAY
+/* MATCH DECK OVERLAY */
 function MatchDeckOverlay({ matches, onClose }) {
   return (
     <div style={styles.matchDeckOverlay}>
@@ -569,7 +581,7 @@ function MatchDeckOverlay({ matches, onClose }) {
   );
 }
 
-// CELEBRATION
+/* CELEBRATION */
 function CelebrationAnimation() {
   return (
     <div style={styles.celebrationOverlay}>
@@ -581,7 +593,7 @@ function CelebrationAnimation() {
   );
 }
 
-// STYLES
+/* STYLES */
 const styles = {
   container: {
     width: "100vw",
@@ -667,7 +679,8 @@ const styles = {
   },
   bottomTextRow: {
     textAlign: "center",
-    marginBottom: "60px"
+    marginBottom: "60px",
+    padding: "0 20px"
   },
   yesNoRow: {
     marginTop: "20px",
@@ -766,7 +779,7 @@ const styles = {
     textAlign: "center"
   },
 
-  // SWIPE STYLES
+  /* SWIPE STYLES */
   swipeContainer: {
     width: "350px",
     height: "450px",
@@ -820,6 +833,19 @@ const styles = {
     margin: 0,
     padding: "0 10px",
     textTransform: "uppercase",
+    textAlign: "center"
+  },
+  neighborhoodText: {
+    fontSize: "1.2em",
+    marginBottom: "8px",
+    color: "#ffd700",
+    textShadow: "1px 1px 3px rgba(0,0,0,0.7)"
+  },
+  descriptionText: {
+    color: "#fff",
+    marginTop: "12px",
+    fontSize: "1.1em",
+    lineHeight: "1.4",
     textAlign: "center"
   }
 };
