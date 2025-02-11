@@ -59,52 +59,11 @@ export default function Home() {
     }
   }
 
-  function handleYes() {
-    if (mode === "places") handleYesPlace();
-    else handleYesTaxonomy();
-  }
-
-  function handleNo() {
-    if (mode === "places") handleNoPlace();
-    else handleNoTaxonomy();
-  }
-
-  function handleYesTaxonomy() {
-    if (!taxonomyNodes[currentIndex]) return;
-    const selectedNode = taxonomyNodes[currentIndex];
-    setNodeStack([...nodeStack, { node: selectedNode, nodeArray: taxonomyNodes, arrayIndex: currentIndex }]);
-    fetchChildNodes(selectedNode.id);
-  }
-
-  async function fetchChildNodes(parentId) {
-    try {
-      let { data, error } = await supabase
-        .from("taxonomy")
-        .select("*")
-        .eq("parent_id", parentId)
-        .eq("is_active", true)
-        .order("weight", { ascending: false });
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        loadPlacesByTaxonomyNode(parentId);
-      } else {
-        setTaxonomyNodes(data);
-        setCurrentIndex(0);
-        setMode("taxonomy");
-        setPlaces([]);
-        setPlaceIndex(0);
-      }
-    } catch (err) {
-      console.error("Error fetching child nodes:", err.message);
-      setErrorMsg("Failed to load subcategories.");
-    }
-  }
-
   async function loadPlacesByTaxonomyNode(taxId) {
     try {
       let { data, error } = await supabase
         .from("place_taxonomy")
-        .select("place_id, places(*)")
+        .select("place_id, places!inner(*)")
         .eq("taxonomy_id", taxId);
       if (error) throw error;
       let placeItems = (data || []).map(row => row.places);
@@ -115,6 +74,27 @@ export default function Home() {
     } catch (err) {
       console.error("Error loading places:", err.message);
       setErrorMsg("No places found for this category.");
+    }
+  }
+
+  function handleYes() {
+    if (mode === "places") {
+      setMatches([...matches, places[placeIndex]]);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2000);
+      setPlaceIndex((prev) => (prev + 1 < places.length ? prev + 1 : 0));
+    } else {
+      const selectedNode = taxonomyNodes[currentIndex];
+      setNodeStack([...nodeStack, { node: selectedNode, nodeArray: taxonomyNodes, arrayIndex: currentIndex }]);
+      fetchChildNodes(selectedNode.id);
+    }
+  }
+
+  function handleNo() {
+    if (mode === "places") {
+      setPlaceIndex((prev) => (prev + 1 < places.length ? prev + 1 : 0));
+    } else {
+      setCurrentIndex((prev) => (prev + 1 < taxonomyNodes.length ? prev + 1 : 0));
     }
   }
 
