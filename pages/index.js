@@ -1,24 +1,29 @@
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic"; 
 import { createClient } from "@supabase/supabase-js";
 
-/** SETUP: Connect to Supabase */
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// Dynamically import the map to avoid SSR issues
+const MyMap = dynamic(() => import("../components/MapContainer"), {
+  ssr: false
+});
 
 export default function Home() {
   // MAIN DATA
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [places, setPlaces] = useState([]);
-  const [neighborhoods, setNeighborhoods] = useState([]); // For searching neighborhoods
+  const [neighborhoods, setNeighborhoods] = useState([]);
 
   // Flow
   const [catIndex, setCatIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [placeIndex, setPlaceIndex] = useState(0);
-  const [mode, setMode] = useState("categories"); // "categories", "subcategories", "places"
+  const [mode, setMode] = useState("categories");
 
   // Current selections
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -28,8 +33,6 @@ export default function Home() {
   const [matches, setMatches] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
-
-  // For the match deck overlay
   const [matchDeckOpen, setMatchDeckOpen] = useState(false);
   const [newMatchesCount, setNewMatchesCount] = useState(0);
 
@@ -38,69 +41,63 @@ export default function Home() {
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  // On mount, load data
+  // Load data on mount
   useEffect(() => {
     loadBaseData();
   }, []);
 
-  // ------------------------------------------------------------
-  // 1) LOAD DATA (weight-based for subcats/places, but we can shuffle categories on reshuffle)
-  // ------------------------------------------------------------
   async function loadBaseData() {
     try {
-      // Load categories
-      let { data: catData, error: catErr } = await supabase
+      // 1) Load categories
+      let { data: catData } = await supabase
         .from("categories")
         .select("*")
         .eq("is_active", true)
         .order("weight", { ascending: false });
-      if (catErr) throw catErr;
 
-      // Load subcategories
-      let { data: subData, error: subErr } = await supabase
+      // 2) Load subcategories
+      let { data: subData } = await supabase
         .from("subcategories")
         .select("*")
         .eq("is_active", true)
         .order("weight", { ascending: false });
-      if (subErr) throw subErr;
 
-      // Filter subcategories to ensure they have places
-      let { data: psData, error: psErr } = await supabase
+      // Filter subcategories referencing places
+      let { data: psData } = await supabase
         .from("place_subcategories")
         .select("subcategory_id");
-      if (psErr) throw psErr;
-
-      const validSubIds = new Set(psData.map((ps) => ps.subcategory_id));
-      subData = subData.filter((s) => validSubIds.has(s.id));
+      const validSubs = new Set((psData || []).map((ps) => ps.subcategory_id));
+      subData = (subData || []).filter((s) => validSubs.has(s.id));
 
       // Keep only categories that have subcategories
       const catWithSubs = new Set(subData.map((s) => s.category_id));
-      catData = catData.filter((c) => catWithSubs.has(c.id));
+      catData = (catData || []).filter((c) => catWithSubs.has(c.id));
 
-      // They are sorted by weight descending, but we'll handle random on reshuffle
       catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
       setCategories(catData);
       setSubcategories(subData);
 
-      // Load neighborhoods
-      let { data: hoodData, error: hoodErr } = await supabase
+      // 3) Load neighborhoods
+      let { data: hoodData } = await supabase
         .from("neighborhoods")
         .select("*")
         .eq("is_active", true)
         .order("weight", { ascending: false });
-      if (hoodErr) throw hoodErr;
-
       setNeighborhoods(hoodData || []);
     } catch (err) {
       setErrorMsg(err.message);
     }
   }
 
-  // ------------------------------------------------------------
-  // 2) SEARCH (categories, subcategories, neighborhoods)
-  // ------------------------------------------------------------
+  // Helper
+  function getSubcatsForCategory(cat) {
+    if (!cat) return [];
+    return subcategories.filter((s) => s.category_id === cat.id);
+  }
+
+  // Search
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
@@ -108,17 +105,14 @@ export default function Home() {
     }
     const lower = searchTerm.toLowerCase();
 
-    // Categories
     const catMatches = categories
       .filter((c) => c.name.toLowerCase().includes(lower))
       .map((c) => ({ type: "category", name: c.name, id: c.id }));
 
-    // Subcategories
     const subMatches = subcategories
       .filter((s) => s.name.toLowerCase().includes(lower))
       .map((s) => ({ type: "subcategory", name: s.name, id: s.id }));
 
-    // Neighborhoods
     const hoodMatches = neighborhoods
       .filter((n) => n.name.toLowerCase().includes(lower))
       .map((n) => ({ type: "neighborhood", name: n.name, id: n.id }));
@@ -147,7 +141,8 @@ export default function Home() {
         setCatIndex(catIdx);
         setSelectedCategory(categories[catIdx]);
         setMode("subcategories");
-        const scList = subcategories.filter((s) => s.category_id === catId);
+
+        const scList = getSubcatsForCategory(categories[catIdx]);
         const scIdx = scList.findIndex((x) => x.id === sug.id);
         if (scIdx !== -1) {
           setSubIndex(scIdx);
@@ -166,7 +161,6 @@ export default function Home() {
         .select("*")
         .eq("neighborhood_id", neighborhoodId);
       if (error) throw error;
-
       if (!data || data.length === 0) {
         alert("No places found in that neighborhood!");
         return;
@@ -180,9 +174,8 @@ export default function Home() {
     }
   }
 
-  // ------------------------------------------------------------
-  // 3) FLOW: categories -> subcategories -> places
-  // ------------------------------------------------------------
+  // Category
+  const currentCategory = categories[catIndex] || null;
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -191,31 +184,6 @@ export default function Home() {
     setPlaceIndex(0);
     setMode("subcategories");
   }
-
-  async function handleYesSubcategoryOverride(subId) {
-    const subObj = subcategories.find((x) => x.id === subId);
-    if (!subObj) return;
-    setSelectedSubcategory(subObj);
-
-    try {
-      const { data, error } = await supabase
-        .from("place_subcategories")
-        .select("place_id, places(*)")
-        .eq("subcategory_id", subId);
-      if (error) throw error;
-
-      const placeItems = (data || []).map((row) => row.places);
-      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-      setPlaces(placeItems);
-      setPlaceIndex(0);
-      setMode("places");
-    } catch (err) {
-      setErrorMsg(err.message);
-    }
-  }
-
-  // category-level yes/no
-  const currentCategory = categories[catIndex] || null;
   function handleYesCategory() {
     if (!currentCategory) return;
     setSelectedCategory(currentCategory);
@@ -232,14 +200,38 @@ export default function Home() {
     }
   }
 
-  // subcategory-level yes/no
-  const currentSubcat = getSubcatsForCategory(selectedCategory)[subIndex] || null;
+  // Subcategory
+  const scList = getSubcatsForCategory(selectedCategory);
+  const currentSubcat = scList[subIndex] || null;
+
+  async function handleYesSubcategoryOverride(subId) {
+    const subObj = subcategories.find((x) => x.id === subId);
+    if (!subObj) return;
+    setSelectedSubcategory(subObj);
+
+    try {
+      const { data, error } = await supabase
+        .from("place_subcategories")
+        .select("place_id, places(*)")
+        .eq("subcategory_id", subId);
+      if (error) throw error;
+
+      let placeItems = (data || []).map((row) => row.places);
+      placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+
+      setPlaces(placeItems);
+      setPlaceIndex(0);
+      setMode("places");
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  }
+
   function handleYesSubcategory() {
     if (!currentSubcat) return;
     handleYesSubcategoryOverride(currentSubcat.id);
   }
   function handleNoSubcategory() {
-    const scList = getSubcatsForCategory(selectedCategory);
     const next = subIndex + 1;
     if (next >= scList.length) {
       const nextCat = catIndex + 1;
@@ -255,14 +247,14 @@ export default function Home() {
     }
   }
 
-  // places-level yes/no
+  // Places
   const currentPlace = places[placeIndex] || null;
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    // only places become final matches
+    // Only places become final matches
     setMatches((prev) => [...prev, currentPlace]);
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
@@ -284,7 +276,6 @@ export default function Home() {
     }
   }
   function moveToNextSubcategory() {
-    const scList = getSubcatsForCategory(selectedCategory);
     const next = subIndex + 1;
     if (next >= scList.length) {
       const nextCat = catIndex + 1;
@@ -301,7 +292,7 @@ export default function Home() {
     }
   }
 
-  // unify no/yes
+  // unify no / yes
   function handleNo() {
     if (mode === "places") {
       handleNoPlace();
@@ -331,16 +322,7 @@ export default function Home() {
       alert("Already at top-level categories!");
     }
   }
-
-  /** CRITICAL:
-   *  On Reshuffle, randomize the top-level categories array
-   *  then reset everything
-   */
   function handleReshuffle() {
-    // Shuffle categories so new top layer is random
-    const shuffledCats = [...categories].sort(() => Math.random() - 0.5);
-    setCategories(shuffledCats);
-
     setCatIndex(0);
     setSubIndex(0);
     setPlaceIndex(0);
@@ -354,7 +336,7 @@ export default function Home() {
     setMatchDeckOpen(false);
   }
 
-  // Build current card data
+  // Build card data
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
@@ -362,7 +344,9 @@ export default function Home() {
         name: currentCategory.name,
         image_url: currentCategory.image_url || "",
         neighborhood: "",
-        description: ""
+        description: "",
+        latitude: null,
+        longitude: null
       };
     } else if (mode === "subcategories") {
       if (!currentSubcat) return null;
@@ -370,7 +354,9 @@ export default function Home() {
         name: currentSubcat.name,
         image_url: currentSubcat.image_url || "",
         neighborhood: "",
-        description: ""
+        description: "",
+        latitude: null,
+        longitude: null
       };
     } else if (mode === "places") {
       if (!currentPlace) return null;
@@ -378,23 +364,14 @@ export default function Home() {
         name: currentPlace.name,
         image_url: currentPlace.image_url || "",
         neighborhood: currentPlace.neighborhood || "",
-        description: currentPlace.description || ""
+        description: currentPlace.description || "",
+        latitude: currentPlace.latitude || null,
+        longitude: currentPlace.longitude || null
       };
     }
     return null;
   }
 
-  function getBackgroundImage(url) {
-    return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
-  }
-
-  // Helper to get subcats for the selected category
-  function getSubcatsForCategory(cat) {
-    if (!cat) return [];
-    return subcategories.filter((s) => s.category_id === cat.id);
-  }
-
-  // RENDER
   const currentCard = getCurrentCardData();
   if (!currentCard) {
     return (
@@ -408,31 +385,32 @@ export default function Home() {
     );
   }
 
-  const bgImage = getBackgroundImage(currentCard.image_url);
+  // Simple approach: if there's an image_url, we use it. Otherwise, fallback
+  const bgImage = currentCard.image_url?.trim()
+    ? currentCard.image_url
+    : "/images/default-bg.jpg";
+
+  // Build links
+  // Neighborhood link => Wikipedia (URL-encode the neighborhood)
+  const wikiNeighborhoodUrl = currentCard.neighborhood
+    ? `https://en.wikipedia.org/wiki/${encodeURIComponent(
+        currentCard.neighborhood
+      )}`
+    : null;
+
+  // Place link => Google Maps with lat/lon
+  let googlePlaceUrl = null;
+  if (mode === "places" && currentCard.latitude && currentCard.longitude) {
+    googlePlaceUrl = `https://www.google.com/maps/search/?api=1&query=${currentCard.latitude},${currentCard.longitude}`;
+  }
 
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-
-        {/* LEFT NAV: Branching design */}
-        <LeftHierarchyNav
-          mode={mode}
-          selectedCategory={selectedCategory}
-          selectedSubcategory={selectedSubcategory}
-          onGoToCategories={() => {
-            setMode("categories");
-          }}
-          onGoToSubcategories={() => {
-            setMode("subcategories");
-          }}
-        />
-
-        {/* TOP ROW => now "Matches" is in the center. We'll do a container with space-between */}
+        {/* TOP ROW */}
         <div style={styles.topRow}>
-          {/* left side blank or minimal space */}
-          <div style={{ width: "100px" }}></div>
+          <div style={styles.topLeftEmpty}></div>
 
-          {/* MATCHES button in the middle */}
           <MatchedDeckButton
             matches={matches}
             newMatchesCount={newMatchesCount}
@@ -441,9 +419,8 @@ export default function Home() {
             setNewMatchesCount={setNewMatchesCount}
           />
 
-          {/* SEARCH + location on the right */}
           <div style={styles.topRightArea}>
-            <div style={styles.usaBaltimoreText}>USA → Baltimore</div>
+            <div style={styles.usaBaltimoreText}>USA &rarr; Baltimore</div>
             <SubcategorySearchBar
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
@@ -455,15 +432,53 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={styles.centerContent}></div>
-
-        {/* BOTTOM => name, yes/no, etc. */}
-        <div style={styles.bottomTextRow}>
-          {/* If in places mode, show neighborhood */}
-          {mode === "places" && currentCard.neighborhood && (
-            <p style={styles.neighborhoodText}>{currentCard.neighborhood}</p>
+        <div style={styles.centerContent}>
+          {/* If we're in places mode, show the map at the top of the final card */}
+          {mode === "places" && (
+            <div style={styles.mapWrapper}>
+              <MyMap
+                placeLat={currentCard.latitude}
+                placeLon={currentCard.longitude}
+                // If you also store neighborhood lat/lon, pass them:
+                // neighborhoodLat={someValue}
+                // neighborhoodLon={someValue}
+                zoom={12}
+              />
+            </div>
           )}
-          <h1 style={styles.cardTitle}>{currentCard.name}</h1>
+        </div>
+
+        {/* BOTTOM row => neighborhood link, place link, yes/no, desc */}
+        <div style={styles.bottomTextRow}>
+          {mode === "places" && currentCard.neighborhood && (
+            <p style={styles.neighborhoodText}>
+              {/* Link to Wikipedia */}
+              <a
+                href={wikiNeighborhoodUrl || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.neighborhoodLink}
+              >
+                {currentCard.neighborhood}
+              </a>
+            </p>
+          )}
+          {/* If we have a google link, wrap place name in anchor */}
+          {mode === "places" && googlePlaceUrl ? (
+            <h1 style={styles.cardTitle}>
+              <a
+                href={googlePlaceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.placeLink}
+              >
+                {currentCard.name}
+              </a>
+            </h1>
+          ) : (
+            // Otherwise, just plain text for categories/subcats
+            <h1 style={styles.cardTitle}>{currentCard.name}</h1>
+          )}
 
           <div style={styles.yesNoRow}>
             <button style={styles.noButton} onClick={handleNo}>
@@ -486,7 +501,7 @@ export default function Home() {
           Reshuffle
         </button>
 
-        {/* Match Deck Overlay */}
+        {/* MATCH DECK OVERLAY */}
         {matchDeckOpen && (
           <MatchDeckOverlay
             matches={matches}
@@ -508,75 +523,7 @@ export default function Home() {
   );
 }
 
-/* LEFT NAV: Branching design with category → subcategory (no "Layers" heading). */
-function LeftHierarchyNav({
-  mode,
-  selectedCategory,
-  selectedSubcategory,
-  onGoToCategories,
-  onGoToSubcategories
-}) {
-  // We'll show a mini "tree":
-  //  ● CategoryName
-  //    └─ ● SubcategoryName
-  // If we are in "places," subcategory is clickable.
-  // If we are in "subcategories," category is clickable.
-  // If mode=categories, we show nothing or minimal.
-
-  const layers = [];
-  // If there's a chosen category, show it
-  if (selectedCategory) {
-    layers.push({
-      label: selectedCategory.name,
-      clickable: (mode !== "categories"),
-      onClick: onGoToCategories
-    });
-  }
-  // If there's a chosen subcategory, show it
-  if (selectedSubcategory) {
-    layers.push({
-      label: selectedSubcategory.name,
-      clickable: (mode === "places"),
-      onClick: onGoToSubcategories
-    });
-  }
-
-  return (
-    <div style={styles.leftNav}>
-      {layers.length === 0 ? (
-        <div style={{ color: "#ccc", fontStyle: "italic" }}>
-          {/* Could say "Categories" or leave blank */}
-        </div>
-      ) : (
-        <div>
-          {layers.map((item, idx) => {
-            const isLast = idx === layers.length - 1;
-            return (
-              <div key={idx} style={styles.navBranchItem}>
-                {/* bullet */}
-                <span style={styles.branchBullet}>●</span>
-                {item.clickable ? (
-                  <span
-                    style={styles.branchClickable}
-                    onClick={item.onClick}
-                  >
-                    {item.label}
-                  </span>
-                ) : (
-                  <span style={styles.branchLabel}>{item.label}</span>
-                )}
-                {/* if not the last item, draw connector line */}
-                {!isLast && <div style={styles.branchConnectorLine}></div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* SEARCH BAR */
+/* SUBCATEGORY SEARCH BAR */
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
@@ -628,7 +575,7 @@ function SubcategorySearchBar({
   );
 }
 
-/* MATCH DECK BUTTON */
+/* MATCHED DECK BUTTON */
 function MatchedDeckButton({
   matches,
   newMatchesCount,
@@ -709,52 +656,15 @@ const styles = {
     justifyContent: "space-between",
     position: "relative"
   },
-
-  /* LEFT NAV (branching) */
-  leftNav: {
-    position: "absolute",
-    top: "10px",
-    left: "10px",
-    minWidth: "150px",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    padding: "10px",
-    borderRadius: "8px",
-    color: "#fff",
-    zIndex: 9999
-  },
-  navBranchItem: {
-    position: "relative",
-    marginLeft: "20px",
-    marginBottom: "10px"
-  },
-  branchBullet: {
-    marginRight: "8px",
-    color: "#fff"
-  },
-  branchClickable: {
-    textDecoration: "underline",
-    cursor: "pointer"
-  },
-  branchLabel: {
-    fontWeight: "bold"
-  },
-  branchConnectorLine: {
-    position: "absolute",
-    width: "2px",
-    backgroundColor: "#ccc",
-    left: "6px",
-    top: "20px",
-    bottom: "-10px"
-  },
-
   topRow: {
-    marginTop: "10px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    // Now the center is where we put the Matches button
-    width: "100%",
-    padding: "0 20px"
+    padding: "10px 20px"
+  },
+  topLeftEmpty: {
+    width: "20%",
+    minWidth: "100px"
   },
   topRightArea: {
     display: "flex",
@@ -768,10 +678,7 @@ const styles = {
     marginBottom: "8px"
   },
   matchDeckBtnContainer: {
-    // button is in the middle
-    display: "flex",
-    justifyContent: "center",
-    width: "200px",
+    width: "60%",
     textAlign: "center"
   },
   matchDeckButton: {
@@ -783,7 +690,6 @@ const styles = {
     cursor: "pointer",
     fontSize: "1em"
   },
-
   searchBarContainer: {
     position: "relative"
   },
@@ -810,9 +716,18 @@ const styles = {
     cursor: "pointer",
     borderBottom: "1px solid #555"
   },
-
   centerContent: {
-    flexGrow: 1
+    flexGrow: 1,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  mapWrapper: {
+    width: "600px",
+    height: "400px",
+    border: "2px solid #fff",
+    borderRadius: "8px",
+    overflow: "hidden"
   },
   bottomTextRow: {
     textAlign: "center",
@@ -824,6 +739,14 @@ const styles = {
     marginBottom: "5px",
     fontWeight: "bold",
     textShadow: "1px 1px 3px rgba(0,0,0,0.7)"
+  },
+  neighborhoodLink: {
+    color: "#FFD700",
+    textDecoration: "underline"
+  },
+  placeLink: {
+    color: "#fff",
+    textDecoration: "underline"
   },
   cardTitle: {
     color: "#fff",
@@ -884,7 +807,6 @@ const styles = {
     borderRadius: "5px",
     cursor: "pointer"
   },
-
   matchDeckOverlay: {
     position: "fixed",
     top: 0,
