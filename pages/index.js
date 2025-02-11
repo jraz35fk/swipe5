@@ -44,7 +44,7 @@ export default function Home() {
   }, []);
 
   // ------------------------------------------------------------
-  // 1) LOAD DATA (with weight-based ordering)
+  // 1) LOAD DATA (weight-based for subcats/places, but we can shuffle categories on reshuffle)
   // ------------------------------------------------------------
   async function loadBaseData() {
     try {
@@ -53,7 +53,7 @@ export default function Home() {
         .from("categories")
         .select("*")
         .eq("is_active", true)
-        .order("weight", { ascending: false }); // highest weight first
+        .order("weight", { ascending: false });
       if (catErr) throw catErr;
 
       // Load subcategories
@@ -73,11 +73,11 @@ export default function Home() {
       const validSubIds = new Set(psData.map((ps) => ps.subcategory_id));
       subData = subData.filter((s) => validSubIds.has(s.id));
 
-      // Keep only categories that still have subcategories
+      // Keep only categories that have subcategories
       const catWithSubs = new Set(subData.map((s) => s.category_id));
       catData = catData.filter((c) => catWithSubs.has(c.id));
 
-      // Already ordered, but let's re-check sorting
+      // They are sorted by weight descending, but we'll handle random on reshuffle
       catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
@@ -132,7 +132,6 @@ export default function Home() {
     setShowSearchSuggestions(false);
 
     if (sug.type === "category") {
-      // Jump to that category
       const idx = categories.findIndex((c) => c.id === sug.id);
       if (idx !== -1) {
         setCatIndex(idx);
@@ -140,7 +139,6 @@ export default function Home() {
         handleYesCategoryOverride(idx);
       }
     } else if (sug.type === "subcategory") {
-      // Jump to that subcategory
       const subObj = subcategories.find((x) => x.id === sug.id);
       if (!subObj) return;
       const catId = subObj.category_id;
@@ -173,7 +171,6 @@ export default function Home() {
         alert("No places found in that neighborhood!");
         return;
       }
-      // Order by weight descending
       data.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       setPlaces(data);
       setPlaceIndex(0);
@@ -208,7 +205,6 @@ export default function Home() {
       if (error) throw error;
 
       const placeItems = (data || []).map((row) => row.places);
-      // Sort by weight descending
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       setPlaces(placeItems);
       setPlaceIndex(0);
@@ -218,7 +214,7 @@ export default function Home() {
     }
   }
 
-  // Category-level yes/no
+  // category-level yes/no
   const currentCategory = categories[catIndex] || null;
   function handleYesCategory() {
     if (!currentCategory) return;
@@ -236,7 +232,7 @@ export default function Home() {
     }
   }
 
-  // Subcategory-level yes/no
+  // subcategory-level yes/no
   const currentSubcat = getSubcatsForCategory(selectedCategory)[subIndex] || null;
   function handleYesSubcategory() {
     if (!currentSubcat) return;
@@ -259,14 +255,14 @@ export default function Home() {
     }
   }
 
-  // Places-level yes/no
+  // places-level yes/no
   const currentPlace = places[placeIndex] || null;
   function handleYesPlace() {
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    // Add final match
+    // only places become final matches
     setMatches((prev) => [...prev, currentPlace]);
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
@@ -335,7 +331,16 @@ export default function Home() {
       alert("Already at top-level categories!");
     }
   }
+
+  /** CRITICAL:
+   *  On Reshuffle, randomize the top-level categories array
+   *  then reset everything
+   */
   function handleReshuffle() {
+    // Shuffle categories so new top layer is random
+    const shuffledCats = [...categories].sort(() => Math.random() - 0.5);
+    setCategories(shuffledCats);
+
     setCatIndex(0);
     setSubIndex(0);
     setPlaceIndex(0);
@@ -422,8 +427,12 @@ export default function Home() {
           }}
         />
 
-        {/* TOP ROW => Matches + Search */}
+        {/* TOP ROW => now "Matches" is in the center. We'll do a container with space-between */}
         <div style={styles.topRow}>
+          {/* left side blank or minimal space */}
+          <div style={{ width: "100px" }}></div>
+
+          {/* MATCHES button in the middle */}
           <MatchedDeckButton
             matches={matches}
             newMatchesCount={newMatchesCount}
@@ -431,6 +440,8 @@ export default function Home() {
             setMatchDeckOpen={setMatchDeckOpen}
             setNewMatchesCount={setNewMatchesCount}
           />
+
+          {/* SEARCH + location on the right */}
           <div style={styles.topRightArea}>
             <div style={styles.usaBaltimoreText}>USA → Baltimore</div>
             <SubcategorySearchBar
@@ -517,7 +528,7 @@ function LeftHierarchyNav({
   if (selectedCategory) {
     layers.push({
       label: selectedCategory.name,
-      clickable: (mode !== "categories"), // only clickable if deeper than categories
+      clickable: (mode !== "categories"),
       onClick: onGoToCategories
     });
   }
@@ -525,7 +536,7 @@ function LeftHierarchyNav({
   if (selectedSubcategory) {
     layers.push({
       label: selectedSubcategory.name,
-      clickable: (mode === "places"), // only clickable if we're in places
+      clickable: (mode === "places"),
       onClick: onGoToSubcategories
     });
   }
@@ -741,7 +752,9 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingRight: "20px"
+    // Now the center is where we put the Matches button
+    width: "100%",
+    padding: "0 20px"
   },
   topRightArea: {
     display: "flex",
@@ -755,6 +768,9 @@ const styles = {
     marginBottom: "8px"
   },
   matchDeckBtnContainer: {
+    // button is in the middle
+    display: "flex",
+    justifyContent: "center",
     width: "200px",
     textAlign: "center"
   },
