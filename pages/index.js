@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import SearchBar from "../components/SearchBar";
-import MatchDeck from "../components/MatchDeck";
-import MatchDeckOverlay from "../components/MatchDeckOverlay";
-import Celebration from "../components/Celebration";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -60,30 +56,11 @@ export default function Home() {
   }
 
   return (
-    <div style={{ textAlign: "center", padding: "20px" }}>
+    <div>
       {isLoading && <p>Loading...</p>}
       {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
-
-      <h1>DialN</h1>
-      <SearchBar
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        suggestions={searchSuggestions}
-        showSuggestions={showSearchSuggestions}
-        setShowSearchSuggestions={setShowSearchSuggestions}
-        onPick={(sug) => setSearchTerm(sug.name)}
-      />
-
-      <MatchDeck
-        matches={matches}
-        newMatchesCount={newMatchesCount}
-        matchDeckOpen={matchDeckOpen}
-        setMatchDeckOpen={setMatchDeckOpen}
-        setNewMatchesCount={setNewMatchesCount}
-      />
-
-      {matchDeckOpen && <MatchDeckOverlay matches={matches} onClose={() => setMatchDeckOpen(false)} />}
-      {showCelebration && <Celebration />}
+      <h1>Original UI Version</h1>
+      <p>Rendering cards and previous functionality...</p>
     </div>
   );
 }
