@@ -37,17 +37,16 @@ export default function Home() {
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  // Load on mount
+  // ---------------------------------------------------------------------------
+  // 1) LOAD DATA
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     loadBaseData();
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // 1) LOAD DATA
-  // ---------------------------------------------------------------------------
   async function loadBaseData() {
     try {
-      // Load categories
+      // 1) Load categories
       let { data: catData, error: catErr } = await supabase
         .from("categories")
         .select("*")
@@ -55,7 +54,7 @@ export default function Home() {
         .order("weight", { ascending: false });
       if (catErr) throw catErr;
 
-      // Load subcategories
+      // 2) Load subcategories
       let { data: subData, error: subErr } = await supabase
         .from("subcategories")
         .select("*")
@@ -63,7 +62,7 @@ export default function Home() {
         .order("weight", { ascending: false });
       if (subErr) throw subErr;
 
-      // Filter subcategories to ensure they have places
+      // Filter subcategories that have places
       let { data: psData, error: psErr } = await supabase
         .from("place_subcategories")
         .select("subcategory_id");
@@ -76,14 +75,14 @@ export default function Home() {
       const catWithSubs = new Set(subData.map((s) => s.category_id));
       catData = catData.filter((c) => catWithSubs.has(c.id));
 
-      // Sort them
+      // Sort
       catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
       subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
       setCategories(catData);
       setSubcategories(subData);
 
-      // Load neighborhoods
+      // 3) Load neighborhoods
       let { data: hoodData, error: hoodErr } = await supabase
         .from("neighborhoods")
         .select("*")
@@ -98,7 +97,15 @@ export default function Home() {
   }
 
   // ---------------------------------------------------------------------------
-  // 2) SEARCH (categories, subcategories, neighborhoods)
+  // 2) HELPER: getSubcatsForCategory
+  // ---------------------------------------------------------------------------
+  function getSubcatsForCategory(cat) {
+    if (!cat) return [];
+    return subcategories.filter((s) => s.category_id === cat.id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3) SEARCH (categories, subcategories, neighborhoods)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!searchTerm) {
@@ -107,17 +114,17 @@ export default function Home() {
     }
     const lower = searchTerm.toLowerCase();
 
-    // Categories
+    // categories
     const catMatches = categories
       .filter((c) => c.name.toLowerCase().includes(lower))
       .map((c) => ({ type: "category", name: c.name, id: c.id }));
 
-    // Subcategories
+    // subcategories
     const subMatches = subcategories
       .filter((s) => s.name.toLowerCase().includes(lower))
       .map((s) => ({ type: "subcategory", name: s.name, id: s.id }));
 
-    // Neighborhoods
+    // neighborhoods
     const hoodMatches = neighborhoods
       .filter((n) => n.name.toLowerCase().includes(lower))
       .map((n) => ({ type: "neighborhood", name: n.name, id: n.id }));
@@ -131,7 +138,6 @@ export default function Home() {
     setShowSearchSuggestions(false);
 
     if (sug.type === "category") {
-      // Jump to that category
       const idx = categories.findIndex((c) => c.id === sug.id);
       if (idx !== -1) {
         setCatIndex(idx);
@@ -139,7 +145,6 @@ export default function Home() {
         handleYesCategoryOverride(idx);
       }
     } else if (sug.type === "subcategory") {
-      // Jump to that subcategory
       const subObj = subcategories.find((x) => x.id === sug.id);
       if (!subObj) return;
       const catId = subObj.category_id;
@@ -148,7 +153,7 @@ export default function Home() {
         setCatIndex(catIdx);
         setSelectedCategory(categories[catIdx]);
         setMode("subcategories");
-        const scList = subcategories.filter((s) => s.category_id === catId);
+        const scList = getSubcatsForCategory(categories[catIdx]);
         const scIdx = scList.findIndex((x) => x.id === sug.id);
         if (scIdx !== -1) {
           setSubIndex(scIdx);
@@ -183,32 +188,10 @@ export default function Home() {
   }
 
   // ---------------------------------------------------------------------------
-  // 3) BREADCRUMB: Show parent layers in top-left (except on categories layer)
+  // 4) NORMAL FLOW
   // ---------------------------------------------------------------------------
-  function getBreadcrumb() {
-    if (mode === "categories") {
-      return ""; // No breadcrumb on top-level
-    }
-    if (mode === "subcategories") {
-      // Just show the selected category name (if we have one)
-      return selectedCategory ? selectedCategory.name : "";
-    }
-    if (mode === "places") {
-      // Show "Category → Subcategory"
-      const catName = selectedCategory ? selectedCategory.name : "";
-      const subName = selectedSubcategory ? selectedSubcategory.name : "";
-      if (!catName && !subName) return "";
-      if (catName && subName) {
-        return catName + " → " + subName;
-      }
-      return catName || subName;
-    }
-    return "";
-  }
-
-  // ---------------------------------------------------------------------------
-  // 4) NORMAL FLOW: categories -> subcategories -> places
-  // ---------------------------------------------------------------------------
+  // category
+  const currentCategory = categories[catIndex] || null;
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
@@ -217,6 +200,25 @@ export default function Home() {
     setPlaceIndex(0);
     setMode("subcategories");
   }
+  function handleYesCategory() {
+    if (!currentCategory) return;
+    setSelectedCategory(currentCategory);
+    setSubIndex(0);
+    setPlaceIndex(0);
+    setMode("subcategories");
+  }
+  function handleNoCategory() {
+    const next = catIndex + 1;
+    if (next >= categories.length) {
+      alert("No more categories left!");
+    } else {
+      setCatIndex(next);
+    }
+  }
+
+  // subcategory
+  const scList = getSubcatsForCategory(selectedCategory);
+  const currentSubcat = scList[subIndex] || null;
 
   async function handleYesSubcategoryOverride(subId) {
     const subObj = subcategories.find((x) => x.id === subId);
@@ -240,31 +242,11 @@ export default function Home() {
     }
   }
 
-  // category-level yes/no
-  const currentCategory = categories[catIndex] || null;
-  function handleYesCategory() {
-    if (!currentCategory) return;
-    setSelectedCategory(currentCategory);
-    setSubIndex(0);
-    setPlaceIndex(0);
-    setMode("subcategories");
-  }
-  function handleNoCategory() {
-    const next = catIndex + 1;
-    if (next >= categories.length) {
-      alert("No more categories left!");
-    } else {
-      setCatIndex(next);
-    }
-  }
-
-  // subcategory-level yes/no
   function handleYesSubcategory() {
-    if (!currentSubcategory) return;
-    handleYesSubcategoryOverride(currentSubcategory.id);
+    if (!currentSubcat) return;
+    handleYesSubcategoryOverride(currentSubcat.id);
   }
   function handleNoSubcategory() {
-    const scList = getSubcatsForCategory(selectedCategory);
     const next = subIndex + 1;
     if (next >= scList.length) {
       const nextCat = catIndex + 1;
@@ -280,18 +262,14 @@ export default function Home() {
     }
   }
 
-  // places-level yes/no
-  const scList = getSubcatsForCategory(selectedCategory);
-  const currentSubcat = scList[subIndex] || null;
+  // places
   const currentPlace = places[placeIndex] || null;
-
   function handleYesPlace() {
-    // Only in places mode do we add to matches
     if (!currentPlace) return;
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    // This ensures only places become final matches
+    // Only places are final matches
     setMatches((prev) => [...prev, currentPlace]);
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
@@ -329,7 +307,7 @@ export default function Home() {
     }
   }
 
-  // unify no/yes
+  // unify yes/no
   function handleNo() {
     if (mode === "places") {
       handleNoPlace();
@@ -384,10 +362,10 @@ export default function Home() {
         description: ""
       };
     } else if (mode === "subcategories") {
-      if (!currentSubcategory) return null;
+      if (!currentSubcat) return null;
       return {
-        name: currentSubcategory.name,
-        image_url: currentSubcategory.image_url || "",
+        name: currentSubcat.name,
+        image_url: currentSubcat.image_url || "",
         neighborhood: "",
         description: ""
       };
@@ -403,13 +381,8 @@ export default function Home() {
     return null;
   }
 
-  function getBackgroundImage(url) {
-    return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
-  }
-
   // Render
   const currentCard = getCurrentCardData();
-  const breadcrumb = getBreadcrumb();
   if (!currentCard) {
     return (
       <div style={styles.container}>
@@ -422,20 +395,22 @@ export default function Home() {
     );
   }
 
-  const bgImage = getBackgroundImage(currentCard.image_url);
+  const bgImage = currentCard.image_url?.trim()
+    ? currentCard.image_url
+    : "/images/default-bg.jpg";
 
   return (
-    <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
+    <div
+      style={{
+        ...styles.container,
+        backgroundImage: `url(${bgImage})`
+      }}
+    >
       <div style={styles.overlay}>
         {/* TOP ROW */}
         <div style={styles.topRow}>
+          <div style={styles.topLeftEmpty}></div>
 
-          {/* BREADCRUMB in the top-left (if not empty) */}
-          <div style={styles.topLeftBreadcrumb}>
-            {breadcrumb && <span>{breadcrumb}</span>}
-          </div>
-
-          {/* MATCHES BUTTON */}
           <MatchedDeckButton
             matches={matches}
             newMatchesCount={newMatchesCount}
@@ -444,7 +419,6 @@ export default function Home() {
             setNewMatchesCount={setNewMatchesCount}
           />
 
-          {/* TOP RIGHT => location + search */}
           <div style={styles.topRightArea}>
             <div style={styles.usaBaltimoreText}>USA &rarr; Baltimore</div>
             <SubcategorySearchBar
@@ -460,7 +434,7 @@ export default function Home() {
 
         <div style={styles.centerContent}></div>
 
-        {/* BOTTOM ROW => neighborhood (if place), name, yes/no, desc (if place) */}
+        {/* Bottom row => if places, show neighborhood, then name, yes/no, description if places */}
         <div style={styles.bottomTextRow}>
           {mode === "places" && currentCard.neighborhood && (
             <p style={styles.neighborhoodText}>{currentCard.neighborhood}</p>
@@ -488,7 +462,6 @@ export default function Home() {
           Reshuffle
         </button>
 
-        {/* Match Deck Overlay */}
         {matchDeckOpen && (
           <MatchDeckOverlay
             matches={matches}
@@ -510,7 +483,7 @@ export default function Home() {
   );
 }
 
-/* SUBCATEGORY SEARCH BAR */
+/* SEARCH BAR */
 function SubcategorySearchBar({
   searchTerm,
   setSearchTerm,
@@ -527,6 +500,7 @@ function SubcategorySearchBar({
       setShowSearchSuggestions(false);
     }, 200);
   }
+
   return (
     <div style={styles.searchBarContainer}>
       <input
@@ -562,7 +536,7 @@ function SubcategorySearchBar({
   );
 }
 
-/* MATCH DECK BUTTON */
+/* MATCHED DECK BUTTON */
 function MatchedDeckButton({
   matches,
   newMatchesCount,
@@ -649,17 +623,10 @@ const styles = {
     alignItems: "flex-start",
     padding: "10px 20px"
   },
-
-  // BREADCRUMB on the left
-  topLeftBreadcrumb: {
+  topLeftEmpty: {
     width: "20%",
-    minWidth: "100px",
-    color: "#fff",
-    fontWeight: "bold",
-    marginTop: "8px",
-    textShadow: "1px 1px 2px rgba(0,0,0,0.8)"
+    minWidth: "100px"
   },
-
   topRightArea: {
     display: "flex",
     flexDirection: "column",
