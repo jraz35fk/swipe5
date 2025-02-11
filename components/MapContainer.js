@@ -1,14 +1,18 @@
-// components/MapContainer.js
+// components/map/MapContainer.js
 import React from "react";
 
-function MapContainer({ placeLat, placeLon, zoom }) {
+export default function MapContainer({ placeLat, placeLon, zoom }) {
+  // If you haven't set up a real map library, 
+  // this just shows placeholder text with the props
   return (
-    <div style={{ width: "100%", height: "100%", backgroundColor: "#ddd" }}>
-      {/* Replace this with your actual map library code */}
-      <p>Map Placeholder</p>
-      <p>Lat: {placeLat}, Lon: {placeLon}, Zoom: {zoom}</p>
+    <div style={{ width: "100%", height: "100%", backgroundColor: "#cccccc" }}>
+      <p>Latitude: {placeLat}</p>
+      <p>Longitude: {placeLon}</p>
+      <p>Zoom Level: {zoom}</p>
+      {/* 
+        TODO: Replace this placeholder with your actual map library code 
+        (e.g., Leaflet, Google Maps, Mapbox, etc.)
+      */}
     </div>
   );
 }
-
-export default MapContainer;
