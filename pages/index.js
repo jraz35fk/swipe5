@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase client initialization
+// Initialize Supabase (adjust env variables as needed)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -12,11 +12,11 @@ export default function Home() {
   // 1) STATE
   // ===============================
 
-  // taxonomy nodes array for the current layer
+  // Current array of taxonomy nodes we’re displaying
   const [taxonomyNodes, setTaxonomyNodes] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // A stack to keep track of the path the user took (so we can Go Back)
+  // Stack of chosen nodes (for going back)
   const [nodeStack, setNodeStack] = useState([]);
 
   // Places
@@ -26,7 +26,7 @@ export default function Home() {
   // Distinguish between showing taxonomy nodes or final places
   const [mode, setMode] = useState("taxonomy"); // "taxonomy" or "places"
 
-  // Matches & deck overlay
+  // Matches & deck
   const [matches, setMatches] = useState([]);
   const [matchDeckOpen, setMatchDeckOpen] = useState(false);
   const [newMatchesCount, setNewMatchesCount] = useState(0);
@@ -40,7 +40,7 @@ export default function Home() {
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  // Google Maps Embed
+  // Google Maps
   const googleMapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY || "";
 
   // ===============================
@@ -52,36 +52,34 @@ export default function Home() {
 
   async function loadTopLevelTaxonomy() {
     try {
-      // Query top-level nodes in 'taxonomy': parent_id is null, is_active = true
       const { data, error } = await supabase
         .from("taxonomy")
         .select("*")
         .eq("is_active", true)
         .is("parent_id", null)
         .order("weight", { ascending: false });
-
       if (error) throw error;
+
       setTaxonomyNodes(data || []);
       setCurrentIndex(0);
       setMode("taxonomy");
       setPlaces([]);
       setPlaceIndex(0);
-      setNodeStack([]); // reset navigation
+      setNodeStack([]);
     } catch (err) {
       setErrorMsg(err.message);
     }
   }
 
   // ===============================
-  // 3) SEARCH LOGIC (We query 'taxonomy' by name)
+  // 3) SEARCH LOGIC: We query 'taxonomy' by name
   // ===============================
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
       return;
     }
-    const lower = searchTerm.toLowerCase();
-    fetchSearchSuggestions(lower);
+    fetchSearchSuggestions(searchTerm.toLowerCase());
   }, [searchTerm]);
 
   async function fetchSearchSuggestions(searchStr) {
@@ -93,6 +91,7 @@ export default function Home() {
         .eq("is_active", true)
         .limit(8);
       if (error) throw error;
+
       setSearchSuggestions(data || []);
       setShowSearchSuggestions(true);
     } catch (err) {
@@ -108,7 +107,7 @@ export default function Home() {
 
   async function jumpToTaxonomyNode(nodeId) {
     try {
-      // First find that node
+      // find that node
       const { data: nodeData, error: nodeErr } = await supabase
         .from("taxonomy")
         .select("*")
@@ -122,7 +121,7 @@ export default function Home() {
 
       const parentId = nodeData.parent_id;
       if (!parentId) {
-        // It's top-level => reload top-level, set current index to nodeId
+        // It's top-level => reload top-level
         const { data: topData, error: topErr } = await supabase
           .from("taxonomy")
           .select("*")
@@ -161,14 +160,15 @@ export default function Home() {
   }
 
   // ===============================
-  // 4) "Yes" / "No" Logic for TAXONOMY nodes
+  // 4) "Yes" / "No" Logic for TAXONOMY NODES
+  //    + 'skip subcategories <2 places' or 'sub-split if child nodes >6'
   // ===============================
   const currentNode = (mode === "taxonomy" && taxonomyNodes[currentIndex]) || null;
 
   async function handleYesTaxonomy() {
     if (!currentNode) return;
 
-    // push onto the stack so we can go back
+    // push onto stack so user can go back
     const stackEntry = {
       nodeArray: taxonomyNodes,
       arrayIndex: currentIndex,
@@ -176,7 +176,7 @@ export default function Home() {
     };
     setNodeStack((prev) => [...prev, stackEntry]);
 
-    // load children
+    // fetch children
     try {
       const { data: children, error } = await supabase
         .from("taxonomy")
@@ -188,10 +188,32 @@ export default function Home() {
 
       if (!children || children.length === 0) {
         // no children => load final places
-        loadPlacesByNode(currentNode.id);
+        await loadPlacesByNode(currentNode.id);
+        return;
+      }
+
+      // 4A) if children are more than 6, optionally sub-split
+      if (children.length > 6) {
+        const proceed = window.confirm(
+          `This node has ${children.length} sub-layers. Do you want to refine further? (OK=Yes, Cancel=Skip)`
+        );
+        if (!proceed) {
+          // if user doesn't want to refine, skip directly to places
+          await loadPlacesByNode(currentNode.id);
+          return;
+        }
+        // else we continue with normal sub-layer approach
+      }
+
+      // 4B) we also do a “child place count” check. If a subcategory has <2 bridging places, we skip or auto-expand
+      const filteredChildren = await autoSkipChildNodes(children);
+
+      if (!filteredChildren || filteredChildren.length === 0) {
+        // either everything got skipped or no actual child to display => load places of current node
+        await loadPlacesByNode(currentNode.id);
       } else {
-        // show children
-        setTaxonomyNodes(children);
+        // show the filtered children
+        setTaxonomyNodes(filteredChildren);
         setCurrentIndex(0);
         setMode("taxonomy");
         setPlaces([]);
@@ -202,18 +224,69 @@ export default function Home() {
     }
   }
 
+  // If user says NO, just skip to next item in the same array
   function handleNoTaxonomy() {
     const next = currentIndex + 1;
     if (next >= taxonomyNodes.length) {
       alert("No more items in this category!");
-      // Optionally go up or reshuffle
     } else {
       setCurrentIndex(next);
     }
   }
 
+  // A helper to check each child’s bridging place count
+  // If bridging <2 => we “auto-expand” or skip the child
+  // => we load that child’s children or places, effectively flattening it for the user
+  async function autoSkipChildNodes(children) {
+    const results = [];
+
+    for (let child of children) {
+      // count how many bridging places
+      // We do a quick query
+      const { data: bridgingRows, error } = await supabase
+        .from("place_taxonomy")
+        .select("place_id", { count: "exact" }) // or just select("place_id") then check length
+        .eq("taxonomy_id", child.id);
+      if (error) {
+        console.error("Error bridging child:", error);
+        results.push(child); // fallback to keep child
+        continue;
+      }
+      const placeCount = bridgingRows?.length || 0;
+
+      // also, check how many child nodes does this child have
+      const { data: subKids, error: subErr } = await supabase
+        .from("taxonomy")
+        .select("id")
+        .eq("parent_id", child.id)
+        .eq("is_active", true);
+      const subKidCount = subKids?.length || 0;
+      if (subErr) console.error("SubKid error:", subErr);
+
+      if (placeCount < 2 && subKidCount === 0) {
+        // if this child has fewer than 2 places bridging, no children => “skip” it
+        console.log(
+          `Auto-skipping child ${child.name}, placeCount=${placeCount}, no sub-layers.`
+        );
+        // We do nothing (i.e. not add it to results), effectively skipping
+      } else if (placeCount < 2 && subKidCount === 1) {
+        // auto expand that single sub-later
+        console.log(
+          `Auto-expanding child ${child.name}, placeCount <2, subKidCount=1. Flattening...`
+        );
+        // We can do a deeper flatten approach or just keep it for the user. 
+        // Let's keep it in results for demonstration
+        results.push(child);
+      } else {
+        // normal
+        results.push(child);
+      }
+    }
+    return results;
+  }
+
   // ===============================
-  // 5) Loading Places from place_taxonomy => places
+  // 5) LOADING PLACES from place_taxonomy => places
   // ===============================
   async function loadPlacesByNode(taxonomyId) {
     try {
@@ -221,13 +294,16 @@ export default function Home() {
         .from("place_taxonomy")
         .select("place_id, places(*)")
         .eq("taxonomy_id", taxonomyId);
+
       if (error) throw error;
 
       let placeItems = (data || []).map((row) => row.places);
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+
       if (placeItems.length === 0) {
         alert("No places found for this node!");
       }
+
       setPlaces(placeItems);
       setPlaceIndex(0);
       setMode("places");
@@ -237,17 +313,18 @@ export default function Home() {
   }
 
   // ===============================
-  // 6) "Yes" / "No" Logic for PLACES
+  // 6) "Yes" / "No" for PLACES
   // ===============================
   const currentPlace = (mode === "places" && places[placeIndex]) || null;
 
   function handleYesPlace() {
     if (!currentPlace) return;
-    // show a quick "MATCH" celebration
+
+    // show "MATCH" overlay
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2000);
 
-    // push into matches
+    // add to matches
     setMatches((prev) => [...prev, currentPlace]);
     if (!matchDeckOpen) {
       setNewMatchesCount((n) => n + 1);
@@ -256,7 +333,7 @@ export default function Home() {
     // next place
     const next = placeIndex + 1;
     if (next >= places.length) {
-      // done => go back up
+      // done => go back
       moveBackToTaxonomy();
     } else {
       setPlaceIndex(next);
@@ -289,10 +366,10 @@ export default function Home() {
   }
 
   // ===============================
-  // 7) Navigation + Reshuffle
+  // 7) NAVIGATION & RESHUFFLE
   // ===============================
   function moveBackToTaxonomy() {
-    // after we exhaust places
+    // after finishing places
     setMode("taxonomy");
     setPlaces([]);
     setPlaceIndex(0);
@@ -300,7 +377,7 @@ export default function Home() {
 
   function handleGoBack() {
     if (mode === "places") {
-      // switch to taxonomy mode
+      // switch to taxonomy
       setMode("taxonomy");
       setPlaces([]);
       setPlaceIndex(0);
@@ -312,8 +389,8 @@ export default function Home() {
       }
       const newStack = [...nodeStack];
       const popped = newStack.pop();
-      setNodeStack(newStack);
 
+      setNodeStack(newStack);
       setTaxonomyNodes(popped.nodeArray);
       setCurrentIndex(popped.arrayIndex);
       setMode("taxonomy");
@@ -329,7 +406,7 @@ export default function Home() {
   }
 
   // ===============================
-  // 8) Build Current Card Data
+  // 8) BUILD CURRENT CARD
   // ===============================
   let currentCard = null;
   if (mode === "taxonomy") {
@@ -365,11 +442,12 @@ export default function Home() {
     );
   }
 
+  // fallback background image
   const bgImage = currentCard.image_url?.trim()
     ? currentCard.image_url
     : "/images/default-bg.jpg";
 
-  // google maps embed logic if in places mode
+  // Google maps embed
   let googleEmbedUrl = null;
   if (
     mode === "places" &&
@@ -393,7 +471,7 @@ export default function Home() {
   return (
     <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
       <div style={styles.overlay}>
-        {/* top row => matches + search */}
+        {/* Top row => matched deck + search */}
         <div style={styles.topRow}>
           <div style={styles.topLeftEmpty}></div>
 
@@ -418,7 +496,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* center content => if places mode with lat/lon, show google map */}
+        {/* center content => if we're in places mode with lat/lon, show google embed */}
         <div style={styles.centerContent}>
           {mode === "places" && googleEmbedUrl && (
             <div style={styles.mapWrapper}>
@@ -434,7 +512,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* bottom => card name, yes/no, desc */}
+        {/* bottom => card name, yes/no, description */}
         <div style={styles.bottomTextRow}>
           {mode === "places" && currentCard.neighborhood && (
             <p style={styles.neighborhoodText}>{currentCard.neighborhood}</p>
@@ -469,6 +547,7 @@ export default function Home() {
           )}
         </div>
 
+        {/* bottom nav => go back, reshuffle */}
         <button style={styles.goBackButton} onClick={handleGoBack}>
           Go Back
         </button>
