@@ -44,8 +44,8 @@ export default function SearchBar({
 }
 
 const styles = {
-  searchBarContainer: { position: "relative" },
-  searchInput: { width: "220px", padding: "6px", borderRadius: "4px", border: "1px solid #888" },
-  suggestionList: { position: "absolute", top: "35px", left: 0, width: "220px", backgroundColor: "#333", borderRadius: "4px", zIndex: 9999, maxHeight: "140px", overflowY: "auto" },
-  suggestionItem: { padding: "5px", color: "#fff", cursor: "pointer", borderBottom: "1px solid #555" },
+  searchBarContainer: { position: "relative", marginTop: "10px" },
+  searchInput: { width: "300px", padding: "8px", borderRadius: "5px", border: "1px solid #ccc" },
+  suggestionList: { position: "absolute", top: "35px", left: 0, width: "100%", backgroundColor: "#fff", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", borderRadius: "5px" },
+  suggestionItem: { padding: "8px", cursor: "pointer", borderBottom: "1px solid #ddd" }
 };
