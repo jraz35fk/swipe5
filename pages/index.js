@@ -41,11 +41,6 @@ export default function Home() {
     loadBaseData();
   }, []);
 
-  /**
-   * STEP 1: Load top-level categories, subcategories, and neighborhoods.
-   * STEP 2: Filter out categories/subcategories that have zero places.
-   * STEP 3: Merge neighborhoods in as top-level categories (so they're never a subcategory).
-   */
   async function loadBaseData() {
     try {
       // 1. Load only is_active categories
@@ -64,55 +59,32 @@ export default function Home() {
         .order("weight", { ascending: false });
       if (subErr) throw subErr;
 
-      // 3. Load neighborhoods (treated as top-level "categories" in the UI)
-      let { data: hoodData, error: hoodErr } = await supabase
-        .from("neighborhoods")
-        .select("*")
-        .eq("is_active", true)
-        .order("weight", { ascending: false });
-      if (hoodErr) throw hoodErr;
-
-      // 4. Check which subcategories actually link to a place
-      //    We'll see which subcategory_id values appear in place_subcategories.
+      // 3. Check which subcategories actually link to a place
       let { data: psData, error: psErr } = await supabase
         .from("place_subcategories")
         .select("subcategory_id");
       if (psErr) throw psErr;
       const validSubIds = new Set((psData || []).map((ps) => ps.subcategory_id));
 
-      // Filter subcategories -> keep only those referencing at least 1 place
+      // Filter subcategories -> keep only those that appear in place_subcategories
       subData = (subData || []).filter((s) => validSubIds.has(s.id));
 
       // Now keep only categories that still have subcategories
-      // i.e. subcategories referencing places.
       const catWithSubs = new Set(subData.map((s) => s.category_id));
       catData = (catData || []).filter((c) => catWithSubs.has(c.id));
 
-      // 5. Transform neighborhoods into "fake categories"
-      //    so they show at top-level only.
-      const hoodCats = (hoodData || []).map((n) => ({
-        id: "hood-" + n.id,  // string ID so we can differentiate from normal cat IDs
-        name: n.name,
-        image_url: n.image_url,
-        weight: n.weight,
-        // We'll mark it so we know it's a neighborhood "category"
-        isNeighborhood: true
-      }));
+      // Sort them all by weight descending (optional)
+      catData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+      subData.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
-      // 6. Combine real categories + neighborhood categories
-      const finalCategories = [...catData, ...hoodCats];
-
-      // Sort them all by weight descending (just to unify the order)
-      finalCategories.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-
-      setCategories(finalCategories);
+      setCategories(catData || []);
       setSubcategories(subData || []);
     } catch (err) {
       setErrorMsg(err.message);
     }
   }
 
-  // Search logic: combine categories + subcategories
+  // Combine categories + subcategories for search
   useEffect(() => {
     if (!searchTerm) {
       setSearchSuggestions([]);
@@ -148,7 +120,6 @@ export default function Home() {
       const subObj = subcategories.find((x) => x.id === sug.id);
       if (!subObj) return;
       const catId = subObj.category_id;
-      // which normal category is that?
       const catIdx = categories.findIndex((c) => c.id === catId);
       if (catIdx !== -1) {
         setCatIndex(catIdx);
@@ -167,22 +138,6 @@ export default function Home() {
   function handleYesCategoryOverride(catIdx) {
     if (catIdx < 0 || catIdx >= categories.length) return;
     const catObj = categories[catIdx];
-
-    // If it's a neighborhood category, skip subcategories & places flow
-    if (catObj.isNeighborhood) {
-      // (Option A) If you have logic to show places directly in a neighborhood,
-      //   you'd implement that here. Otherwise, we skip to next category:
-      const next = catIdx + 1;
-      if (next >= categories.length) {
-        alert("No more categories left!");
-        setMode("categories");
-      } else {
-        setCatIndex(next);
-      }
-      return;
-    }
-
-    // If it's a normal category
     setSelectedCategory(catObj);
     setSubIndex(0);
     setPlaceIndex(0);
@@ -202,7 +157,6 @@ export default function Home() {
 
       const placeItems = (data || []).map((row) => row.places);
       placeItems.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-
       setPlaces(placeItems);
       setPlaceIndex(0);
       setMode("places");
@@ -215,10 +169,6 @@ export default function Home() {
   const currentCategory = categories[catIndex] || null;
   function getSubcatsForCategory(cat) {
     if (!cat) return [];
-    if (cat.isNeighborhood) {
-      // If it's a neighborhood, we have no subcategories for it
-      return [];
-    }
     return subcategories.filter((s) => s.category_id === cat.id);
   }
   const scList = getSubcatsForCategory(selectedCategory);
@@ -255,19 +205,6 @@ export default function Home() {
   // Category
   function handleYesCategory() {
     if (!currentCategory) return;
-
-    if (currentCategory.isNeighborhood) {
-      // Option A: do something special for neighborhoods (skip to next)
-      const next = catIndex + 1;
-      if (next >= categories.length) {
-        alert("No more categories left!");
-        setMode("categories");
-      } else {
-        setCatIndex(next);
-      }
-      return;
-    }
-
     setSelectedCategory(currentCategory);
     setSubIndex(0);
     setPlaceIndex(0);
@@ -305,6 +242,7 @@ export default function Home() {
   function handleNoSubcategory() {
     const next = subIndex + 1;
     if (next >= scList.length) {
+      // Move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -434,13 +372,9 @@ export default function Home() {
 
         <div style={styles.centerContent}></div>
 
-        {/* Bottom row => card name, maybe neighborhood, yes/no */}
+        {/* Bottom row => card name, yes/no */}
         <div style={styles.bottomTextRow}>
           <h1 style={styles.currentCardName}>{currentCard.name}</h1>
-          {mode === "places" && currentPlace?.neighborhood && (
-            <p style={styles.neighborhoodText}>{currentPlace.neighborhood}</p>
-          )}
-
           <div style={styles.yesNoRow}>
             <button style={styles.noButton} onClick={handleNo}>
               No
@@ -705,14 +639,6 @@ const styles = {
     textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
     margin: 0,
     textTransform: "uppercase"
-  },
-  neighborhoodText: {
-    color: "#FFD700",
-    fontSize: "1.5em",
-    fontStyle: "italic",
-    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-    marginTop: "10px",
-    marginBottom: "15px"
   },
   yesNoRow: {
     marginTop: "20px",
