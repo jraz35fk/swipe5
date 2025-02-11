@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import dynamic from "next/dynamic"; 
+import dynamic from "next/dynamic";
 import { createClient } from "@supabase/supabase-js";
 
+// Make sure your environment variables are set correctly
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Dynamically import the map to avoid SSR issues
-const MyMap = dynamic(() => import("../components/MapContainer"), {
-  ssr: false
+// Dynamically import the map component
+// IMPORTANT: Replace `MapContainer.js` below if your file name is different.
+const MyMap = dynamic(() => import("../components/MapContainer.js"), {
+  ssr: false,
 });
 
 export default function Home() {
@@ -346,7 +348,7 @@ export default function Home() {
         neighborhood: "",
         description: "",
         latitude: null,
-        longitude: null
+        longitude: null,
       };
     } else if (mode === "subcategories") {
       if (!currentSubcat) return null;
@@ -356,7 +358,7 @@ export default function Home() {
         neighborhood: "",
         description: "",
         latitude: null,
-        longitude: null
+        longitude: null,
       };
     } else if (mode === "places") {
       if (!currentPlace) return null;
@@ -366,7 +368,7 @@ export default function Home() {
         neighborhood: currentPlace.neighborhood || "",
         description: currentPlace.description || "",
         latitude: currentPlace.latitude || null,
-        longitude: currentPlace.longitude || null
+        longitude: currentPlace.longitude || null,
       };
     }
     return null;
@@ -439,7 +441,7 @@ export default function Home() {
               <MyMap
                 placeLat={currentCard.latitude}
                 placeLon={currentCard.longitude}
-                // If you also store neighborhood lat/lon, pass them:
+                // If you also store neighborhood lat/lon, pass them here:
                 // neighborhoodLat={someValue}
                 // neighborhoodLon={someValue}
                 zoom={12}
@@ -530,12 +532,13 @@ function SubcategorySearchBar({
   suggestions,
   showSuggestions,
   setShowSearchSuggestions,
-  onPick
+  onPick,
 }) {
   function handleFocus() {
     if (searchTerm) setShowSearchSuggestions(true);
   }
   function handleBlur() {
+    // Delay hiding suggestions so click can register
     setTimeout(() => {
       setShowSearchSuggestions(false);
     }, 200);
@@ -581,7 +584,7 @@ function MatchedDeckButton({
   newMatchesCount,
   matchDeckOpen,
   setMatchDeckOpen,
-  setNewMatchesCount
+  setNewMatchesCount,
 }) {
   return (
     <div style={styles.matchDeckBtnContainer}>
@@ -645,7 +648,7 @@ const styles = {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
     position: "relative",
-    fontFamily: "sans-serif"
+    fontFamily: "sans-serif",
   },
   overlay: {
     width: "100%",
@@ -654,32 +657,32 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    position: "relative"
+    position: "relative",
   },
   topRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: "10px 20px"
+    padding: "10px 20px",
   },
   topLeftEmpty: {
     width: "20%",
-    minWidth: "100px"
+    minWidth: "100px",
   },
   topRightArea: {
     display: "flex",
     flexDirection: "column",
-    alignItems: "flex-end"
+    alignItems: "flex-end",
   },
   usaBaltimoreText: {
     color: "#ffd700",
     fontSize: "1.2em",
     textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-    marginBottom: "8px"
+    marginBottom: "8px",
   },
   matchDeckBtnContainer: {
     width: "60%",
-    textAlign: "center"
+    textAlign: "center",
   },
   matchDeckButton: {
     backgroundColor: "#ff9800",
@@ -688,16 +691,16 @@ const styles = {
     padding: "8px 16px",
     borderRadius: "5px",
     cursor: "pointer",
-    fontSize: "1em"
+    fontSize: "1em",
   },
   searchBarContainer: {
-    position: "relative"
+    position: "relative",
   },
   searchInput: {
     width: "220px",
     padding: "6px",
     borderRadius: "4px",
-    border: "1px solid #888"
+    border: "1px solid #888",
   },
   suggestionList: {
     position: "absolute",
@@ -708,64 +711,64 @@ const styles = {
     borderRadius: "4px",
     zIndex: 9999,
     maxHeight: "140px",
-    overflowY: "auto"
+    overflowY: "auto",
   },
   suggestionItem: {
     padding: "5px",
     color: "#fff",
     cursor: "pointer",
-    borderBottom: "1px solid #555"
+    borderBottom: "1px solid #555",
   },
   centerContent: {
     flexGrow: 1,
     display: "flex",
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
   },
   mapWrapper: {
     width: "600px",
     height: "400px",
     border: "2px solid #fff",
     borderRadius: "8px",
-    overflow: "hidden"
+    overflow: "hidden",
   },
   bottomTextRow: {
     textAlign: "center",
-    marginBottom: "70px"
+    marginBottom: "70px",
   },
   neighborhoodText: {
     color: "#FFD700",
     fontSize: "1.3em",
     marginBottom: "5px",
     fontWeight: "bold",
-    textShadow: "1px 1px 3px rgba(0,0,0,0.7)"
+    textShadow: "1px 1px 3px rgba(0,0,0,0.7)",
   },
   neighborhoodLink: {
     color: "#FFD700",
-    textDecoration: "underline"
+    textDecoration: "underline",
   },
   placeLink: {
     color: "#fff",
-    textDecoration: "underline"
+    textDecoration: "underline",
   },
   cardTitle: {
     color: "#fff",
     fontSize: "3em",
     textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
     margin: 0,
-    textTransform: "uppercase"
+    textTransform: "uppercase",
   },
   descriptionText: {
     color: "#fff",
     marginTop: "15px",
     fontSize: "1.1em",
-    lineHeight: "1.4"
+    lineHeight: "1.4",
   },
   yesNoRow: {
     marginTop: "20px",
     display: "flex",
     justifyContent: "center",
-    gap: "40px"
+    gap: "40px",
   },
   noButton: {
     backgroundColor: "#f44336",
@@ -774,7 +777,7 @@ const styles = {
     padding: "12px 24px",
     borderRadius: "5px",
     fontSize: "1.1em",
-    cursor: "pointer"
+    cursor: "pointer",
   },
   yesButton: {
     backgroundColor: "#4CAF50",
@@ -783,7 +786,7 @@ const styles = {
     padding: "12px 24px",
     borderRadius: "5px",
     fontSize: "1.1em",
-    cursor: "pointer"
+    cursor: "pointer",
   },
   goBackButton: {
     position: "absolute",
@@ -794,7 +797,7 @@ const styles = {
     color: "#fff",
     border: "none",
     borderRadius: "5px",
-    cursor: "pointer"
+    cursor: "pointer",
   },
   reshuffleButton: {
     position: "absolute",
@@ -805,7 +808,7 @@ const styles = {
     color: "#fff",
     border: "none",
     borderRadius: "5px",
-    cursor: "pointer"
+    cursor: "pointer",
   },
   matchDeckOverlay: {
     position: "fixed",
@@ -817,7 +820,7 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10000
+    zIndex: 10000,
   },
   matchDeckBox: {
     backgroundColor: "#fff",
@@ -826,7 +829,13 @@ const styles = {
     width: "300px",
     maxHeight: "70vh",
     overflowY: "auto",
-    position: "relative"
+    position: "relative",
+  },
+  closeDeckButton: {
+    position: "absolute",
+    top: "10px",
+    right: "10px",
+    cursor: "pointer",
   },
   celebrationOverlay: {
     position: "fixed",
@@ -838,12 +847,12 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 9999
+    zIndex: 9999,
   },
   celebrationBox: {
     backgroundColor: "#fff",
     padding: "30px",
     borderRadius: "10px",
-    textAlign: "center"
-  }
+    textAlign: "center",
+  },
 };
