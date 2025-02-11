@@ -6,8 +6,9 @@ export default function MatchDeck({
   setNewMatchesCount
 }) {
   return (
-    <div>
+    <div style={styles.matchDeckBtnContainer}>
       <button
+        style={styles.matchDeckButton}
         onClick={() => {
           setMatchDeckOpen(true);
           setNewMatchesCount(0);
@@ -18,3 +19,8 @@ export default function MatchDeck({
     </div>
   );
 }
+
+const styles = {
+  matchDeckBtnContainer: { textAlign: "center", marginTop: "10px" },
+  matchDeckButton: { backgroundColor: "#ff9800", color: "#fff", padding: "10px 20px", borderRadius: "5px", cursor: "pointer", fontSize: "1.1em" }
+};
