@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { useSwipeable } from "react-swipeable";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -175,6 +176,7 @@ export default function Home() {
   const currentSubcat = scList[subIndex] || null;
   const currentPlace = places[placeIndex] || null;
 
+  // This is what we show in the card
   function getCurrentCardData() {
     if (mode === "categories") {
       if (!currentCategory) return null;
@@ -198,8 +200,57 @@ export default function Home() {
     return null;
   }
 
-  function getBackgroundImage(url) {
-    return url && url.trim() !== "" ? url : "/images/default-bg.jpg";
+  // Reusable "Card" with swipe gestures
+  function DraggableCard({ cardData, onYes, onNo }) {
+    const { name, image_url } = cardData;
+    // Set up swipe handlers
+    const handlers = useSwipeable({
+      onSwipedLeft: () => onNo(),
+      onSwipedRight: () => onYes(),
+      preventScrollOnSwipe: true
+    });
+
+    // If there's an image, we use the entire background as the swipe region.
+    // If not, we add a "swipeBox" in the center to highlight the swipe area.
+    const hasImage = image_url && image_url.trim() !== "";
+
+    const containerStyle = hasImage
+      ? {
+          ...styles.swipeContainer,
+          backgroundImage: `url(${image_url})`
+        }
+      : {
+          ...styles.swipeContainerNoImage
+        };
+
+    return (
+      <div {...handlers} style={containerStyle}>
+        {!hasImage && (
+          <div style={styles.swipeBox}>Swipe Left or Right</div>
+        )}
+        <h1 style={styles.cardTitle}>{name}</h1>
+      </div>
+    );
+  }
+
+  // Card-level "No" / "Yes" logic
+  function handleNo() {
+    if (mode === "places") {
+      handleNoPlace();
+    } else if (mode === "subcategories") {
+      handleNoSubcategory();
+    } else {
+      handleNoCategory();
+    }
+  }
+  function handleYes() {
+    if (mode === "places") {
+      handleYesPlace();
+    } else if (mode === "subcategories") {
+      handleYesSubcategory();
+    } else {
+      handleYesCategory();
+    }
   }
 
   // Category
@@ -242,7 +293,6 @@ export default function Home() {
   function handleNoSubcategory() {
     const next = subIndex + 1;
     if (next >= scList.length) {
-      // Move to next category
       const nextCat = catIndex + 1;
       if (nextCat >= categories.length) {
         alert("No more categories left!");
@@ -323,8 +373,8 @@ export default function Home() {
   }
 
   // Current card
-  const currentCard = getCurrentCardData();
-  if (!currentCard) {
+  const currentCardData = getCurrentCardData();
+  if (!currentCardData) {
     return (
       <div style={styles.container}>
         <h1>DialN</h1>
@@ -335,10 +385,9 @@ export default function Home() {
       </div>
     );
   }
-  const bgImage = getBackgroundImage(currentCard.image_url);
 
   return (
-    <div style={{ ...styles.container, backgroundImage: `url(${bgImage})` }}>
+    <div style={styles.container}>
       <div style={styles.overlay}>
 
         {/* TOP ROW */}
@@ -370,11 +419,17 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={styles.centerContent}></div>
+        <div style={styles.centerContent}>
+          {/* The SWIPE-ENABLED CARD */}
+          <DraggableCard
+            cardData={currentCardData}
+            onYes={handleYes}
+            onNo={handleNo}
+          />
+        </div>
 
-        {/* Bottom row => card name, yes/no */}
+        {/* Bottom row => yes/no buttons */}
         <div style={styles.bottomTextRow}>
-          <h1 style={styles.currentCardName}>{currentCard.name}</h1>
           <div style={styles.yesNoRow}>
             <button style={styles.noButton} onClick={handleNo}>
               No
@@ -412,26 +467,6 @@ export default function Home() {
       )}
     </div>
   );
-
-  // unify no / yes
-  function handleNo() {
-    if (mode === "places") {
-      handleNoPlace();
-    } else if (mode === "subcategories") {
-      handleNoSubcategory();
-    } else {
-      handleNoCategory();
-    }
-  }
-  function handleYes() {
-    if (mode === "places") {
-      handleYesPlace();
-    } else if (mode === "subcategories") {
-      handleYesSubcategory();
-    } else {
-      handleYesCategory();
-    }
-  }
 }
 
 // SEARCH BAR
@@ -551,16 +586,14 @@ const styles = {
   container: {
     width: "100vw",
     height: "100vh",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
     position: "relative",
-    fontFamily: "sans-serif"
+    fontFamily: "sans-serif",
+    backgroundColor: "#aaa" // fallback background
   },
   overlay: {
     width: "100%",
     height: "100%",
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(0,0,0,0.1)",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
@@ -627,18 +660,14 @@ const styles = {
     borderBottom: "1px solid #555"
   },
   centerContent: {
-    flexGrow: 1
+    flexGrow: 1,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
   },
   bottomTextRow: {
     textAlign: "center",
-    marginBottom: "70px"
-  },
-  currentCardName: {
-    color: "#fff",
-    fontSize: "3em",
-    textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
-    margin: 0,
-    textTransform: "uppercase"
+    marginBottom: "60px"
   },
   yesNoRow: {
     marginTop: "20px",
@@ -734,6 +763,63 @@ const styles = {
     backgroundColor: "#fff",
     padding: "30px",
     borderRadius: "10px",
+    textAlign: "center"
+  },
+
+  // SWIPE STYLES
+  swipeContainer: {
+    width: "350px",
+    height: "450px",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundColor: "#555",
+    borderRadius: "12px",
+    position: "relative",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingBottom: "20px",
+    color: "#fff",
+    userSelect: "none",
+    overflow: "hidden"
+  },
+  swipeContainerNoImage: {
+    width: "350px",
+    height: "450px",
+    backgroundColor: "#777",
+    borderRadius: "12px",
+    position: "relative",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingBottom: "20px",
+    color: "#fff",
+    userSelect: "none",
+    overflow: "hidden"
+  },
+  swipeBox: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: "160px",
+    height: "80px",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    transform: "translate(-50%, -50%)",
+    borderRadius: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "1.1em",
+    textAlign: "center"
+  },
+  cardTitle: {
+    fontSize: "2em",
+    textShadow: "1px 1px 3px rgba(0,0,0,0.7)",
+    margin: 0,
+    padding: "0 10px",
+    textTransform: "uppercase",
     textAlign: "center"
   }
 };
