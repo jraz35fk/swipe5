@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase config
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
-
-// No "MyMap" import, since we're using Google Maps iFrame instead
 
 export default function Home() {
   // MAIN DATA
@@ -412,7 +409,7 @@ export default function Home() {
       )}`
     : null;
 
-  // Place link => Google Maps (like a direct link)
+  // Place link => Google Maps (direct link)
   let googlePlaceUrl = null;
   if (mode === "places" && currentCard.latitude && currentCard.longitude) {
     googlePlaceUrl = `https://www.google.com/maps/search/?api=1&query=${currentCard.latitude},${currentCard.longitude}`;
@@ -421,18 +418,18 @@ export default function Home() {
   // ===============================
   // 8) Google Maps Embed Iframe
   // ===============================
-  // If we want a dynamic pinned map for each place, we can build an <iframe> URL:
+  // We can't use "view?center=...&markers=..." in some embed modes, so we do a "search?q=lat,lng"
   let googleEmbedUrl = null;
   if (mode === "places" && googleMapsKey && currentCard.latitude && currentCard.longitude) {
     const lat = currentCard.latitude;
     const lng = currentCard.longitude;
 
-    // "view" mode with lat/lng pinned via &markers
-    googleEmbedUrl = `https://www.google.com/maps/embed/v1/view
+    // We'll do a "search" embed with q=lat,lng
+    // e.g. https://www.google.com/maps/embed/v1/search?key=xxx&zoom=14&q=39.2815,-76.5931
+    googleEmbedUrl = `https://www.google.com/maps/embed/v1/search
       ?key=${googleMapsKey}
-      &center=${lat},${lng}
       &zoom=14
-      &markers=${lat},${lng}`.replace(/\s+/g, "");
+      &q=${lat},${lng}`.replace(/\s+/g, "");
   }
 
   return (
