@@ -10,79 +10,158 @@ export default function Home() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState([]);
   const [layer, setLayer] = useState(1);
-  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedPath, setSelectedPath] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mode, setMode] = useState("taxonomy"); // Can be "taxonomy" or "places"
 
   useEffect(() => {
-    fetchLayerCards(1, null);
+    fetchTopLevelCategories();
   }, []);
 
-  const fetchLayerCards = async (layer, parentId) => {
-    let query;
-    if (layer === 1) {
-      query = supabase.from('taxonomy').select('*').order('id', { ascending: true }).limit(5);
-    } else {
-      query = supabase.from('taxonomy').select('*').eq('parent_id', parentId);
-      
-      const { data: subcategories, error } = await query;
-      if (error) console.error('Error fetching subcategories:', error);
-      else if (subcategories.length > 0) {
-        setCards(subcategories);
-        setLayer(layer + 1);
-        return;
-      }
-      
-      query = supabase.from('place_taxonomy').select('place_id, places(*)').eq('taxonomy_id', parentId);
-    }
-    
-    const { data, error } = await query;
-    if (error) console.error('Error fetching cards:', error);
+  /** ========================== 
+   *  Fetch Top-Level Categories 
+   *  ========================== */
+  const fetchTopLevelCategories = async () => {
+    const { data, error } = await supabase
+      .from('taxonomy')
+      .select('*')
+      .is('parent_id', null)
+      .order('id', { ascending: true });
+
+    if (error) console.error('Error fetching top-level categories:', error);
     else {
-      setCards(data.map(d => d.places || d));
+      setCards(data);
       setCurrentIndex(0);
+      setLayer(1);
+      setMode("taxonomy");
     }
   };
 
-  const handleYes = () => {
-    if (layer < 3) {
-      setSelectedCategories([...selectedCategories, cards[currentIndex].name]);
-      fetchLayerCards(layer + 1, cards[currentIndex].id);
+  /** ========================== 
+   *  Fetch Subcategories or Places 
+   *  ========================== */
+  const fetchNextLayer = async (parentId, newLayer) => {
+    let { data: subcategories, error } = await supabase
+      .from('taxonomy')
+      .select('*')
+      .eq('parent_id', parentId)
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching subcategories:', error);
+      return;
+    }
+
+    if (subcategories.length > 0) {
+      // Move into subcategories
+      setCards(subcategories);
+      setCurrentIndex(0);
+      setLayer(newLayer);
+      setMode("taxonomy");
     } else {
-      console.log('Matched Place:', cards[currentIndex]);
+      // No subcategories? Load Places
+      fetchPlaces(parentId);
+    }
+  };
+
+  /** ========================== 
+   *  Fetch Places When No More Subcategories 
+   *  ========================== */
+  const fetchPlaces = async (taxonomyId) => {
+    let { data: places, error } = await supabase
+      .from('place_taxonomy')
+      .select('place_id, places(*)')
+      .eq('taxonomy_id', taxonomyId);
+
+    if (error) {
+      console.error('Error fetching places:', error);
+      return;
+    }
+
+    if (places.length > 0) {
+      setCards(places.map(p => p.places));
+      setCurrentIndex(0);
+      setLayer(layer + 1);
+      setMode("places"); // Switch to "places" mode
+    } else {
+      console.log("No places found for this category.");
+      goBack();
+    }
+  };
+
+  /** ========================== 
+   *  Handle Yes Selection
+   *  ========================== */
+  const handleYes = () => {
+    if (mode === "taxonomy") {
+      const selectedItem = cards[currentIndex];
+      setSelectedPath([...selectedPath, selectedItem.name]);
+      fetchNextLayer(selectedItem.id, layer + 1);
+    } else {
+      console.log("Matched Place:", cards[currentIndex]); // User matched a place
     }
     goToNextCard();
   };
 
+  /** ========================== 
+   *  Handle No Selection (Skip to Next) 
+   *  ========================== */
   const handleNo = () => {
     goToNextCard();
   };
 
+  /** ========================== 
+   *  Go to Next Card (Within Current Layer) 
+   *  ========================== */
   const goToNextCard = () => {
     if (currentIndex < cards.length - 1) {
-      setHistory([...history, { index: currentIndex, layer }]);
+      setHistory([...history, { index: currentIndex, layer, mode }]);
       setCurrentIndex(currentIndex + 1);
+    } else {
+      goBack();
     }
   };
 
+  /** ========================== 
+   *  Go Back One Layer
+   *  ========================== */
   const goBack = () => {
     if (history.length > 0) {
       const lastState = history.pop();
       setHistory([...history]);
       setCurrentIndex(lastState.index);
       setLayer(lastState.layer);
+      setMode(lastState.mode);
+    } else {
+      fetchTopLevelCategories(); // Return to top if no history
     }
   };
 
+  /** ========================== 
+   *  Reshuffle Cards in Current Layer 
+   *  ========================== */
   const reshuffle = () => {
     setCards([...cards].sort(() => Math.random() - 0.5));
     setCurrentIndex(0);
     setHistory([]);
   };
 
+  /** ========================== 
+   *  Handle Search  
+   *  ========================== */
   const handleSearch = async () => {
-    const { data, error } = await supabase.from('taxonomy').select('*').ilike('name', `%${searchQuery}%`);
+    const { data, error } = await supabase
+      .from('taxonomy')
+      .select('*')
+      .ilike('name', `%${searchQuery}%`);
+
     if (error) console.error('Error searching:', error);
-    else setCards(data);
+    else {
+      setCards(data);
+      setCurrentIndex(0);
+      setLayer(1);
+      setMode("taxonomy");
+    }
   };
 
   return (
@@ -95,10 +174,21 @@ export default function Home() {
         className="p-2 border rounded mb-4"
       />
       <button onClick={handleSearch} className="mb-4 bg-gray-700 text-white px-4 py-2 rounded">Search</button>
+
       {cards.length > 0 && currentIndex < cards.length ? (
         <div className="bg-white p-6 rounded-lg shadow-lg text-center w-96">
           <h2 className="text-xl font-bold mb-2">{cards[currentIndex].name}</h2>
           <p className="text-gray-600 mb-4">{cards[currentIndex].description}</p>
+          {mode === "places" && (
+            <iframe
+              width="100%"
+              height="200"
+              style={{ border: 0 }}
+              loading="lazy"
+              allowFullScreen
+              src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY}&q=${cards[currentIndex].latitude},${cards[currentIndex].longitude}`}
+            />
+          )}
           <div className="flex justify-between mt-4">
             <button onClick={handleNo} className="bg-red-500 text-white px-4 py-2 rounded">No</button>
             <button onClick={goBack} className="bg-gray-500 text-white px-4 py-2 rounded">Go Back</button>
