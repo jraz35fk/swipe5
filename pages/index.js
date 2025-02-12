@@ -9,39 +9,67 @@ export default function Home() {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState([]);
+  const [layer, setLayer] = useState(1);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    fetchCards();
+    fetchLayerCards(1, null);
   }, []);
 
-  const fetchCards = async () => {
-    const { data, error } = await supabase.from('places').select('*').order('id', { ascending: true });
-    if (error) console.error('Error fetching places:', error);
-    else setCards(data);
+  const fetchLayerCards = async (layer, parentId) => {
+    let query;
+    if (layer === 1) {
+      query = supabase.from('taxonomy').select('*').order('id', { ascending: true }).limit(5);
+    } else {
+      query = supabase.from('taxonomy').select('*').eq('parent_id', parentId);
+      
+      const { data: subcategories, error } = await query;
+      if (error) console.error('Error fetching subcategories:', error);
+      else if (subcategories.length > 0) {
+        setCards(subcategories);
+        setLayer(layer + 1);
+        return;
+      }
+      
+      query = supabase.from('place_taxonomy').select('place_id, places(*)').eq('taxonomy_id', parentId);
+    }
+    
+    const { data, error } = await query;
+    if (error) console.error('Error fetching cards:', error);
+    else {
+      setCards(data.map(d => d.places || d));
+      setCurrentIndex(0);
+    }
   };
 
   const handleYes = () => {
-    console.log('Liked:', cards[currentIndex]);
+    if (layer < 3) {
+      setSelectedCategories([...selectedCategories, cards[currentIndex].name]);
+      fetchLayerCards(layer + 1, cards[currentIndex].id);
+    } else {
+      console.log('Matched Place:', cards[currentIndex]);
+    }
     goToNextCard();
   };
 
   const handleNo = () => {
-    console.log('Disliked:', cards[currentIndex]);
     goToNextCard();
   };
 
   const goToNextCard = () => {
     if (currentIndex < cards.length - 1) {
-      setHistory([...history, currentIndex]);
+      setHistory([...history, { index: currentIndex, layer }]);
       setCurrentIndex(currentIndex + 1);
     }
   };
 
   const goBack = () => {
     if (history.length > 0) {
-      const lastIndex = history.pop();
+      const lastState = history.pop();
       setHistory([...history]);
-      setCurrentIndex(lastIndex);
+      setCurrentIndex(lastState.index);
+      setLayer(lastState.layer);
     }
   };
 
@@ -51,8 +79,22 @@ export default function Home() {
     setHistory([]);
   };
 
+  const handleSearch = async () => {
+    const { data, error } = await supabase.from('taxonomy').select('*').ilike('name', `%${searchQuery}%`);
+    if (error) console.error('Error searching:', error);
+    else setCards(data);
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <input
+        type="text"
+        placeholder="Search categories..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="p-2 border rounded mb-4"
+      />
+      <button onClick={handleSearch} className="mb-4 bg-gray-700 text-white px-4 py-2 rounded">Search</button>
       {cards.length > 0 && currentIndex < cards.length ? (
         <div className="bg-white p-6 rounded-lg shadow-lg text-center w-96">
           <h2 className="text-xl font-bold mb-2">{cards[currentIndex].name}</h2>
