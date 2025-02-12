@@ -12,7 +12,8 @@ export default function Home() {
   const [layer, setLayer] = useState(1);
   const [selectedPath, setSelectedPath] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [mode, setMode] = useState("taxonomy"); // Can be "taxonomy" or "places"
+  const [mode, setMode] = useState("taxonomy"); // Can be "taxonomy" (categories) or "places" (final match layer)
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchTopLevelCategories();
@@ -22,6 +23,7 @@ export default function Home() {
    *  Fetch Top-Level Categories 
    *  ========================== */
   const fetchTopLevelCategories = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('taxonomy')
       .select('*')
@@ -35,12 +37,15 @@ export default function Home() {
       setLayer(1);
       setMode("taxonomy");
     }
+    setLoading(false);
   };
 
   /** ========================== 
    *  Fetch Subcategories or Places 
    *  ========================== */
   const fetchNextLayer = async (parentId, newLayer) => {
+    setLoading(true);
+
     let { data: subcategories, error } = await supabase
       .from('taxonomy')
       .select('*')
@@ -49,6 +54,7 @@ export default function Home() {
 
     if (error) {
       console.error('Error fetching subcategories:', error);
+      setLoading(false);
       return;
     }
 
@@ -62,19 +68,23 @@ export default function Home() {
       // No subcategories? Load Places
       fetchPlaces(parentId);
     }
+    setLoading(false);
   };
 
   /** ========================== 
    *  Fetch Places When No More Subcategories 
    *  ========================== */
   const fetchPlaces = async (taxonomyId) => {
+    setLoading(true);
+
     let { data: places, error } = await supabase
       .from('place_taxonomy')
-      .select('place_id, places(*)')
+      .select('place_id, places:places(*)')
       .eq('taxonomy_id', taxonomyId);
 
     if (error) {
       console.error('Error fetching places:', error);
+      setLoading(false);
       return;
     }
 
@@ -82,24 +92,33 @@ export default function Home() {
       setCards(places.map(p => p.places));
       setCurrentIndex(0);
       setLayer(layer + 1);
-      setMode("places"); // Switch to "places" mode
+      setMode("places");
     } else {
       console.log("No places found for this category.");
       goBack();
     }
+    setLoading(false);
   };
 
   /** ========================== 
    *  Handle Yes Selection
    *  ========================== */
   const handleYes = () => {
+    if (cards.length === 0) return;
+
+    const selectedItem = cards[currentIndex];
+
     if (mode === "taxonomy") {
-      const selectedItem = cards[currentIndex];
-      setSelectedPath([...selectedPath, selectedItem.name]);
-      fetchNextLayer(selectedItem.id, layer + 1);
+      setSelectedPath(prev => [...prev, selectedItem.name]);
+
+      // Add a slight delay before fetching new data to prevent flickering
+      setTimeout(() => {
+        fetchNextLayer(selectedItem.id, layer + 1);
+      }, 150);
     } else {
-      console.log("Matched Place:", cards[currentIndex]); // User matched a place
+      console.log("Matched Place:", selectedItem);
     }
+
     goToNextCard();
   };
 
@@ -114,11 +133,18 @@ export default function Home() {
    *  Go to Next Card (Within Current Layer) 
    *  ========================== */
   const goToNextCard = () => {
+    if (cards.length === 0) return;
+
+    setHistory(prevHistory => [...prevHistory, { index: currentIndex, layer, mode }]);
+
     if (currentIndex < cards.length - 1) {
-      setHistory([...history, { index: currentIndex, layer, mode }]);
-      setCurrentIndex(currentIndex + 1);
+      setCurrentIndex(prevIndex => prevIndex + 1);
     } else {
-      goBack();
+      if (mode === "taxonomy") {
+        goBack();
+      } else if (mode === "places") {
+        setMode("taxonomy");
+      }
     }
   };
 
@@ -150,6 +176,7 @@ export default function Home() {
    *  Handle Search  
    *  ========================== */
   const handleSearch = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('taxonomy')
       .select('*')
@@ -162,6 +189,7 @@ export default function Home() {
       setLayer(1);
       setMode("taxonomy");
     }
+    setLoading(false);
   };
 
   return (
@@ -175,7 +203,9 @@ export default function Home() {
       />
       <button onClick={handleSearch} className="mb-4 bg-gray-700 text-white px-4 py-2 rounded">Search</button>
 
-      {cards.length > 0 && currentIndex < cards.length ? (
+      {loading ? (
+        <p className="text-gray-600">Loading...</p>
+      ) : cards.length > 0 && currentIndex < cards.length ? (
         <div className="bg-white p-6 rounded-lg shadow-lg text-center w-96">
           <h2 className="text-xl font-bold mb-2">{cards[currentIndex].name}</h2>
           <p className="text-gray-600 mb-4">{cards[currentIndex].description}</p>
