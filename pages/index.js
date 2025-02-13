@@ -8,13 +8,14 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [cards, setCards] = useState([]); // Holds the stack of cards
-  const [currentIndex, setCurrentIndex] = useState(0); // Tracks current card index
-  const [history, setHistory] = useState([]); // Tracks previous selections for "Go Back"
-  const [showMatch, setShowMatch] = useState(false); // Controls "Match Made" screen
+  const [cards, setCards] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [history, setHistory] = useState([]);
+  const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTag, setSearchTag] = useState(""); // Holds search input for new tags
+  const [searchTag, setSearchTag] = useState(""); 
+  const [tagVisibility, setTagVisibility] = useState({}); // Controls tag visibility per place
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -42,7 +43,7 @@ export default function Home() {
     } else if (layer === "untagged") {
       query = query.or(
         "tags.cs.{Foodie}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
-      ); // Fetch places with only Persona or Tier 1 tags
+      ); 
     }
 
     try {
@@ -92,19 +93,25 @@ export default function Home() {
       setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
 
       if (currentIndex + 1 >= cards.length) {
-        fetchCards("untagged"); // Show untagged places after Tier 2 exhaustion
+        fetchCards("untagged");
       }
     }
   };
 
-  // Add a New Tag to a Place
-  const addTag = async (placeId) => {
-    if (!searchTag.trim()) return;
+  // Toggle Tag Visibility
+  const toggleTags = (placeId) => {
+    setTagVisibility((prev) => ({
+      ...prev,
+      [placeId]: !prev[placeId],
+    }));
+  };
 
-    const place = cards[currentIndex];
+  // Remove a Tag
+  const removeTag = async (placeId, tagToRemove) => {
+    const place = cards.find(p => p.id === placeId);
     if (!place) return;
 
-    const updatedTags = [...place.tags, searchTag.trim()];
+    const updatedTags = place.tags.filter(tag => tag !== tagToRemove);
 
     try {
       const { error } = await supabase
@@ -113,10 +120,9 @@ export default function Home() {
         .eq("id", placeId);
 
       if (error) throw error;
-      setSearchTag("");
-      fetchCards("untagged"); // Refresh places after tagging
+      fetchCards("untagged");
     } catch (err) {
-      console.error("Error adding tag:", err);
+      console.error("Error removing tag:", err);
     }
   };
 
@@ -140,7 +146,19 @@ export default function Home() {
             <>
               <div className="card">
                 <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
+                <button onClick={() => toggleTags(cards[currentIndex].id)}>Show Tags</button>
+
+                {tagVisibility[cards[currentIndex].id] && (
+                  <div className="tag-container">
+                    {cards[currentIndex].tags.map(tag => (
+                      <span key={tag} className="tag">
+                        {tag} <button className="remove-tag" onClick={() => removeTag(cards[currentIndex].id, tag)}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
+
               <div className="buttons">
                 <button onClick={() => handleSelection(false)}>No</button>
                 <button onClick={() => handleSelection(true)}>Yes</button>
@@ -148,18 +166,6 @@ export default function Home() {
               <div className="nav-buttons">
                 <button onClick={() => fetchCards("persona")}>Reshuffle</button>
               </div>
-
-              {cards[currentIndex] && (
-                <div className="tagging-system">
-                  <input
-                    type="text"
-                    placeholder="Add a tag..."
-                    value={searchTag}
-                    onChange={(e) => setSearchTag(e.target.value)}
-                  />
-                  <button onClick={() => addTag(cards[currentIndex].id)}>Add Tag</button>
-                </div>
-              )}
             </>
           ) : (
             <p>No cards available. Try reshuffling.</p>
@@ -182,22 +188,33 @@ export default function Home() {
           align-items: center;
           justify-content: center;
         }
-        .buttons {
+        .buttons, .nav-buttons {
           display: flex;
           gap: 20px;
           margin-top: 20px;
         }
-        .tagging-system {
-          margin-top: 20px;
+        .tag-container {
+          margin-top: 10px;
           display: flex;
-          gap: 10px;
+          flex-wrap: wrap;
+          gap: 5px;
         }
-        .tagging-system input {
-          padding: 5px;
-        }
-        .tagging-system button {
+        .tag {
+          background: #ddd;
           padding: 5px 10px;
+          border-radius: 5px;
+          display: flex;
+          align-items: center;
+        }
+        .remove-tag {
+          margin-left: 5px;
+          border: none;
+          background: red;
+          color: white;
           cursor: pointer;
+          font-weight: bold;
+          padding: 2px 5px;
+          border-radius: 50%;
         }
       `}</style>
     </div>
