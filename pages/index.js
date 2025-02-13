@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Removed: import "../styles/tinderSwipe.css"; // ❌ (No longer importing CSS)
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -23,13 +21,13 @@ export default function Home() {
     initializeUser();
   }, []);
 
-  /** ✅ Initialize user by ensuring they have a weight entry */
+  /** ✅ Initialize user weight & fetch first set of cards */
   const initializeUser = async () => {
     await fetchUserWeight();
-    await fetchCards("persona"); // 🚀 Always start with Personas first
+    await fetchCards("persona");
   };
 
-  /** ✅ Fetch user weight from Supabase */
+  /** ✅ Fetch or create user weight */
   const fetchUserWeight = async () => {
     const { data, error } = await supabase
       .from("user_progress")
@@ -40,7 +38,6 @@ export default function Home() {
     if (error || !data) {
       console.warn("User weight not found. Creating a default entry...");
 
-      // 🚀 Create a new user_progress row with weight = 0 if missing
       const { error: insertError } = await supabase
         .from("user_progress")
         .upsert([{ user_id: DEFAULT_USER_ID, weight: 0 }]);
@@ -63,75 +60,49 @@ export default function Home() {
     let query;
 
     if (layer === "persona") {
-      // ✅ Fetch Personas first
       query = supabase.from("personas").select("*");
-    } 
-    else if (layer === "tier1" && previousSelection) {
-      // ✅ Tier 1 from tag_mappings
-      query = supabase
-        .from("tag_mappings")
-        .select("child_tag")
-        .eq("parent_tag", previousSelection)
-        .eq("tier", 1);
-    } 
-    else if (layer === "tier2" && previousSelection) {
-      // ✅ Tier 2
-      query = supabase
-        .from("tag_mappings")
-        .select("child_tag")
-        .eq("parent_tag", previousSelection)
-        .eq("tier", 2);
-    } 
-    else if (layer === "tier3" && previousSelection) {
-      // ✅ Tier 3
-      query = supabase
-        .from("tag_mappings")
-        .select("child_tag")
-        .eq("parent_tag", previousSelection)
-        .eq("tier", 3);
-    } 
-    else if (layer === "places" && previousSelection) {
-      // ✅ Only unlock if userWeight >= 160
+    } else if (layer === "tier1" && previousSelection) {
+      query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 1);
+    } else if (layer === "tier2" && previousSelection) {
+      query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 2);
+    } else if (layer === "tier3" && previousSelection) {
+      query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 3);
+    } else if (layer === "places" && previousSelection) {
       if (userWeight < 160) {
         console.warn("Not enough weight to unlock places!");
         setLoading(false);
-        return;
+        return [];
       }
-      query = supabase
-        .from("places")
-        .select("*")
-        .contains("tags", [previousSelection]);
+      query = supabase.from("places").select("*").contains("tags", [previousSelection]);
     } else {
-      // If no valid path, just return
       setLoading(false);
-      return;
+      return [];
     }
 
     try {
       const { data, error } = await query;
       if (error) throw error;
+
       if (!data || data.length === 0) {
-        throw new Error(`No cards found for ${layer}.`);
+        console.warn(`No ${layer} found.`);
+        setLoading(false);
+        return [];
       }
 
-      // ✅ Format for UI. If using "child_tag" (tier mapping),
-      // set name = child_tag. If using "personas"/"places", keep name as is.
-      const formatted = data.map(item => ({
-        name: item.child_tag || item.name || "Unnamed"
-      }));
-
-      setCards(formatted);
+      setCards(data.map(item => ({ name: item.child_tag || item.name })));
       setCurrentIndex(0);
       setCurrentLayer(layer);
+
+      return data;
     } catch (err) {
-      setError(`Failed to load ${layer} cards. Try reshuffling.`);
-    } finally {
+      setError(`Failed to load ${layer} cards.`);
       setLoading(false);
+      return [];
     }
   };
 
   /** ✅ Handles swipe interaction */
-  const handleSwipe = (accepted) => {
+  const handleSwipe = async (accepted) => {
     if (!cards.length) return;
 
     const selectedCard = cards[currentIndex];
@@ -141,19 +112,6 @@ export default function Home() {
       return;
     }
 
-    if (!accepted) {
-      // If "No" clicked, skip to next card
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < cards.length) {
-        setCurrentIndex(nextIndex);
-      } else {
-        // If out of cards, re-fetch same layer or do fallback
-        fetchCards(currentLayer);
-      }
-      return;
-    }
-
-    // If "Yes" clicked, determine next layer
     let nextLayer;
 
     if (currentLayer === "persona") {
@@ -165,13 +123,22 @@ export default function Home() {
     } else if (currentLayer === "tier3") {
       nextLayer = "places";
     } else {
-      // If we're beyond tier3, do nothing or fallback
       return;
     }
 
-    // Update breadcrumbs and fetch next layer
-    setBreadcrumbs(prev => [...prev, selectedCard.name]);
-    fetchCards(nextLayer, selectedCard.name);
+    // ✅ Add selected card to breadcrumbs
+    setBreadcrumbs([...breadcrumbs, selectedCard.name]);
+
+    // ✅ Fetch next layer
+    const newCards = await fetchCards(nextLayer, selectedCard.name);
+
+    // ✅ If no cards exist at next layer, try showing places
+    if (!newCards || newCards.length === 0) {
+      if (nextLayer !== "places") {
+        console.warn(`No ${nextLayer} tags found. Fetching places instead.`);
+        await fetchCards("places", selectedCard.name);
+      }
+    }
   };
 
   return (
@@ -198,74 +165,9 @@ export default function Home() {
       )}
 
       <div className="swipe-buttons">
-        {/* Left / No */}
-        <button className="no-button" onClick={() => handleSwipe(false)}>
-          ❌ No
-        </button>
-        {/* Right / Yes */}
-        <button className="yes-button" onClick={() => handleSwipe(true)}>
-          ✅ Yes
-        </button>
+        <button className="no-button" onClick={() => handleSwipe(false)}>❌ No</button>
+        <button className="yes-button" onClick={() => handleSwipe(true)}>✅ Yes</button>
       </div>
-
-      {/* Inline styling (optional). Remove if you have global CSS. */}
-      <style jsx>{`
-        .app {
-          position: relative;
-          max-width: 420px;
-          margin: 0 auto;
-          height: 100vh;
-          display: flex;
-          flex-direction: column;
-          background: #f8f8f8;
-          font-family: sans-serif;
-        }
-        .breadcrumb {
-          margin: 10px;
-          font-weight: 600;
-          color: #555;
-        }
-        .card-container {
-          flex: 1;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-        .card {
-          background: white;
-          border-radius: 8px;
-          padding: 20px;
-          width: 80%;
-          max-width: 340px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          text-align: center;
-        }
-        .swipe-buttons {
-          display: flex;
-          justify-content: space-evenly;
-          padding: 10px 0;
-          background: #f0f0f0;
-        }
-        button {
-          padding: 12px 16px;
-          font-size: 16px;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-        }
-        .no-button {
-          background: #f44336;
-          color: #fff;
-        }
-        .yes-button {
-          background: #4caf50;
-          color: #fff;
-        }
-        .error-screen {
-          text-align: center;
-          margin-top: 50px;
-        }
-      `}</style>
     </div>
   );
 }
