@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import "../styles/tinderSwipe.css"; // Import your mobile-friendly CSS
 
 // 👈 Use a default user ID so we always fetch/update the same row
 const DEFAULT_USER_ID = "static_user";
