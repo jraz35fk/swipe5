@@ -105,4 +105,99 @@ export default function Home() {
     const updatedTags = [...place.tags, searchTag.trim()];
 
     try {
-      const { error } = await
+      const { error } = await supabase
+        .from("places")
+        .update({ tags: updatedTags })
+        .eq("id", placeId);
+
+      if (error) throw error;
+      setSearchTag("");
+      fetchCards("untagged"); // Refresh places after tagging
+    } catch (err) {
+      console.error("Error adding tag:", err);
+    }
+  };
+
+  return (
+    <div className="app">
+      {error ? (
+        <div className="error-screen">
+          <h2>{error}</h2>
+          <button onClick={() => fetchCards("persona")}>Retry</button>
+        </div>
+      ) : loading ? (
+        <p>Loading cards...</p>
+      ) : showMatch ? (
+        <div className="match-screen">
+          <h1>Match Made!</h1>
+          <button onClick={() => setShowMatch(false)}>X</button>
+        </div>
+      ) : (
+        <div className="card-container">
+          {cards.length > 0 ? (
+            <>
+              <div className="card">
+                <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
+              </div>
+              <div className="buttons">
+                <button onClick={() => handleSelection(false)}>No</button>
+                <button onClick={() => handleSelection(true)}>Yes</button>
+              </div>
+              <div className="nav-buttons">
+                <button onClick={() => fetchCards("persona")}>Reshuffle</button>
+              </div>
+
+              {cards[currentIndex] && (
+                <div className="tagging-system">
+                  <input
+                    type="text"
+                    placeholder="Add a tag..."
+                    value={searchTag}
+                    onChange={(e) => setSearchTag(e.target.value)}
+                  />
+                  <button onClick={() => addTag(cards[currentIndex].id)}>Add Tag</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p>No cards available. Try reshuffling.</p>
+          )}
+        </div>
+      )}
+
+      <style jsx>{`
+        .app {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          background: #f4f4f4;
+        }
+        .card-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        .buttons {
+          display: flex;
+          gap: 20px;
+          margin-top: 20px;
+        }
+        .tagging-system {
+          margin-top: 20px;
+          display: flex;
+          gap: 10px;
+        }
+        .tagging-system input {
+          padding: 5px;
+        }
+        .tagging-system button {
+          padding: 5px 10px;
+          cursor: pointer;
+        }
+      `}</style>
+    </div>
+  );
+}
