@@ -1,3 +1,4 @@
+import "../styles/tinderSwipe.css"; // ✅ Global CSS Fix
 import '../styles/globals.css';
 import NavBar from '../components/NavBar';
 
