@@ -22,87 +22,98 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      fetchCards("tier1");
+      fetchPersonas(); // Fetch personas first
     }
   }, []);
 
-  // Fetch Cards from Supabase (Using Tag Tiers)
-  const fetchCards = async (tier, previousSelection = null) => {
+  // Fetch Personas (Fixes incorrect table reference)
+  const fetchPersonas = async () => {
     setLoading(true);
     setError(null);
-    logDebug(`Fetching ${tier} cards...`);
-
-    let query = supabase.from("places").select("*");
-
-    if (tier === "tier1") {
-      query = query.contains("tags", ["tier1"]);
-    } else if (tier === "tier2" && previousSelection) {
-      query = query.contains("tags", [previousSelection]);
-    } else if (tier === "tier3" && previousSelection) {
-      query = query.contains("tags", [previousSelection]);
-    } else if (tier === "places" && previousSelection) {
-      query = query.contains("tags", [previousSelection]);
-    }
+    logDebug(`Fetching personas from Supabase...`);
 
     try {
-      const { data, error } = await query;
+      const { data, error } = await supabase.from("personas").select("*");
+
       if (error) throw error;
 
-      logDebug(`Supabase Response for ${tier}:`, data);
+      logDebug(`Supabase Response for personas:`, data);
 
       if (!data || data.length === 0) {
-        throw new Error(`No cards found for ${tier}.`);
+        throw new Error(`No personas found.`);
       }
 
       setCards(data);
       setCurrentIndex(0);
     } catch (err) {
       logDebug(`Fetch Error: ${err.message}`);
-      setError(`Failed to load ${tier} cards. Try reshuffling.`);
+      setError(`Failed to load personas. Try reshuffling.`);
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle Card Selection
   const handleSelection = (accepted) => {
     if (!cards || cards.length === 0) return;
 
     if (accepted) {
       const selectedCard = cards[currentIndex];
 
-      if (!selectedCard || !selectedCard.tags) {
+      if (!selectedCard) {
         setError("Invalid card data. Try reshuffling.");
         return;
       }
 
-      if (selectedCard.tags.includes("place")) {
-        setShowMatch(true);
-        return;
-      }
-
-      let nextTier = selectedCard.tags.includes("tier2")
-        ? "tier2"
-        : selectedCard.tags.includes("tier3")
-        ? "tier3"
-        : "places";
-
-      setHistory([...history, { layer: nextTier, selection: selectedCard.tags[0] }]);
-      fetchCards(nextTier, selectedCard.tags[0]);
+      setHistory([...history, { layer: "tags", selection: selectedCard.name }]);
+      fetchTags(selectedCard.name);
     } else {
       setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
     }
   };
 
+  // Fetch Tags based on selected persona
+  const fetchTags = async (persona) => {
+    setLoading(true);
+    setError(null);
+    logDebug(`Fetching Tier 1 tags for persona: ${persona}`);
+
+    try {
+      const { data, error } = await supabase
+        .from("places")
+        .select("*")
+        .contains("tags", [persona]); // Fetch places with tags related to persona
+
+      if (error) throw error;
+
+      logDebug(`Supabase Response for tags:`, data);
+
+      if (!data || data.length === 0) {
+        throw new Error(`No tags found for ${persona}.`);
+      }
+
+      setCards(data);
+      setCurrentIndex(0);
+    } catch (err) {
+      logDebug(`Fetch Error: ${err.message}`);
+      setError(`Failed to load tags for ${persona}. Try reshuffling.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Go Back to Previous Layer
   const handleGoBack = () => {
     if (history.length === 0) return;
     const previous = history.pop();
     setHistory(history);
-    fetchCards(previous.layer, previous.selection);
+    fetchTags(previous.selection);
   };
 
+  // Reshuffle (Return to Persona Selection)
   const handleReshuffle = () => {
     setHistory([]);
-    fetchCards("tier1");
+    fetchPersonas();
   };
 
   return (
