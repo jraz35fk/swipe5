@@ -17,7 +17,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchUserWeight();
-    fetchCards("persona"); // 🚀 Always start with Personas first
+    fetchCards("persona"); // 🚀 Always start with Personas
   }, []);
 
   const fetchUserWeight = async () => {
@@ -26,32 +26,32 @@ export default function Home() {
       .select("weight")
       .single();
 
-    if (error) {
+    if (error || !data) {
       console.error("Error fetching weight:", error);
-      return;
+      setUserWeight(0); // Set default weight to 0 to prevent skipping
+    } else {
+      setUserWeight(data.weight);
     }
-    setUserWeight(data.weight);
   };
 
   const fetchCards = async (layer, previousSelection = null) => {
     setLoading(true);
     setError(null);
-    let query = supabase.from("places").select("*");
 
-    // 🚀 **Force Personas to Load First**
+    let query;
+
     if (layer === "persona") {
-      query = supabase.from("personas").select("*"); // ✅ Pull from the Personas table
+      query = supabase.from("personas").select("*"); // ✅ Always start with Personas
     } else if (layer === "tier1" && previousSelection) {
       query = supabase.from("places").select("*").contains("tags", [previousSelection]);
     } else if (layer === "tier2" && previousSelection) {
       query = supabase.from("places").select("*").contains("tags", [previousSelection]);
     } else if (layer === "places" && previousSelection) {
-      if (userWeight >= 160) {
-        query = supabase.from("places").select("*").contains("tags", [previousSelection]);
-      } else {
+      if (userWeight < 160) {
         console.log("Not enough weight to unlock places!");
         return;
       }
+      query = supabase.from("places").select("*").contains("tags", [previousSelection]);
     } else {
       return;
     }
@@ -83,21 +83,20 @@ export default function Home() {
       return;
     }
 
-    if (accepted) {
-      let nextLayer;
-      if (currentLayer === "persona") {
-        nextLayer = "tier1";
-      } else if (currentLayer === "tier1") {
-        nextLayer = "tier2";
-      } else if (currentLayer === "tier2") {
-        nextLayer = "places";
-      }
+    let nextLayer;
 
-      setBreadcrumbs([...breadcrumbs, selectedCard.name]);
-      fetchCards(nextLayer, selectedCard.name);
+    if (currentLayer === "persona") {
+      nextLayer = "tier1";
+    } else if (currentLayer === "tier1") {
+      nextLayer = "tier2";
+    } else if (currentLayer === "tier2") {
+      nextLayer = "places";
     } else {
-      setCurrentIndex((prev) => (prev + 1 < cards.length ? prev + 1 : 0));
+      return;
     }
+
+    setBreadcrumbs([...breadcrumbs, selectedCard.name]);
+    fetchCards(nextLayer, selectedCard.name);
   };
 
   return (
