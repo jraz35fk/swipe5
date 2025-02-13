@@ -9,9 +9,9 @@ const supabase = createClient(
 
 export default function Home() {
   const [cards, setCards] = useState([]); // Holds the stack of cards
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0); // Tracks current card index
   const [history, setHistory] = useState([]); // Tracks previous selections for "Go Back"
-  const [showMatch, setShowMatch] = useState(false);
+  const [showMatch, setShowMatch] = useState(false); // Controls "Match Made" screen
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTag, setSearchTag] = useState(""); // Holds search input for new tags
@@ -30,7 +30,9 @@ export default function Home() {
     let query = supabase.from("places").select("*");
 
     if (layer === "persona") {
-      query = query.contains("tags", ["persona"]);
+      query = query.or(
+        "tags.cs.{Foodie}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
+      );
     } else if (layer === "tier1" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
     } else if (layer === "tier2" && previousSelection) {
@@ -39,7 +41,7 @@ export default function Home() {
       query = query.contains("tags", [previousSelection]);
     } else if (layer === "untagged") {
       query = query.or(
-        "tags.cs.{persona}, tags.cs.{tier1}"
+        "tags.cs.{Foodie}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
       ); // Fetch places with only Persona or Tier 1 tags
     }
 
