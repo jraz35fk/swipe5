@@ -59,27 +59,25 @@ export default function Home() {
     setError(null);
     let query;
 
-    if (layer === "persona") {
-      query = supabase.from("personas").select("*");
-    } else if (layer === "tier1" && previousSelection) {
-      query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 1);
-    } else if (layer === "tier2" && previousSelection) {
-      query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 2);
-    } else if (layer === "tier3" && previousSelection) {
-      query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 3);
-    } else if (layer === "places" && previousSelection) {
-      if (userWeight < 160) {
-        console.warn("Not enough weight to unlock places!");
+    try {
+      if (layer === "persona") {
+        query = supabase.from("personas").select("*");
+      } else if (layer === "tier1" && previousSelection) {
+        query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 1);
+      } else if (layer === "tier2" && previousSelection) {
+        query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 2);
+      } else if (layer === "places" && previousSelection) {
+        if (userWeight < 160) {
+          console.warn("Not enough weight to unlock places!");
+          setLoading(false);
+          return [];
+        }
+        query = supabase.from("places").select("*").contains("tags", [previousSelection]);
+      } else {
         setLoading(false);
         return [];
       }
-      query = supabase.from("places").select("*").contains("tags", [previousSelection]);
-    } else {
-      setLoading(false);
-      return [];
-    }
 
-    try {
       const { data, error } = await query;
       if (error) throw error;
 
@@ -95,6 +93,7 @@ export default function Home() {
 
       return data;
     } catch (err) {
+      console.error(`Failed to load ${layer} cards:`, err);
       setError(`Failed to load ${layer} cards.`);
       setLoading(false);
       return [];
@@ -103,42 +102,35 @@ export default function Home() {
 
   /** ✅ Handles swipe interaction */
   const handleSwipe = async (accepted) => {
-    if (!cards.length) return;
-
-    const selectedCard = cards[currentIndex];
-
-    if (!selectedCard) {
+    if (!cards.length || currentIndex >= cards.length) {
       setError("Invalid card data. Try reshuffling.");
       return;
     }
 
-    let nextLayer;
+    const selectedCard = cards[currentIndex];
 
+    let nextLayer;
     if (currentLayer === "persona") {
       nextLayer = "tier1";
     } else if (currentLayer === "tier1") {
       nextLayer = "tier2";
     } else if (currentLayer === "tier2") {
-      nextLayer = "tier3";
-    } else if (currentLayer === "tier3") {
       nextLayer = "places";
     } else {
       return;
     }
 
-    // ✅ Add selected card to breadcrumbs
     setBreadcrumbs([...breadcrumbs, selectedCard.name]);
 
-    // ✅ Fetch next layer
     const newCards = await fetchCards(nextLayer, selectedCard.name);
-
-    // ✅ If no cards exist at next layer, try showing places
     if (!newCards || newCards.length === 0) {
       if (nextLayer !== "places") {
         console.warn(`No ${nextLayer} tags found. Fetching places instead.`);
         await fetchCards("places", selectedCard.name);
       }
     }
+
+    setCurrentIndex(currentIndex + 1);
   };
 
   return (
