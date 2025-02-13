@@ -38,9 +38,10 @@ export default function Home() {
     if (error || !data) {
       console.warn("User weight not found. Creating a default entry...");
 
+      // 🚀 Create a new user_progress row with weight = 0 if missing
       const { error: insertError } = await supabase
         .from("user_progress")
-        .upsert([{ user_id: DEFAULT_USER_ID, weight: 0 }]); // ✅ Ensures row exists
+        .upsert([{ user_id: DEFAULT_USER_ID, weight: 0 }]);
 
       if (insertError) {
         console.error("Failed to create user weight:", insertError);
@@ -60,18 +61,30 @@ export default function Home() {
     let query;
 
     if (layer === "persona") {
-      query = supabase.from("personas").select("*"); // ✅ Start with Personas
-    } else if (layer === "tier1" && previousSelection) {
+      query = supabase.from("personas").select("*"); // ✅ Fetch Personas first
+    } 
+    else if (layer === "tier1" && previousSelection) {
       query = supabase
-        .from("tag_mappings") // ✅ Get Tier 1 tags based on Persona
-        .select("tag")
-        .eq("parent_tag", previousSelection);
-    } else if (layer === "tier2" && previousSelection) {
+        .from("tag_mappings")
+        .select("child_tag")
+        .eq("parent_tag", previousSelection)
+        .eq("tier", 1); // ✅ Ensures Tier 1 only
+    } 
+    else if (layer === "tier2" && previousSelection) {
       query = supabase
-        .from("tag_mappings") // ✅ Get Tier 2 tags based on Tier 1
-        .select("tag")
-        .eq("parent_tag", previousSelection);
-    } else if (layer === "places" && previousSelection) {
+        .from("tag_mappings")
+        .select("child_tag")
+        .eq("parent_tag", previousSelection)
+        .eq("tier", 2); // ✅ Ensures Tier 2 only
+    } 
+    else if (layer === "tier3" && previousSelection) {
+      query = supabase
+        .from("tag_mappings")
+        .select("child_tag")
+        .eq("parent_tag", previousSelection)
+        .eq("tier", 3); // ✅ Ensures Tier 3 only
+    } 
+    else if (layer === "places" && previousSelection) {
       if (userWeight < 160) {
         console.warn("Not enough weight to unlock places!");
         return;
@@ -79,7 +92,7 @@ export default function Home() {
       query = supabase
         .from("places")
         .select("*")
-        .contains("tags", [previousSelection]); // ✅ Get Places for selected Tier 2
+        .contains("tags", [previousSelection]);
     } else {
       return;
     }
@@ -91,7 +104,7 @@ export default function Home() {
         throw new Error(`No cards found for ${layer}.`);
       }
 
-      setCards(data.map(item => ({ name: item.tag || item.name }))); // ✅ Format for cards
+      setCards(data.map(item => ({ name: item.child_tag || item.name }))); // ✅ Format for UI
       setCurrentIndex(0);
       setCurrentLayer(layer);
     } catch (err) {
@@ -119,6 +132,8 @@ export default function Home() {
     } else if (currentLayer === "tier1") {
       nextLayer = "tier2";
     } else if (currentLayer === "tier2") {
+      nextLayer = "tier3";
+    } else if (currentLayer === "tier3") {
       nextLayer = "places";
     } else {
       return;
