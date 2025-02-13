@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import "../styles/tinderSwipe.css"; // 📌 Import mobile-friendly UI
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -12,14 +13,12 @@ export default function Home() {
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [userWeight, setUserWeight] = useState(0);
   const [boosterPack, setBoosterPack] = useState(false);
-  const [showMatch, setShowMatch] = useState(false);
-  const [tagVisibility, setTagVisibility] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchUserWeight();
-    fetchCards("persona");
+    fetchCards("persona"); // 🚀 Always start with Personas
   }, []);
 
   const fetchUserWeight = async () => {
@@ -41,13 +40,20 @@ export default function Home() {
 
     let query = supabase.from("places").select("*");
 
+    // 🔥 Step 1: Always start with Personas
     if (layer === "persona") {
       query = query.or("tags.cs.{Food}, tags.cs.{Socialite}, tags.cs.{Adventurer}");
-    } else if (layer === "tier1" && previousSelection) {
+    }
+    // 🔥 Step 2: Move to Tier 1 based on Persona selection
+    else if (layer === "tier1" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
-    } else if (layer === "tier2" && previousSelection) {
+    }
+    // 🔥 Step 3: Move to Tier 2 based on Tier 1 selection
+    else if (layer === "tier2" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
-    } else if (layer === "places" && previousSelection) {
+    }
+    // 🔥 Step 4: Only show places after all Tier 2 tags are exhausted
+    else if (layer === "places" && previousSelection) {
       if (userWeight >= 200) {
         query = query.or("tags.cs.{rare_match}");
       } else if (userWeight >= 160) {
@@ -56,6 +62,8 @@ export default function Home() {
         console.log("Not enough weight to unlock places!");
         return;
       }
+    } else {
+      return;
     }
 
     try {
@@ -131,13 +139,6 @@ export default function Home() {
     }
   };
 
-  const toggleTags = (placeId) => {
-    setTagVisibility((prev) => ({
-      ...prev,
-      [placeId]: !prev[placeId],
-    }));
-  };
-
   return (
     <div className="app">
       {/* Breadcrumbs in Top Left */}
@@ -157,25 +158,11 @@ export default function Home() {
         </div>
       ) : loading ? (
         <p>Loading cards...</p>
-      ) : showMatch ? (
-        <div className="match-screen">
-          <h1>Match Made!</h1>
-          <button onClick={() => setShowMatch(false)}>X</button>
-        </div>
       ) : (
         <div className="card-container">
           {cards.length > 0 ? (
             <div className="card">
               <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
-              <button onClick={() => toggleTags(cards[currentIndex].id)}>Show Tags</button>
-
-              {tagVisibility[cards[currentIndex].id] && (
-                <div className="tag-container">
-                  {cards[currentIndex].tags.map(tag => (
-                    <span key={tag} className="tag">{tag}</span>
-                  ))}
-                </div>
-              )}
             </div>
           ) : (
             <p>No cards available. Try reshuffling.</p>
