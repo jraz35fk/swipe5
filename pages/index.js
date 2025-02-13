@@ -8,50 +8,60 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [cards, setCards] = useState(null);
+  const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState([]);
   const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // Global Error State
+  const [error, setError] = useState(null);
 
-  // Fetch Cards from Supabase based on Layer
+  // Debugging function
+  const logDebug = (message, data = null) => {
+    console.log(`[DEBUG]: ${message}`, data);
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      fetchCards("persona");
+    }
+  }, []);
+
+  // Fetch Cards from Supabase
   const fetchCards = async (layer, previousSelection = null) => {
     setLoading(true);
-    setError(null); // Reset error state
+    setError(null);
+    logDebug(`Fetching ${layer} cards...`);
+
+    let query = supabase.from("places").select("*");
+
+    if (layer === "persona") {
+      query = query.eq("persona", true);
+    } else if (layer === "tags" && previousSelection) {
+      query = query.contains("tags", [previousSelection]);
+    } else if (layer === "places" && previousSelection) {
+      query = query.contains("tags", [previousSelection]);
+    }
 
     try {
-      let query = supabase.from("places").select("*");
-
-      if (layer === "persona") {
-        query = query.eq("persona", true);
-      } else if (layer === "tags" && previousSelection) {
-        query = query.contains("tags", [previousSelection]); // Get Tier 2 tags
-      } else if (layer === "places" && previousSelection) {
-        query = query.contains("tags", [previousSelection]); // Get places matching tags
-      }
-
       const { data, error } = await query;
+      if (error) throw error;
 
-      if (error) {
-        throw new Error("Error fetching cards from database.");
-      }
+      logDebug(`Supabase Response for ${layer}:`, data);
 
       if (!data || data.length === 0) {
-        throw new Error("No cards available.");
+        throw new Error(`No cards found for ${layer}.`);
       }
 
       setCards(data);
       setCurrentIndex(0);
     } catch (err) {
-      console.error(err);
-      setError(err.message); // Set error state for UI
+      logDebug(`Fetch Error: ${err.message}`);
+      setError(`Failed to load ${layer} cards. Try reshuffling.`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Card Selection
   const handleSelection = (accepted) => {
     if (!cards || cards.length === 0) return;
 
@@ -64,7 +74,6 @@ export default function Home() {
       }
 
       setHistory([...history, { layer: "tags", selection: selectedCard.tags[0] }]);
-
       fetchCards(
         selectedCard.tags.includes("tier2") ? "tags" : "places",
         selectedCard.tags[0]
@@ -74,16 +83,13 @@ export default function Home() {
     }
   };
 
-  // Go Back to Previous Layer
   const handleGoBack = () => {
     if (history.length === 0) return;
-
     const previous = history.pop();
     setHistory(history);
     fetchCards(previous.layer, previous.selection);
   };
 
-  // Reshuffle (Return to Persona Selection)
   const handleReshuffle = () => {
     setHistory([]);
     fetchCards("persona");
@@ -91,13 +97,13 @@ export default function Home() {
 
   return (
     <div className="app">
-      {error ? (
-        <div className="error-screen">
-          <h2>Error: {error}</h2>
-          <button onClick={() => fetchCards("persona")}>Retry</button>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <p>Loading cards...</p>
+      ) : error ? (
+        <div className="error-screen">
+          <h2>{error}</h2>
+          <button onClick={handleReshuffle}>Retry</button>
+        </div>
       ) : showMatch ? (
         <div className="match-screen">
           <h1>Match Made!</h1>
@@ -105,11 +111,11 @@ export default function Home() {
         </div>
       ) : (
         <div className="card-container">
-          {cards && cards.length > 0 ? (
+          {cards.length > 0 ? (
             <>
               <div className="card">
                 <div className="card-image" />
-                <h2>{cards[currentIndex]?.name || "Loading..."}</h2>
+                <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
               </div>
               <div className="buttons">
                 <button onClick={() => handleSelection(false)}>No</button>
@@ -121,7 +127,7 @@ export default function Home() {
               </div>
             </>
           ) : (
-            <p>No cards available.</p>
+            <p>No cards available. Try reshuffling.</p>
           )}
         </div>
       )}
