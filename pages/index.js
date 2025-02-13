@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import "../styles/tinderSwipe.css"; // 📌 Import mobile-friendly UI
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
