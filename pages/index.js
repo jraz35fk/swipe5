@@ -6,6 +6,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+const DEFAULT_USER_ID = "static_user"; // ✅ Always use this ID
+
 export default function Home() {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -20,20 +22,34 @@ export default function Home() {
     fetchCards("persona"); // 🚀 Always start with Personas
   }, []);
 
+  /** ✅ Fetch user weight or create a default one if missing **/
   const fetchUserWeight = async () => {
     const { data, error } = await supabase
       .from("user_progress")
       .select("weight")
+      .eq("user_id", DEFAULT_USER_ID) // 👈 Uses the static user ID
       .single();
 
     if (error || !data) {
-      console.error("Error fetching weight:", error);
-      setUserWeight(0); // Set default weight to 0 to prevent skipping
+      console.warn("User weight not found. Creating a default entry...");
+
+      // 🚀 Create a new user_progress row with weight = 0
+      const { error: insertError } = await supabase
+        .from("user_progress")
+        .insert([{ user_id: DEFAULT_USER_ID, weight: 0 }], { upsert: true });
+
+      if (insertError) {
+        console.error("Failed to create user weight:", insertError);
+        return;
+      }
+
+      setUserWeight(0); // Default weight
     } else {
       setUserWeight(data.weight);
     }
   };
 
+  /** ✅ Fetch cards for the correct layer **/
   const fetchCards = async (layer, previousSelection = null) => {
     setLoading(true);
     setError(null);
@@ -73,6 +89,7 @@ export default function Home() {
     }
   };
 
+  /** ✅ Handles swipe and moves to the next layer **/
   const handleSwipe = (accepted) => {
     if (!cards.length) return;
 
