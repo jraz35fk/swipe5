@@ -1,699 +1,352 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// No external CSS import – rely on your global CSS
-// import "../styles/tinderSwipe.css";
-
+// Adjust these environment variables to match your project
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const DEFAULT_USER_ID = "static_user";
-
 // Layer definitions
-const LAYER_PERSONA_T1 = "persona_t1"; // Single combined layer for Persona + Tier1
+const LAYER_PERSONA = "persona";
+const LAYER_TIER1 = "tier1";
 const LAYER_TIER2 = "tier2";
-const LAYER_TIER3 = "tier3";
 const LAYER_PLACES = "places";
 
+// Example threshold: once user finishes a layer, we might check if we’re
+// “confident” enough to jump to places. This code shows the direct flow
+// persona → tier1 → tier2 → places, but you can skip or dialN early.
+const CONFIDENCE_THRESHOLD = 0.9;
+
 export default function Home() {
-  // Core states
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentLayer, setCurrentLayer] = useState(LAYER_PERSONA);
+
+  // For UI
   const [breadcrumbs, setBreadcrumbs] = useState([]);
-  const [userWeight, setUserWeight] = useState(0);
-
-  // Which layer we're in + history for "Go Back"
-  const [currentLayer, setCurrentLayer] = useState(LAYER_PERSONA_T1);
-  const [layerHistory, setLayerHistory] = useState([]);
-
-  // Loading / error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Overlays
-  const [showMatch, setShowMatch] = useState(false);
-  const [boosterPack, setBoosterPack] = useState(false);
-  const [dialNOverlay, setDialNOverlay] = useState(false);
+  /**
+   * Simple in-memory preferences object, e.g.:
+   * {
+   *   "adventure": { likes: 3, skips: 1 },
+   *   "foodie":    { likes: 5, skips: 0 },
+   * }
+   */
+  const [preferences, setPreferences] = useState({});
 
   useEffect(() => {
-    initializeUser();
+    // Always start with persona
+    fetchCards(LAYER_PERSONA);
   }, []);
 
-  /**
-   * 1. Initialize user weight or create default row, then fetch merged Persona+Tier1 cards
-   */
-  const initializeUser = async () => {
-    await fetchUserWeight();
-    // Combined Persona + T1 as first “layer”
-    await fetchPersonaTier1();
-  };
-
-  /**
-   * 2. Check or create user weight row
-   */
-  const fetchUserWeight = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("user_progress")
-        .select("weight")
-        .eq("user_id", DEFAULT_USER_ID)
-        .single();
-
-      if (error || !data) {
-        console.warn("User weight not found. Creating a default entry...");
-        const { error: insertError } = await supabase
-          .from("user_progress")
-          .upsert([{ user_id: DEFAULT_USER_ID, weight: 0 }]);
-
-        if (insertError) {
-          console.error("Failed to create user weight:", insertError);
-          return;
-        }
-        setUserWeight(0);
-      } else {
-        setUserWeight(data.weight);
-      }
-    } catch (err) {
-      console.error("Error fetching user weight:", err);
-    }
-  };
-
-  /**
-   * 3. Merge Tier 1 cards with their Persona. 
-   *    Steps:
-   *     - Fetch all "personas"
-   *     - For each persona, fetch its Tier1 children from "tag_mappings"
-   *     - Combine them in a single array: [ {name: PersonaName}, {name: Tier1Child}, ... ]
-   */
-  const fetchPersonaTier1 = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // 1) Fetch all personas
-      const { data: personas, error: personaErr } = await supabase
-        .from("personas")
-        .select("*");
-      if (personaErr) throw personaErr;
-
-      if (!personas || personas.length === 0) {
-        console.warn("No personas found.");
-        setLoading(false);
-        return [];
-      }
-
-      // 2) For each persona, fetch its tier1 children
-      let combinedCards = [];
-
-      for (let p of personas) {
-        // Always push the persona itself
-        combinedCards.push({
-          name: p.name || "Unnamed Persona",
-          type: "persona"
-        });
-
-        // Then find tier1 for that persona, if any
-        const { data: t1data, error: t1Err } = await supabase
-          .from("tag_mappings")
-          .select("child_tag")
-          .eq("parent_tag", p.name)
-          .eq("tier", 1);
-
-        if (t1Err) {
-          console.error("Error fetching tier1 for persona:", t1Err);
-          continue;
-        }
-        if (t1data && t1data.length > 0) {
-          t1data.forEach(item => {
-            combinedCards.push({
-              name: item.child_tag || "Unnamed Tier1",
-              type: "tier1" // to differentiate from persona
-            });
-          });
-        }
-      }
-
-      // If we found zero total
-      if (combinedCards.length === 0) {
-        console.warn("No Persona+Tier1 merged results.");
-        setLoading(false);
-        return [];
-      }
-
-      // 3) Update cards & layer
-      setCards(combinedCards);
-      setCurrentIndex(0);
-      setCurrentLayer(LAYER_PERSONA_T1);
-
-      // 4) Store in layer history
-      const newHistoryItem = {
-        layer: LAYER_PERSONA_T1,
-        cards: combinedCards,
-        index: 0,
-        previousSelection: null
-      };
-      setLayerHistory([newHistoryItem]);
-
-      return combinedCards;
-    } catch (err) {
-      console.error("Error merging Persona+Tier1:", err);
-      setError("Failed to load Persona+Tier1 cards.");
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * 4. Reusable fetch for Tier2, Tier3, or Places. 
-   *    (We no longer have to fetch Tier1 here because it's merged with Persona.)
-   */
-  const fetchLayerCards = async (layer, previousSelection) => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 1) Universal fetch from Supabase
+  // ─────────────────────────────────────────────────────────────────────────────
+  const fetchCards = async (layer, parentSelection = null) => {
     setLoading(true);
     setError(null);
 
     try {
       let query;
 
-      // A) Tier2 
-      if (layer === LAYER_TIER2) {
+      if (layer === LAYER_PERSONA) {
+        // e.g., fetch from a "personas" table
+        query = supabase.from("personas").select("*");
+      } 
+      else if (layer === LAYER_TIER1 && parentSelection) {
+        // e.g., fetch from "tag_mappings" for tier=1
         query = supabase
           .from("tag_mappings")
-          .select("child_tag")
-          .eq("parent_tag", previousSelection)
+          .select("*")
+          .eq("parent_tag", parentSelection)
+          .eq("tier", 1);
+      } 
+      else if (layer === LAYER_TIER2 && parentSelection) {
+        // e.g., fetch from "tag_mappings" for tier=2
+        query = supabase
+          .from("tag_mappings")
+          .select("*")
+          .eq("parent_tag", parentSelection)
           .eq("tier", 2);
-      }
-      // B) Tier3
-      else if (layer === LAYER_TIER3) {
+      } 
+      else if (layer === LAYER_PLACES && parentSelection) {
+        // e.g., fetch from "places" that contain the selected tag
         query = supabase
-          .from("tag_mappings")
-          .select("child_tag")
-          .eq("parent_tag", previousSelection)
-          .eq("tier", 3);
-      }
-      // C) Places
-      else if (layer === LAYER_PLACES) {
-        // Must come after Tier3 
-        // If userWeight >= 200, ignore tags => show all places
-        if (userWeight >= 200) {
-          query = supabase.from("places").select("*");
-        } else {
-          // Otherwise, filter by the Tier3 selection, but also ensure we do it only after Tier3
-          query = supabase
-            .from("places")
-            .select("*")
-            .contains("tags", [previousSelection]);
-        }
-      } else {
-        // Should not happen in normal flow
+          .from("places")
+          .select("*")
+          .contains("tags", [parentSelection]);
+      } 
+      else if (layer === LAYER_PLACES && !parentSelection) {
+        // If we have no parent, fetch all places
+        query = supabase.from("places").select("*");
+      } 
+      else {
+        // If none match, no fetch
         setLoading(false);
-        return [];
+        return;
       }
 
       const { data, error } = await query;
       if (error) throw error;
       if (!data || data.length === 0) {
-        console.warn(`No results found for layer: ${layer}`);
+        setCards([]);
+        setCurrentIndex(0);
+        setError(`No cards found for ${layer}.`);
         setLoading(false);
-        return [];
+        return;
       }
 
-      let formatted;
-      if (layer === LAYER_PLACES) {
-        formatted = data.map(item => ({
-          name: item.name || "Unnamed Place",
-          type: "place"
-        }));
-      } else {
-        // Tier2 or Tier3 => child_tag
-        formatted = data.map(item => ({
-          name: item.child_tag || "Unnamed Tag",
-          type: layer
-        }));
-      }
+      // Convert DB rows into array of { id, name, tags, ... }
+      const formatted = data.map(item => ({
+        id: item.id || null,
+        name: item.name || item.child_tag || "Unnamed",
+        tags: item.tags || [], // or item.child_tag if needed
+      }));
 
-      setCards(formatted);
+      // Sort by preference-based matching
+      const sorted = scoreAndSortCards(formatted);
+      setCards(sorted);
       setCurrentIndex(0);
       setCurrentLayer(layer);
 
-      // push to layerHistory
-      setLayerHistory(prev => [
-        ...prev,
-        { layer, cards: formatted, index: 0, previousSelection }
-      ]);
+      // Add to breadcrumbs if we want to show user path
+      if (layer === LAYER_PERSONA) {
+        setBreadcrumbs(["Persona"]);
+      }
 
-      return formatted;
     } catch (err) {
-      console.error("fetchLayerCards error:", err);
+      console.error("fetchCards error:", err);
       setError(`Failed to load ${layer}.`);
-      return [];
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 5. Swiping logic. 
-   *    - "No": skip card
-   *    - "Yes": figure out next layer or final match
-   */
-  const handleSwipe = async (accepted) => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 2) Scoring & Sorting
+  // ─────────────────────────────────────────────────────────────────────────────
+  const scoreAndSortCards = (cards) => {
+    // For each card, sum up the ratio for tags. Then sort descending.
+    return cards
+      .map(card => {
+        // Calculate matchScore by averaging ratio from each tag
+        let totalScore = 0;
+        let tagCount = 0;
+
+        if (Array.isArray(card.tags)) {
+          for (let t of card.tags) {
+            const pref = preferences[t];
+            if (pref) {
+              const ratio = pref.likes / Math.max(1, pref.likes + pref.skips);
+              totalScore += ratio;
+              tagCount += 1;
+            }
+          }
+        }
+        const finalScore = tagCount > 0 ? totalScore / tagCount : 0;
+        return { ...card, matchScore: finalScore };
+      })
+      .sort((a, b) => b.matchScore - a.matchScore);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 3) User Actions: skip, like, dialN
+  // ─────────────────────────────────────────────────────────────────────────────
+  const handleSwipe = (action) => {
     if (!cards.length) return;
+    const currentCard = cards[currentIndex];
+    if (!currentCard) return;
 
-    const selectedCard = cards[currentIndex];
-    if (!selectedCard) {
-      setError("Invalid card data. Try reshuffling.");
-      return;
-    }
-
-    // If user says No => skip
-    if (!accepted) {
-      const nextIdx = currentIndex + 1;
-      if (nextIdx < cards.length) {
-        setCurrentIndex(nextIdx);
-      } else {
-        // out of cards -> re-fetch same layer
-        await reFetchCurrentLayer();
-      }
-      return;
-    }
-
-    // If user says Yes => pick next layer in chain
-    let nextLayer = null;
-    let weightToAdd = 0;
-
-    // We combine persona + tier1 in one array:
-    // - If selectedCard.type = 'persona' or 'tier1', we go to Tier2
-    // - If selectedCard.type = 'tier2', we go to Tier3
-    // - If selectedCard.type = 'tier3', we go to Places
-    // - If selectedCard.type = 'place', show match
-    if (selectedCard.type === "persona" || selectedCard.type === "tier1") {
-      nextLayer = LAYER_TIER2;
-      // Example increments
-      // persona->tier1 merged, so let's do +100 if persona, +60 if tier1, or just pick one value
-      weightToAdd = selectedCard.type === "persona" ? 100 : 60;
-    } else if (selectedCard.type === LAYER_TIER2) {
-      nextLayer = LAYER_TIER3;
-      weightToAdd = 60;
-    } else if (selectedCard.type === LAYER_TIER3) {
-      nextLayer = LAYER_PLACES;
-      weightToAdd = 0; // up to you
-    } else if (selectedCard.type === "place") {
-      // Final match found
-      setShowMatch(true);
-      return;
-    }
-
-    // Add to breadcrumbs
-    setBreadcrumbs(prev => [...prev, selectedCard.name]);
-
-    // Update weight, check thresholds
-    if (weightToAdd > 0) {
-      const newWeight = userWeight + weightToAdd;
-      setUserWeight(newWeight);
-      await updateUserWeightInDB(newWeight);
-
-      // Booster triggers at 220
-      if (userWeight < 220 && newWeight >= 220 && newWeight < 2000) {
-        // The user specifically wants booster at 220 
-        setBoosterPack(true);
-        return; // Stop so user sees booster overlay
-      }
-
-      // If crossing 200 => dialN overlay
-      if (userWeight < 200 && newWeight >= 200) {
-        setDialNOverlay(true);
-        return;
-      }
-    }
-
-    // fetch next layer
-    const nextData = await fetchLayerCards(nextLayer, selectedCard.name);
-    // if no results => fallback to places if nextLayer isn't places
-    if ((!nextData || nextData.length === 0) && nextLayer !== LAYER_PLACES) {
-      await fetchLayerCards(LAYER_PLACES, selectedCard.name);
+    if (action === "skip") {
+      recordPreference(currentCard, false);
+      handleNextCardOrLayer();
+    } else if (action === "like") {
+      recordPreference(currentCard, true);
+      handleNextCardOrLayer();
+    } else if (action === "dialN") {
+      // "DialN" means we immediately drill down to the next layer for this card
+      recordPreference(currentCard, true);
+      drillDownOneLayer(currentCard);
     }
   };
 
-  /** 5b. Re-fetch the current layer from layerHistory */
-  const reFetchCurrentLayer = async () => {
-    if (!layerHistory.length) return;
-    const last = layerHistory[layerHistory.length - 1];
-    const { layer, previousSelection } = last;
-
-    if (layer === LAYER_PERSONA_T1) {
-      await fetchPersonaTier1();
+  // Moves to next card in current layer or triggers next layer if out of cards
+  const handleNextCardOrLayer = () => {
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < cards.length) {
+      setCurrentIndex(nextIndex);
     } else {
-      // Tier2, Tier3, or Places
-      await fetchLayerCards(layer, previousSelection);
+      // If we finished this layer’s cards, decide what to do next
+      decideNextStep();
     }
   };
 
-  /**
-   * 6. "Go Back" button – pop layerHistory 
-   */
-  const goBackOneLayer = () => {
-    if (layerHistory.length <= 1) {
-      console.warn("No previous layer to go back to.");
+  // "DialN" = user specifically wants to dive deeper with this card
+  const drillDownOneLayer = (card) => {
+    if (currentLayer === LAYER_PERSONA) {
+      // Move to Tier1 for this card
+      fetchCards(LAYER_TIER1, card.name);
+      setBreadcrumbs(["Persona", card.name, "Tier1"]);
+    } else if (currentLayer === LAYER_TIER1) {
+      // Move to Tier2
+      fetchCards(LAYER_TIER2, card.name);
+      setBreadcrumbs(["Persona", "Tier1", card.name, "Tier2"]);
+    } else if (currentLayer === LAYER_TIER2) {
+      // Finally places
+      fetchCards(LAYER_PLACES, card.name);
+      setBreadcrumbs(["Persona", "Tier1", "Tier2", card.name, "Places"]);
+    } else if (currentLayer === LAYER_PLACES) {
+      // Already at final layer, no deeper to go
+      console.log("No deeper layer. Already at places.");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 4) Preferences
+  // ─────────────────────────────────────────────────────────────────────────────
+  const recordPreference = (card, liked) => {
+    if (!card.tags) return;
+    const updated = { ...preferences };
+
+    card.tags.forEach(tag => {
+      if (!updated[tag]) {
+        updated[tag] = { likes: 0, skips: 0 };
+      }
+      if (liked) {
+        updated[tag].likes++;
+      } else {
+        updated[tag].skips++;
+      }
+    });
+    setPreferences(updated);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 5) After finishing the layer, decide if we do the next layer or jump to places
+  // ─────────────────────────────────────────────────────────────────────────────
+  const decideNextStep = () => {
+    // Quick confidence check. If the user’s average ratio is >= 0.9,
+    // maybe jump straight to places. Otherwise, do normal next layer flow.
+    if (isConfidentEnough()) {
+      fetchCards(LAYER_PLACES);
+      setBreadcrumbs([...breadcrumbs, "Places"]);
       return;
     }
-    // Remove current layer
-    const newHistory = [...layerHistory];
-    newHistory.pop(); // discard last
 
-    // The new last is the previous layer
-    const { layer, cards, index, previousSelection } = newHistory[newHistory.length - 1];
-
-    // Revert states
-    setLayerHistory(newHistory);
-    setCurrentLayer(layer);
-    setCards(cards);
-    setCurrentIndex(index);
-    // Remove last breadcrumb
-    setBreadcrumbs(prev => prev.slice(0, -1));
-  };
-
-  /**
-   * 7. Booster at 220 weight
-   */
-  const openBoosterPack = async () => {
-    // Subtract 220 from userWeight
-    const newWeight = userWeight - 220;
-    setUserWeight(newWeight);
-    await updateUserWeightInDB(newWeight);
-
-    setBoosterPack(false);
-
-    // Optionally fetch "places" right away
-    if (breadcrumbs.length > 0) {
-      await fetchLayerCards(LAYER_PLACES, breadcrumbs[breadcrumbs.length - 1]);
+    // If user just finished persona => go Tier1
+    if (currentLayer === LAYER_PERSONA) {
+      fetchCards(LAYER_TIER1, bestTagSoFar());
+      setBreadcrumbs(["Persona", bestTagSoFar(), "Tier1"]);
+    }
+    // If user just finished Tier1 => go Tier2
+    else if (currentLayer === LAYER_TIER1) {
+      fetchCards(LAYER_TIER2, bestTagSoFar());
+      setBreadcrumbs(["Persona", "Tier1", bestTagSoFar(), "Tier2"]);
+    }
+    // If user just finished Tier2 => go Places
+    else if (currentLayer === LAYER_TIER2) {
+      fetchCards(LAYER_PLACES, bestTagSoFar());
+      setBreadcrumbs(["Persona", "Tier1", "Tier2", bestTagSoFar(), "Places"]);
+    } else {
+      console.log("Already at places or unknown layer. No deeper flow.");
     }
   };
 
-  /**
-   * 8. DialN overlay at 200 weight
-   */
-  const dialN = async () => {
-    setDialNOverlay(false);
-    try {
-      // e.g. search for match_score >= 200
-      const { data, error } = await supabase
-        .from("places")
-        .select("*")
-        .gte("match_score", 200)
-        .limit(1);
+  // Calculate average ratio from all user tags to see if we exceed the threshold
+  const isConfidentEnough = () => {
+    const allRatios = Object.values(preferences).map(pref => {
+      const total = pref.likes + pref.skips;
+      if (total === 0) return 0;
+      return pref.likes / total;
+    });
+    const avg = allRatios.reduce((sum, r) => sum + r, 0) / Math.max(1, allRatios.length);
+    return avg >= CONFIDENCE_THRESHOLD;
+  };
 
-      if (error) throw error;
-      if (data && data.length > 0) {
-        const rareMatch = data.map(item => ({
-          name: item.name || "Unnamed Place",
-          type: "place"
-        }));
-        setCards(rareMatch);
-        setCurrentIndex(0);
-        setCurrentLayer(LAYER_PLACES);
+  // A quick helper to find the user’s best tag so far
+  const bestTagSoFar = () => {
+    let bestTag = null;
+    let bestScore = 0;
 
-        // push to history
-        setLayerHistory(prev => [
-          ...prev,
-          { layer: LAYER_PLACES, cards: rareMatch, index: 0, previousSelection: "rare_match" }
-        ]);
-      } else {
-        // fallback to tier3 if no rare match
-        if (breadcrumbs.length) {
-          await fetchLayerCards(LAYER_TIER3, breadcrumbs[breadcrumbs.length - 1]);
+    for (let [tag, pref] of Object.entries(preferences)) {
+      const total = pref.likes + pref.skips;
+      if (total > 0) {
+        const ratio = pref.likes / total;
+        if (ratio > bestScore) {
+          bestScore = ratio;
+          bestTag = tag;
         }
       }
-    } catch (err) {
-      console.error("DialN error:", err);
-      // fallback
-      if (breadcrumbs.length) {
-        await fetchLayerCards(LAYER_TIER3, breadcrumbs[breadcrumbs.length - 1]);
-      }
     }
+    return bestTag;
   };
 
-  /**
-   * 9. Update weight in DB
-   */
-  const updateUserWeightInDB = async (newWeight) => {
-    const { error } = await supabase
-      .from("user_progress")
-      .update({ weight: newWeight })
-      .eq("user_id", DEFAULT_USER_ID);
-
-    if (error) {
-      console.error("Error updating user weight:", error);
-    }
-  };
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 6) Render UI
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="app-container">
-      {/* Top Row: Go Back + Weight */}
-      <div className="top-row">
-        <button className="btn back-btn" onClick={goBackOneLayer}>
-          ← Go Back
-        </button>
-        <div className="weight-indicator">Weight: {userWeight}</div>
+    <div style={{ maxWidth: "420px", margin: "0 auto", padding: "10px" }}>
+      <h2>Multi-Layer Tinder (No Weight System)</h2>
+      <div style={{ margin: "10px 0", fontWeight: "bold" }}>
+        {breadcrumbs.join(" → ") || "Current: Persona Layer"}
       </div>
 
-      {/* Breadcrumbs */}
-      <div className="breadcrumb">
-        {breadcrumbs.length > 0 ? breadcrumbs.join(" → ") : "Select a Persona"}
-      </div>
-
-      {/* Booster Overlay (220) */}
-      {boosterPack && (
-        <div className="overlay">
-          <div className="booster-screen">
-            <h2>Booster Pack Unlocked!</h2>
-            <p>You’ve reached 220 weight. Next action?</p>
-            <button className="btn booster-btn" onClick={openBoosterPack}>
-              Open Booster
-            </button>
-            <button className="btn skip-btn" onClick={() => setBoosterPack(false)}>
-              Skip
-            </button>
-          </div>
+      {error && (
+        <div style={{ marginBottom: "20px", color: "red" }}>
+          <p>{error}</p>
+          <button onClick={() => fetchCards(currentLayer)}>Retry</button>
         </div>
       )}
 
-      {/* DialN Overlay (200) */}
-      {dialNOverlay && (
-        <div className="overlay">
-          <div className="booster-screen">
-            <h2>DialN Unlocked!</h2>
-            <p>You’ve reached 200 weight—try for a Rare Match?</p>
-            <button className="btn dialn-btn" onClick={dialN}>
+      {loading && !error && <p>Loading...</p>}
+
+      {!loading && !error && cards.length > 0 && currentIndex < cards.length && (
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              padding: "20px",
+              background: "#fff",
+              borderRadius: "8px",
+              marginBottom: "15px",
+              boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
+            }}
+          >
+            <h3>{cards[currentIndex].name}</h3>
+            {cards[currentIndex].tags?.length > 0 && (
+              <small>Tags: {cards[currentIndex].tags.join(", ")}</small>
+            )}
+          </div>
+
+          <div>
+            <button
+              style={{ marginRight: "10px", background: "#ccc" }}
+              onClick={() => handleSwipe("skip")}
+            >
+              Skip
+            </button>
+            <button
+              style={{ marginRight: "10px", background: "#4caf50", color: "#fff" }}
+              onClick={() => handleSwipe("like")}
+            >
+              Like
+            </button>
+            <button
+              style={{ background: "#2196f3", color: "#fff" }}
+              onClick={() => handleSwipe("dialN")}
+            >
               DialN
             </button>
-            <button className="btn skip-btn" onClick={() => setDialNOverlay(false)}>
-              Skip
-            </button>
           </div>
         </div>
       )}
 
-      {/* Match Found */}
-      {showMatch && (
-        <div className="overlay">
-          <div className="match-screen">
-            <h1>Match Found!</h1>
-            <button className="close-btn" onClick={() => setShowMatch(false)}>
-              ✕
-            </button>
-          </div>
-        </div>
+      {/* If done loading, no error, but no cards => no data */}
+      {!loading && !error && cards.length === 0 && (
+        <p>No cards found for this layer. Try a different approach or check your DB.</p>
       )}
-
-      {/* Error Overlay */}
-      {error && !boosterPack && !dialNOverlay && !showMatch && (
-        <div className="overlay">
-          <div className="error-screen">
-            <h2>{error}</h2>
-            <button className="btn retry-btn" onClick={initializeUser}>
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Screen */}
-      {loading && !error && !boosterPack && !dialNOverlay && !showMatch && (
-        <div className="info-screen">
-          <p>Loading cards...</p>
-        </div>
-      )}
-
-      {/* Main Card UI */}
-      {!loading && !error && !boosterPack && !dialNOverlay && !showMatch && (
-        <div className="card-area">
-          {cards.length > 0 ? (
-            <>
-              <div className="swipe-card">
-                <h2>{cards[currentIndex]?.name || "Unnamed"}</h2>
-              </div>
-              <div className="swipe-buttons">
-                <button className="btn no-btn" onClick={() => handleSwipe(false)}>
-                  ❌ No
-                </button>
-                <button className="btn yes-btn" onClick={() => handleSwipe(true)}>
-                  ✅ Yes
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="info-screen">
-              <p>No cards available. Try reshuffling.</p>
-              <button className="btn reshuffle-btn" onClick={initializeUser}>
-                🔄 Reshuffle
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Minimal inline style, you can rely on global CSS */}
-      <style jsx>{`
-        .app-container {
-          position: relative;
-          max-width: 480px;
-          margin: 0 auto;
-          height: 100vh;
-          display: flex;
-          flex-direction: column;
-          background: #fafafa;
-          font-family: sans-serif;
-          overflow: hidden;
-        }
-        .top-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 10px;
-        }
-        .breadcrumb {
-          margin: 0 10px;
-          font-size: 14px;
-          font-weight: 600;
-          color: #555;
-        }
-        .weight-indicator {
-          background: #eee;
-          padding: 6px 12px;
-          border-radius: 8px;
-          font-size: 14px;
-        }
-        .card-area {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          text-align: center;
-          padding: 10px;
-        }
-        .swipe-card {
-          background: white;
-          border-radius: 8px;
-          padding: 20px;
-          width: 90%;
-          max-width: 340px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          margin-bottom: 20px;
-        }
-        .swipe-buttons {
-          display: flex;
-          justify-content: space-around;
-          width: 80%;
-          max-width: 320px;
-        }
-        .btn {
-          border: none;
-          border-radius: 8px;
-          padding: 10px 16px;
-          font-size: 16px;
-          cursor: pointer;
-        }
-        .back-btn {
-          background: #ccc;
-          color: #333;
-        }
-        .no-btn {
-          background: #f44336;
-          color: #fff;
-        }
-        .yes-btn {
-          background: #4caf50;
-          color: #fff;
-        }
-        .reshuffle-btn {
-          background: #2196f3;
-          color: white;
-          margin-top: 15px;
-        }
-        .overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          z-index: 999;
-          width: 100%;
-          height: 100%;
-          background: rgba(0,0,0,0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-        .booster-screen,
-        .error-screen,
-        .match-screen {
-          background: #fff;
-          border-radius: 8px;
-          padding: 25px 20px;
-          text-align: center;
-          width: 80%;
-          max-width: 420px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-          position: relative;
-        }
-        .match-screen h1 {
-          margin-bottom: 20px;
-        }
-        .close-btn {
-          position: absolute;
-          top: 15px;
-          right: 15px;
-          font-size: 20px;
-          border: none;
-          background: transparent;
-          cursor: pointer;
-        }
-        .info-screen {
-          text-align: center;
-          margin-top: 50px;
-        }
-        .retry-btn {
-          background: #f44336;
-          color: #fff;
-          margin-top: 20px;
-        }
-        .booster-btn {
-          background: #ff9800;
-          color: #fff;
-          margin-right: 10px;
-        }
-        .dialn-btn {
-          background: #9c27b0;
-          color: #fff;
-          margin-right: 10px;
-        }
-        .skip-btn {
-          background: #ccc;
-          color: #333;
-        }
-      `}</style>
     </div>
   );
 }
