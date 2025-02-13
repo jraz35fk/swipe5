@@ -8,203 +8,136 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [cards, setCards] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [history, setHistory] = useState([]);
-  const [showMatch, setShowMatch] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Debugging function
-  const logDebug = (message, data = null) => {
-    console.log(`[DEBUG]: ${message}`, data);
-  };
+  const [places, setPlaces] = useState([]);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      fetchPersonas(); // Fetch personas first
-    }
+    fetchPlaces();
   }, []);
 
-  // Fetch Personas (Fixes incorrect table reference)
-  const fetchPersonas = async () => {
-    setLoading(true);
-    setError(null);
-    logDebug(`Fetching personas from Supabase...`);
-
-    try {
-      const { data, error } = await supabase.from("personas").select("*");
-
-      if (error) throw error;
-
-      logDebug(`Supabase Response for personas:`, data);
-
-      if (!data || data.length === 0) {
-        throw new Error(`No personas found.`);
-      }
-
-      setCards(data);
-      setCurrentIndex(0);
-    } catch (err) {
-      logDebug(`Fetch Error: ${err.message}`);
-      setError(`Failed to load personas. Try reshuffling.`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle Card Selection
-  const handleSelection = (accepted) => {
-    if (!cards || cards.length === 0) return;
-
-    if (accepted) {
-      const selectedCard = cards[currentIndex];
-
-      if (!selectedCard) {
-        setError("Invalid card data. Try reshuffling.");
-        return;
-      }
-
-      setHistory([...history, { layer: "tags", selection: selectedCard.name }]);
-      fetchTags(selectedCard.name);
+  const fetchPlaces = async () => {
+    const { data, error } = await supabase.from("places").select("*");
+    if (error) {
+      console.error("Error fetching places:", error);
     } else {
-      setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
+      setPlaces(data);
     }
   };
 
-  // Fetch Tags based on selected persona
-  const fetchTags = async (persona) => {
-    setLoading(true);
-    setError(null);
-    logDebug(`Fetching Tier 1 tags for persona: ${persona}`);
+  const removeTag = async (placeId, tagToRemove) => {
+    const place = places.find(p => p.id === placeId);
+    if (!place) return;
 
-    try {
-      const { data, error } = await supabase
-        .from("places")
-        .select("*")
-        .contains("tags", [persona]); // Fetch places with tags related to persona
+    const updatedTags = place.tags.filter(tag => tag !== tagToRemove);
 
-      if (error) throw error;
+    const { error } = await supabase
+      .from("places")
+      .update({ tags: updatedTags })
+      .eq("id", placeId);
 
-      logDebug(`Supabase Response for tags:`, data);
-
-      if (!data || data.length === 0) {
-        throw new Error(`No tags found for ${persona}.`);
-      }
-
-      setCards(data);
-      setCurrentIndex(0);
-    } catch (err) {
-      logDebug(`Fetch Error: ${err.message}`);
-      setError(`Failed to load tags for ${persona}. Try reshuffling.`);
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.error("Error removing tag:", error);
+    } else {
+      fetchPlaces();
     }
   };
 
-  // Go Back to Previous Layer
-  const handleGoBack = () => {
-    if (history.length === 0) return;
-    const previous = history.pop();
-    setHistory(history);
-    fetchTags(previous.selection);
-  };
+  const addTag = async (placeId) => {
+    if (!newTag) return;
 
-  // Reshuffle (Return to Persona Selection)
-  const handleReshuffle = () => {
-    setHistory([]);
-    fetchPersonas();
+    const place = places.find(p => p.id === placeId);
+    if (!place) return;
+
+    const updatedTags = [...place.tags, newTag];
+
+    const { error } = await supabase
+      .from("places")
+      .update({ tags: updatedTags })
+      .eq("id", placeId);
+
+    if (error) {
+      console.error("Error adding tag:", error);
+    } else {
+      setNewTag("");
+      fetchPlaces();
+    }
   };
 
   return (
     <div className="app">
-      {error ? (
-        <div className="error-screen">
-          <h2>{error}</h2>
-          <button onClick={handleReshuffle}>Retry</button>
-        </div>
-      ) : loading ? (
-        <p>Loading cards...</p>
-      ) : showMatch ? (
-        <div className="match-screen">
-          <h1>Match Made!</h1>
-          <button onClick={() => setShowMatch(false)}>X</button>
-        </div>
-      ) : (
-        <div className="card-container">
-          {cards.length > 0 ? (
-            <>
-              <div className="card">
-                <div className="card-image" />
-                <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
-              </div>
-              <div className="buttons">
-                <button onClick={() => handleSelection(false)}>No</button>
-                <button onClick={() => handleSelection(true)}>Yes</button>
-              </div>
-              <div className="nav-buttons">
-                <button onClick={handleGoBack}>Go Back</button>
-                <button onClick={handleReshuffle}>Reshuffle</button>
-              </div>
-            </>
-          ) : (
-            <p>No cards available. Try reshuffling.</p>
-          )}
+      <h1>Tag Editor</h1>
+      <div className="place-list">
+        {places.map(place => (
+          <div key={place.id} className="place-card" onClick={() => setSelectedPlace(place)}>
+            <h2>{place.name}</h2>
+            <p>{place.description}</p>
+          </div>
+        ))}
+      </div>
+
+      {selectedPlace && (
+        <div className="tag-editor">
+          <h2>Editing Tags for {selectedPlace.name}</h2>
+          <div className="tags">
+            {selectedPlace.tags.map(tag => (
+              <span key={tag} className="tag">
+                {tag} <button onClick={() => removeTag(selectedPlace.id, tag)}>X</button>
+              </span>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            placeholder="Add new tag"
+          />
+          <button onClick={() => addTag(selectedPlace.id)}>Add Tag</button>
+          <button onClick={() => setSelectedPlace(null)}>Close</button>
         </div>
       )}
 
       <style jsx>{`
         .app {
+          padding: 20px;
+          font-family: Arial, sans-serif;
+        }
+        .place-list {
           display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          height: 100vh;
-          background: #f4f4f4;
+          flex-wrap: wrap;
+          gap: 10px;
         }
-        .card-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-        .card {
-          width: 300px;
-          height: 400px;
-          background: #ccc;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          border-radius: 10px;
-        }
-        .card-image {
-          width: 100%;
-          height: 80%;
-          background: gray;
-        }
-        .buttons {
-          display: flex;
-          gap: 20px;
-          margin-top: 20px;
-        }
-        .buttons button {
-          padding: 10px 20px;
-          border: none;
+        .place-card {
+          border: 1px solid #ddd;
+          padding: 10px;
           cursor: pointer;
         }
-        .error-screen {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          color: red;
+        .tag-editor {
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: white;
+          padding: 20px;
+          border: 1px solid #ddd;
+          z-index: 10;
         }
-        .match-screen {
+        .tags {
           display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .tag {
+          background: #ddd;
+          padding: 5px 10px;
+          border-radius: 5px;
+        }
+        .tag button {
+          margin-left: 5px;
+          background: red;
+          color: white;
+          border: none;
+          cursor: pointer;
         }
       `}</style>
     </div>
