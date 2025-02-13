@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// Removed: import "../styles/tinderSwipe.css"; // ❌ (No longer importing CSS)
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -61,32 +63,38 @@ export default function Home() {
     let query;
 
     if (layer === "persona") {
-      query = supabase.from("personas").select("*"); // ✅ Fetch Personas first
+      // ✅ Fetch Personas first
+      query = supabase.from("personas").select("*");
     } 
     else if (layer === "tier1" && previousSelection) {
+      // ✅ Tier 1 from tag_mappings
       query = supabase
         .from("tag_mappings")
         .select("child_tag")
         .eq("parent_tag", previousSelection)
-        .eq("tier", 1); // ✅ Ensures Tier 1 only
+        .eq("tier", 1);
     } 
     else if (layer === "tier2" && previousSelection) {
+      // ✅ Tier 2
       query = supabase
         .from("tag_mappings")
         .select("child_tag")
         .eq("parent_tag", previousSelection)
-        .eq("tier", 2); // ✅ Ensures Tier 2 only
+        .eq("tier", 2);
     } 
     else if (layer === "tier3" && previousSelection) {
+      // ✅ Tier 3
       query = supabase
         .from("tag_mappings")
         .select("child_tag")
         .eq("parent_tag", previousSelection)
-        .eq("tier", 3); // ✅ Ensures Tier 3 only
+        .eq("tier", 3);
     } 
     else if (layer === "places" && previousSelection) {
+      // ✅ Only unlock if userWeight >= 160
       if (userWeight < 160) {
         console.warn("Not enough weight to unlock places!");
+        setLoading(false);
         return;
       }
       query = supabase
@@ -94,6 +102,8 @@ export default function Home() {
         .select("*")
         .contains("tags", [previousSelection]);
     } else {
+      // If no valid path, just return
+      setLoading(false);
       return;
     }
 
@@ -104,7 +114,13 @@ export default function Home() {
         throw new Error(`No cards found for ${layer}.`);
       }
 
-      setCards(data.map(item => ({ name: item.child_tag || item.name }))); // ✅ Format for UI
+      // ✅ Format for UI. If using "child_tag" (tier mapping),
+      // set name = child_tag. If using "personas"/"places", keep name as is.
+      const formatted = data.map(item => ({
+        name: item.child_tag || item.name || "Unnamed"
+      }));
+
+      setCards(formatted);
       setCurrentIndex(0);
       setCurrentLayer(layer);
     } catch (err) {
@@ -125,6 +141,19 @@ export default function Home() {
       return;
     }
 
+    if (!accepted) {
+      // If "No" clicked, skip to next card
+      const nextIndex = currentIndex + 1;
+      if (nextIndex < cards.length) {
+        setCurrentIndex(nextIndex);
+      } else {
+        // If out of cards, re-fetch same layer or do fallback
+        fetchCards(currentLayer);
+      }
+      return;
+    }
+
+    // If "Yes" clicked, determine next layer
     let nextLayer;
 
     if (currentLayer === "persona") {
@@ -136,10 +165,12 @@ export default function Home() {
     } else if (currentLayer === "tier3") {
       nextLayer = "places";
     } else {
+      // If we're beyond tier3, do nothing or fallback
       return;
     }
 
-    setBreadcrumbs([...breadcrumbs, selectedCard.name]);
+    // Update breadcrumbs and fetch next layer
+    setBreadcrumbs(prev => [...prev, selectedCard.name]);
     fetchCards(nextLayer, selectedCard.name);
   };
 
@@ -167,9 +198,74 @@ export default function Home() {
       )}
 
       <div className="swipe-buttons">
-        <button className="no-button" onClick={() => handleSwipe(false)}>❌ No</button>
-        <button className="yes-button" onClick={() => handleSwipe(true)}>✅ Yes</button>
+        {/* Left / No */}
+        <button className="no-button" onClick={() => handleSwipe(false)}>
+          ❌ No
+        </button>
+        {/* Right / Yes */}
+        <button className="yes-button" onClick={() => handleSwipe(true)}>
+          ✅ Yes
+        </button>
       </div>
+
+      {/* Inline styling (optional). Remove if you have global CSS. */}
+      <style jsx>{`
+        .app {
+          position: relative;
+          max-width: 420px;
+          margin: 0 auto;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: #f8f8f8;
+          font-family: sans-serif;
+        }
+        .breadcrumb {
+          margin: 10px;
+          font-weight: 600;
+          color: #555;
+        }
+        .card-container {
+          flex: 1;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .card {
+          background: white;
+          border-radius: 8px;
+          padding: 20px;
+          width: 80%;
+          max-width: 340px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          text-align: center;
+        }
+        .swipe-buttons {
+          display: flex;
+          justify-content: space-evenly;
+          padding: 10px 0;
+          background: #f0f0f0;
+        }
+        button {
+          padding: 12px 16px;
+          font-size: 16px;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+        }
+        .no-button {
+          background: #f44336;
+          color: #fff;
+        }
+        .yes-button {
+          background: #4caf50;
+          color: #fff;
+        }
+        .error-screen {
+          text-align: center;
+          margin-top: 50px;
+        }
+      `}</style>
     </div>
   );
 }
