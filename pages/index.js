@@ -1,14 +1,13 @@
-import fetch from "node-fetch";
 import { createClient } from "@supabase/supabase-js";
 
-// Use your Vercel environment variables
+// Use Vercel environment variables
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Function to generate AI embeddings using OpenAI
+// Function to generate AI embeddings using OpenAI (no need for node-fetch)
 async function generateEmbedding(text) {
     const response = await fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
