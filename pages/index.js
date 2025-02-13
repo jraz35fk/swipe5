@@ -8,12 +8,12 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [cards, setCards] = useState([]); // Ensure it's always an array
+  const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState([]);
   const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); 
+  const [error, setError] = useState(null);
 
   // Debugging function
   const logDebug = (message, data = null) => {
@@ -22,23 +22,25 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      fetchCards("persona");
+      fetchCards("tier1");
     }
   }, []);
 
-  // Fetch Cards from Supabase
-  const fetchCards = async (layer, previousSelection = null) => {
+  // Fetch Cards from Supabase (Using Tag Tiers)
+  const fetchCards = async (tier, previousSelection = null) => {
     setLoading(true);
     setError(null);
-    logDebug(`Fetching ${layer} cards...`);
+    logDebug(`Fetching ${tier} cards...`);
 
     let query = supabase.from("places").select("*");
 
-    if (layer === "persona") {
-      query = query.eq("persona", true);
-    } else if (layer === "tags" && previousSelection) {
+    if (tier === "tier1") {
+      query = query.contains("tags", ["tier1"]);
+    } else if (tier === "tier2" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
-    } else if (layer === "places" && previousSelection) {
+    } else if (tier === "tier3" && previousSelection) {
+      query = query.contains("tags", [previousSelection]);
+    } else if (tier === "places" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
     }
 
@@ -46,17 +48,17 @@ export default function Home() {
       const { data, error } = await query;
       if (error) throw error;
 
-      logDebug(`Supabase Response for ${layer}:`, data);
+      logDebug(`Supabase Response for ${tier}:`, data);
 
       if (!data || data.length === 0) {
-        throw new Error(`No cards found for ${layer}.`);
+        throw new Error(`No cards found for ${tier}.`);
       }
 
       setCards(data);
       setCurrentIndex(0);
     } catch (err) {
       logDebug(`Fetch Error: ${err.message}`);
-      setError(`Failed to load ${layer} cards. Try reshuffling.`);
+      setError(`Failed to load ${tier} cards. Try reshuffling.`);
     } finally {
       setLoading(false);
     }
@@ -78,11 +80,14 @@ export default function Home() {
         return;
       }
 
-      setHistory([...history, { layer: "tags", selection: selectedCard.tags[0] }]);
-      fetchCards(
-        selectedCard.tags.includes("tier2") ? "tags" : "places",
-        selectedCard.tags[0]
-      );
+      let nextTier = selectedCard.tags.includes("tier2")
+        ? "tier2"
+        : selectedCard.tags.includes("tier3")
+        ? "tier3"
+        : "places";
+
+      setHistory([...history, { layer: nextTier, selection: selectedCard.tags[0] }]);
+      fetchCards(nextTier, selectedCard.tags[0]);
     } else {
       setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
     }
@@ -97,7 +102,7 @@ export default function Home() {
 
   const handleReshuffle = () => {
     setHistory([]);
-    fetchCards("persona");
+    fetchCards("tier1");
   };
 
   return (
