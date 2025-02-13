@@ -8,12 +8,12 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [cards, setCards] = useState([]);
+  const [cards, setCards] = useState([]); // Ensure it's always an array
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState([]);
   const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); 
 
   // Debugging function
   const logDebug = (message, data = null) => {
@@ -68,6 +68,11 @@ export default function Home() {
     if (accepted) {
       const selectedCard = cards[currentIndex];
 
+      if (!selectedCard || !selectedCard.tags) {
+        setError("Invalid card data. Try reshuffling.");
+        return;
+      }
+
       if (selectedCard.tags.includes("place")) {
         setShowMatch(true);
         return;
@@ -97,13 +102,13 @@ export default function Home() {
 
   return (
     <div className="app">
-      {loading ? (
-        <p>Loading cards...</p>
-      ) : error ? (
+      {error ? (
         <div className="error-screen">
           <h2>{error}</h2>
           <button onClick={handleReshuffle}>Retry</button>
         </div>
+      ) : loading ? (
+        <p>Loading cards...</p>
       ) : showMatch ? (
         <div className="match-screen">
           <h1>Match Made!</h1>
