@@ -1,11 +1,6 @@
-import express from "express";
 import fetch from "node-fetch";
 import { createClient } from "@supabase/supabase-js";
 
-const app = express();
-app.use(express.json()); // Middleware to parse JSON requests
-
-// ✅ Secure API keys using environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -33,7 +28,6 @@ async function generateEmbedding(text) {
         });
 
         const data = await response.json();
-
         if (!data || !data.data || !data.data[0]) {
             throw new Error("Invalid response from OpenAI API");
         }
@@ -46,9 +40,14 @@ async function generateEmbedding(text) {
 }
 
 /**
- * API Route: Generates an embedding & stores it in the Supabase "vectors" table.
+ * Vercel Serverless Function for generating and storing embeddings.
+ * This replaces Express' `app.post` so it works with Vercel.
  */
-app.post("/generate-embedding", async (req, res) => {
+export default async function handler(req, res) {
+    if (req.method !== "POST") {
+        return res.status(405).json({ error: "Method Not Allowed" });
+    }
+
     const { place_id, description } = req.body;
 
     if (!place_id || !description) {
@@ -65,19 +64,9 @@ app.post("/generate-embedding", async (req, res) => {
 
         if (error) throw error;
 
-        res.json({ message: "Embedding saved successfully", data });
+        res.status(200).json({ message: "Embedding saved successfully", data });
     } catch (err) {
         console.error("Error generating embedding:", err.message);
         res.status(500).json({ error: err.message });
     }
-});
-
-/**
- * ✅ Start Express server on port 3000.
- */
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
-});
-
-export default app;
+}
