@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-
+// Update with your actual environment variables or keys
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function Home() {
+  // Example: if you have user auth, replace this with the actual user ID
+  const userId = 1;
+
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -14,58 +17,80 @@ export default function Home() {
   const [boosterPack, setBoosterPack] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showMatch, setShowMatch] = useState(false);
 
   useEffect(() => {
+    // 1️⃣ Always fetch user weight, then persona cards first
     fetchUserWeight();
-    fetchCards("persona"); // 🚀 Always start with Personas
+    fetchCards("persona");
   }, []);
 
+  // Fetch user's weight
   const fetchUserWeight = async () => {
-    const { data, error } = await supabase
-      .from("user_progress")
-      .select("weight")
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("weight")
+        .eq("user_id", userId) // or remove eq(...) if you only have one user
+        .single();
 
-    if (error) {
-      console.error("Error fetching weight:", error);
-      return;
+      if (error) {
+        console.error("Error fetching user weight:", error);
+        return;
+      }
+      if (data && typeof data.weight === "number") {
+        setUserWeight(data.weight);
+      }
+    } catch (err) {
+      console.error("Error in fetchUserWeight:", err);
     }
-    setUserWeight(data.weight);
   };
 
+  // Fetch cards from Supabase
   const fetchCards = async (layer, previousSelection = null) => {
     setLoading(true);
     setError(null);
 
     let query = supabase.from("places").select("*");
 
-    // 🔥 Step 1: Always start with Personas
-    if (layer === "persona") {
-      query = query.or("tags.cs.{Food}, tags.cs.{Socialite}, tags.cs.{Adventurer}");
-    }
-    // 🔥 Step 2: Move to Tier 1 based on Persona selection
-    else if (layer === "tier1" && previousSelection) {
-      query = query.contains("tags", [previousSelection]);
-    }
-    // 🔥 Step 3: Move to Tier 2 based on Tier 1 selection
-    else if (layer === "tier2" && previousSelection) {
-      query = query.contains("tags", [previousSelection]);
-    }
-    // 🔥 Step 4: Only show places after all Tier 2 tags are exhausted
-    else if (layer === "places" && previousSelection) {
-      if (userWeight >= 200) {
-        query = query.or("tags.cs.{rare_match}");
-      } else if (userWeight >= 160) {
+    try {
+      // 🚀 Ensure we always start with Persona
+      if (layer === "persona") {
+        // Example persona tags; adjust as needed
+        query = query.or(
+          "tags.cs.{Food}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
+        );
+      }
+      // Move to Tier1 based on persona
+      else if (layer === "tier1" && previousSelection) {
         query = query.contains("tags", [previousSelection]);
+      }
+      // Move to Tier2 based on Tier1
+      else if (layer === "tier2" && previousSelection) {
+        query = query.contains("tags", [previousSelection]);
+      }
+      // Finally, show places if user has enough weight
+      else if (layer === "places" && previousSelection) {
+        if (userWeight >= 200) {
+          // Rare match possibility
+          query = query.or("tags.cs.{rare_match}");
+        } else if (userWeight >= 160) {
+          // Normal places
+          query = query.contains("tags", [previousSelection]);
+        } else {
+          setError("Not enough weight to unlock places!");
+          setLoading(false);
+          return;
+        }
+      } else if (layer === "untagged") {
+        // Fallback if no results, forcibly fetch anything
+        query = supabase.from("places").select("*");
       } else {
-        console.log("Not enough weight to unlock places!");
+        // If no valid layer, do nothing
+        setLoading(false);
         return;
       }
-    } else {
-      return;
-    }
 
-    try {
       const { data, error } = await query;
       if (error) throw error;
       if (!data || data.length === 0) {
@@ -75,15 +100,16 @@ export default function Home() {
       setCards(data);
       setCurrentIndex(0);
     } catch (err) {
+      console.error(err);
       setError(`Failed to load ${layer} cards. Try reshuffling.`);
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle user swipe (Yes / No)
   const handleSwipe = (accepted) => {
     if (!cards.length) return;
-
     const selectedCard = cards[currentIndex];
 
     if (!selectedCard || !selectedCard.tags) {
@@ -92,91 +118,194 @@ export default function Home() {
     }
 
     if (accepted) {
-      let nextLayer =
-        selectedCard.tags.includes("tier1")
-          ? "tier1"
-          : selectedCard.tags.includes("tier2")
-          ? "tier2"
-          : "places";
+      // Determine next layer in the chain
+      // Instead of lumpsum logic, we ensure correct chain
+      let nextLayer = null;
 
-      setBreadcrumbs([...breadcrumbs, selectedCard.tags[0]]);
+      if (selectedCard.tags.includes("persona")) {
+        nextLayer = "tier1";
+      } else if (selectedCard.tags.includes("tier1")) {
+        nextLayer = "tier2";
+      } else if (selectedCard.tags.includes("tier2")) {
+        nextLayer = "places";
+      } else if (selectedCard.tags.includes("place")) {
+        // If user swiped right on an actual place, show match overlay
+        setShowMatch(true);
+        return;
+      }
 
-      if (nextLayer === "tier1") setUserWeight((prev) => prev + 100);
-      if (nextLayer === "tier2") setUserWeight((prev) => prev + 60);
+      // Update breadcrumbs
+      if (selectedCard.tags[0]) {
+        setBreadcrumbs((prev) => [...prev, selectedCard.tags[0]]);
+      }
 
-      if (userWeight + (nextLayer === "tier1" ? 100 : 60) >= 160) {
-        setBoosterPack(true);
-      } else {
+      // Update user weight depending on next step
+      if (nextLayer === "tier1") {
+        setUserWeight((prev) => prev + 100);
+        // If crossing 160 threshold, show booster
+        if (userWeight + 100 >= 160 && userWeight < 160) {
+          setBoosterPack(true);
+          return;
+        }
+      } else if (nextLayer === "tier2") {
+        setUserWeight((prev) => prev + 60);
+        // If crossing 160 threshold, show booster
+        if (userWeight + 60 >= 160 && userWeight < 160) {
+          setBoosterPack(true);
+          return;
+        }
+      }
+
+      if (nextLayer) {
+        // Fetch next layer of cards
         fetchCards(nextLayer, selectedCard.tags[0]);
+      } else {
+        // If no recognized layer, fallback
+        setError("No recognized layer for this card. Try reshuffling.");
       }
     } else {
-      setCurrentIndex((prev) => (prev + 1 < cards.length ? prev + 1 : 0));
+      // If user swiped "No"
+      const nextIdx = currentIndex + 1;
+      if (nextIdx < cards.length) {
+        setCurrentIndex(nextIdx);
+      } else {
+        // If no more cards, fetch "untagged" as fallback
+        fetchCards("untagged");
+      }
     }
   };
 
+  // Open the booster pack (160 weight)
   const openBoosterPack = () => {
+    // Deduct 160 from user weight
     setUserWeight((prev) => prev - 160);
     setBoosterPack(false);
-    fetchCards("places");
+    // Immediately fetch places (since we've unlocked)
+    // You might pass last breadcrumb as your selection
+    if (breadcrumbs.length > 0) {
+      fetchCards("places", breadcrumbs[breadcrumbs.length - 1]);
+    } else {
+      fetchCards("places", "generic"); // fallback
+    }
   };
 
+  // DialN for a Rare Match (200+ match_score)
   const dialN = async () => {
     setBoosterPack(false);
+    try {
+      const { data, error } = await supabase
+        .from("places")
+        .select("*")
+        .gte("match_score", 200)
+        .limit(1);
 
-    let { data, error } = await supabase
-      .from("places")
-      .select("*")
-      .gte("match_score", 200)
-      .limit(1);
+      if (error) throw error;
 
-    if (error) {
-      console.error("Error finding Rare Match:", error);
-    } else if (data.length > 0) {
-      setCards(data);
-    } else {
+      if (data && data.length > 0) {
+        // Rare match found
+        setCards(data);
+        setCurrentIndex(0);
+      } else {
+        // If no rare match, fallback to tier2
+        // Or persona or something else, depending on your logic
+        fetchCards("tier2");
+      }
+    } catch (err) {
+      console.error("Error with DialN / Rare Match:", err);
       fetchCards("tier2");
     }
   };
 
   return (
-    <div className="app">
-      {/* Breadcrumbs in Top Left */}
-      <div className="breadcrumb">{breadcrumbs.join(" → ")}</div>
+    <div className="app-container">
+      {/* Breadcrumbs */}
+      <div className="breadcrumb">
+        {breadcrumbs.length > 0 ? breadcrumbs.join(" → ") : "Pick a Persona"}
+      </div>
 
-      {/* Booster Pack Unlock Screen */}
-      {boosterPack ? (
-        <div className="booster-screen">
-          <h1>Booster Pack Unlocked!</h1>
-          <button onClick={openBoosterPack}>Open</button>
-          <button onClick={dialN}>DialN</button>
-        </div>
-      ) : error ? (
-        <div className="error-screen">
-          <h2>{error}</h2>
-          <button onClick={() => fetchCards("persona")}>Retry</button>
-        </div>
-      ) : loading ? (
-        <p>Loading cards...</p>
-      ) : (
-        <div className="card-container">
-          {cards.length > 0 ? (
-            <div className="card">
-              <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
+      {/* Weight Indicator (top-right corner or wherever you prefer) */}
+      <div className="weight-indicator">
+        Weight: {userWeight}
+      </div>
+
+      {/* Booster Pack Overlay */}
+      {boosterPack && (
+        <div className="overlay">
+          <div className="booster-screen">
+            <h2>Booster Pack Unlocked!</h2>
+            <p>You reached 160 weight! Select your next move.</p>
+            <div className="booster-buttons">
+              <button className="btn booster-btn" onClick={openBoosterPack}>
+                Open
+              </button>
+              <button className="btn dialn-btn" onClick={dialN}>
+                DialN
+              </button>
             </div>
-          ) : (
-            <p>No cards available. Try reshuffling.</p>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Swipe UI Controls */}
-      <div className="swipe-buttons">
-        <button className="no-button" onClick={() => handleSwipe(false)}>❌ No</button>
-        <button className="yes-button" onClick={() => handleSwipe(true)}>✅ Yes</button>
-      </div>
+      {/* Error Overlay */}
+      {error && !boosterPack && (
+        <div className="overlay">
+          <div className="error-screen">
+            <h2>{error}</h2>
+            <button className="btn retry-btn" onClick={() => fetchCards("persona")}>
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Reshuffle Button */}
-      <button className="reshuffle-button" onClick={() => fetchCards("persona")}>🔄 Reshuffle</button>
+      {/* Match Overlay */}
+      {showMatch && !error && (
+        <div className="overlay">
+          <div className="match-screen">
+            <h1>Match Found!</h1>
+            <button className="close-btn" onClick={() => setShowMatch(false)}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      {loading && !error && !boosterPack && (
+        <div className="info-screen">
+          <p>Loading cards...</p>
+        </div>
+      )}
+
+      {!loading && !showMatch && !boosterPack && !error && (
+        <div className="card-container">
+          {cards.length > 0 ? (
+            <>
+              <div className="swipe-card">
+                <h2 className="card-title">
+                  {cards[currentIndex]?.name || "Unnamed Card"}
+                </h2>
+              </div>
+
+              <div className="swipe-buttons">
+                <button className="btn no-btn" onClick={() => handleSwipe(false)}>
+                  ❌ No
+                </button>
+                <button className="btn yes-btn" onClick={() => handleSwipe(true)}>
+                  ✅ Yes
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="info-screen">
+              <p>No cards available. Try reshuffling.</p>
+              <button className="btn reshuffle-btn" onClick={() => fetchCards("persona")}>
+                🔄 Reshuffle
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
