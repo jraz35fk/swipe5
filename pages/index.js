@@ -10,16 +10,17 @@ const supabase = createClient(
 export default function Home() {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [history, setHistory] = useState([]); 
+  const [history, setHistory] = useState([]);
   const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTag, setSearchTag] = useState("");
   const [tagVisibility, setTagVisibility] = useState({});
+  const [userWeight, setUserWeight] = useState(0);
+  const [boosterPack, setBoosterPack] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      fetchCards("persona"); // Start at Persona selection
+      fetchCards("persona");
     }
   }, []);
 
@@ -35,7 +36,7 @@ export default function Home() {
         "tags.cs.{Foodie}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
       );
     } else if (layer === "tier1" && previousSelection) {
-      query = query.contains("tags", [previousSelection]); 
+      query = query.contains("tags", [previousSelection]);
     } else if (layer === "tier2" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
     } else if (layer === "places" && previousSelection) {
@@ -88,7 +89,15 @@ export default function Home() {
           : "places";
 
       setHistory([...history, { layer: nextLayer, selection: selectedCard.tags[0] }]);
-      fetchCards(nextLayer, selectedCard.tags[0]);
+
+      if (nextLayer === "tier1") setUserWeight((prev) => prev + 100);
+      if (nextLayer === "tier2") setUserWeight((prev) => prev + 60);
+
+      if (userWeight + (nextLayer === "tier1" ? 100 : 60) >= 160) {
+        setBoosterPack(true); // Trigger booster pack event
+      } else {
+        fetchCards(nextLayer, selectedCard.tags[0]);
+      }
     } else {
       setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
 
@@ -98,37 +107,41 @@ export default function Home() {
     }
   };
 
-  // Toggle Tag Visibility
-  const toggleTags = (placeId) => {
-    setTagVisibility((prev) => ({
-      ...prev,
-      [placeId]: !prev[placeId],
-    }));
+  // Open Booster Pack (Show Places)
+  const openBoosterPack = () => {
+    setUserWeight((prev) => prev - 160);
+    setBoosterPack(false);
+    fetchCards("places");
   };
 
-  // Remove a Tag
-  const removeTag = async (placeId, tagToRemove) => {
-    const place = cards.find(p => p.id === placeId);
-    if (!place) return;
+  // DialN (Continue Refining)
+  const dialN = async () => {
+    setBoosterPack(false);
 
-    const updatedTags = place.tags.filter(tag => tag !== tagToRemove);
+    let { data, error } = await supabase
+      .from("places")
+      .select("*")
+      .gte("match_score", 200)
+      .limit(1);
 
-    try {
-      const { error } = await supabase
-        .from("places")
-        .update({ tags: updatedTags })
-        .eq("id", placeId);
-
-      if (error) throw error;
-      fetchCards("untagged");
-    } catch (err) {
-      console.error("Error removing tag:", err);
+    if (error) {
+      console.error("Error finding Rare Match:", error);
+    } else if (data.length > 0) {
+      setCards(data);
+    } else {
+      fetchCards("tier2");
     }
   };
 
   return (
     <div className="app">
-      {error ? (
+      {boosterPack ? (
+        <div className="booster-screen">
+          <h1>Booster Pack Unlocked!</h1>
+          <button onClick={openBoosterPack}>Open</button>
+          <button onClick={dialN}>DialN</button>
+        </div>
+      ) : error ? (
         <div className="error-screen">
           <h2>{error}</h2>
           <button onClick={() => fetchCards("persona")}>Retry</button>
@@ -146,23 +159,13 @@ export default function Home() {
             <>
               <div className="card">
                 <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
-                <button onClick={() => toggleTags(cards[currentIndex].id)}>Show Tags</button>
-
-                {tagVisibility[cards[currentIndex].id] && (
-                  <div className="tag-container">
-                    {cards[currentIndex].tags.map(tag => (
-                      <span key={tag} className="tag">
-                        {tag} <button className="remove-tag" onClick={() => removeTag(cards[currentIndex].id, tag)}>×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div className="buttons">
                 <button onClick={() => handleSelection(false)}>No</button>
                 <button onClick={() => handleSelection(true)}>Yes</button>
               </div>
+
               <div className="nav-buttons">
                 <button onClick={() => fetchCards("persona")}>Reshuffle</button>
               </div>
@@ -174,47 +177,13 @@ export default function Home() {
       )}
 
       <style jsx>{`
-        .app {
+        .booster-screen {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           height: 100vh;
           background: #f4f4f4;
-        }
-        .card-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-        .buttons, .nav-buttons {
-          display: flex;
-          gap: 20px;
-          margin-top: 20px;
-        }
-        .tag-container {
-          margin-top: 10px;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 5px;
-        }
-        .tag {
-          background: #ddd;
-          padding: 5px 10px;
-          border-radius: 5px;
-          display: flex;
-          align-items: center;
-        }
-        .remove-tag {
-          margin-left: 5px;
-          border: none;
-          background: red;
-          color: white;
-          cursor: pointer;
-          font-weight: bold;
-          padding: 2px 5px;
-          border-radius: 50%;
         }
       `}</style>
     </div>
