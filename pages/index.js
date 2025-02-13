@@ -9,34 +9,29 @@ const supabase = createClient(
 export default function Home() {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [history, setHistory] = useState([]);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
-  const [showMatch, setShowMatch] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [tagVisibility, setTagVisibility] = useState({});
   const [userWeight, setUserWeight] = useState(0);
   const [boosterPack, setBoosterPack] = useState(false);
+  const [showMatch, setShowMatch] = useState(false);
+  const [tagVisibility, setTagVisibility] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      fetchUserWeight();
-      fetchCards("persona");
-    }
+    fetchUserWeight();
+    fetchCards("persona");
   }, []);
 
   const fetchUserWeight = async () => {
     const { data, error } = await supabase
       .from("user_progress")
       .select("weight")
-      .eq("user_id", userId)
       .single();
 
     if (error) {
-      console.error("Error fetching user weight:", error);
-      return 0;
+      console.error("Error fetching weight:", error);
+      return;
     }
-
     setUserWeight(data.weight);
   };
 
@@ -47,9 +42,7 @@ export default function Home() {
     let query = supabase.from("places").select("*");
 
     if (layer === "persona") {
-      query = query.or(
-        "tags.cs.{Foodie}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
-      );
+      query = query.or("tags.cs.{Food}, tags.cs.{Socialite}, tags.cs.{Adventurer}");
     } else if (layer === "tier1" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
     } else if (layer === "tier2" && previousSelection) {
@@ -68,7 +61,6 @@ export default function Home() {
     try {
       const { data, error } = await query;
       if (error) throw error;
-
       if (!data || data.length === 0) {
         throw new Error(`No cards found for ${layer}.`);
       }
@@ -82,22 +74,17 @@ export default function Home() {
     }
   };
 
-  const handleSelection = (accepted) => {
-    if (!cards || cards.length === 0) return;
+  const handleSwipe = (accepted) => {
+    if (!cards.length) return;
+
+    const selectedCard = cards[currentIndex];
+
+    if (!selectedCard || !selectedCard.tags) {
+      setError("Invalid card data. Try reshuffling.");
+      return;
+    }
 
     if (accepted) {
-      const selectedCard = cards[currentIndex];
-
-      if (!selectedCard || !selectedCard.tags) {
-        setError("Invalid card data. Try reshuffling.");
-        return;
-      }
-
-      if (selectedCard.tags.includes("place")) {
-        setShowMatch(true);
-        return;
-      }
-
       let nextLayer =
         selectedCard.tags.includes("tier1")
           ? "tier1"
@@ -105,7 +92,6 @@ export default function Home() {
           ? "tier2"
           : "places";
 
-      setHistory([...history, { layer: nextLayer, selection: selectedCard.tags[0] }]);
       setBreadcrumbs([...breadcrumbs, selectedCard.tags[0]]);
 
       if (nextLayer === "tier1") setUserWeight((prev) => prev + 100);
@@ -117,11 +103,7 @@ export default function Home() {
         fetchCards(nextLayer, selectedCard.tags[0]);
       }
     } else {
-      setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
-
-      if (currentIndex + 1 >= cards.length) {
-        fetchCards("untagged");
-      }
+      setCurrentIndex((prev) => (prev + 1 < cards.length ? prev + 1 : 0));
     }
   };
 
@@ -158,10 +140,10 @@ export default function Home() {
 
   return (
     <div className="app">
-      <div className="breadcrumb">
-        {breadcrumbs.join(" → ")}
-      </div>
+      {/* Breadcrumbs in Top Left */}
+      <div className="breadcrumb">{breadcrumbs.join(" → ")}</div>
 
+      {/* Booster Pack Unlock Screen */}
       {boosterPack ? (
         <div className="booster-screen">
           <h1>Booster Pack Unlocked!</h1>
@@ -200,6 +182,15 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* Swipe UI Controls */}
+      <div className="swipe-buttons">
+        <button className="no-button" onClick={() => handleSwipe(false)}>❌ No</button>
+        <button className="yes-button" onClick={() => handleSwipe(true)}>✅ Yes</button>
+      </div>
+
+      {/* Reshuffle Button */}
+      <button className="reshuffle-button" onClick={() => fetchCards("persona")}>🔄 Reshuffle</button>
     </div>
   );
 }
