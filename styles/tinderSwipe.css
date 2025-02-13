@@ -1,0 +1,122 @@
+/* 🌟 Tinder-Style Swipe UI 🌟 */
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  background: #f5f5f5;
+  font-family: Arial, sans-serif;
+}
+
+/* 🏷️ Breadcrumbs (Persona → Tier 1 → Tier 2) */
+.breadcrumb {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+/* 📍 Card Container */
+.card-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 90%;
+  max-width: 400px;
+  height: 65vh;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  text-align: center;
+}
+
+/* ✨ Swipe Buttons */
+.swipe-buttons {
+  display: flex;
+  justify-content: space-between;
+  width: 80%;
+  margin-top: 20px;
+}
+
+.yes-button, .no-button {
+  width: 40%;
+  height: 60px;
+  border-radius: 30px;
+  font-size: 18px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+}
+
+.yes-button {
+  background: #00c853; /* Green */
+  color: white;
+}
+
+.no-button {
+  background: #d32f2f; /* Red */
+  color: white;
+}
+
+/* 🔄 Reshuffle Button */
+.reshuffle-button {
+  margin-top: 20px;
+  padding: 12px 20px;
+  font-size: 16px;
+  border: none;
+  background: #ff9800;
+  color: white;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+/* 🎉 Booster Pack & Match Screen */
+.booster-screen, .match-screen, .error-screen {
+  text-align: center;
+  background: white;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.booster-screen button, .match-screen button {
+  margin-top: 10px;
+  padding: 10px 15px;
+  border: none;
+  font-size: 16px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.booster-screen button:first-child {
+  background: #1e88e5;
+  color: white;
+}
+
+.booster-screen button:last-child {
+  background: #ff5722;
+  color: white;
+}
+
+/* 🎭 Tag Styles */
+.tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.tag {
+  background: #eeeeee;
+  color: black;
+  padding: 5px 10px;
+  margin: 5px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
