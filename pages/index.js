@@ -10,7 +10,7 @@ export default function Home() {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState([]);
-  const [breadcrumbs, setBreadcrumbs] = useState([]); // Stores user selections for breadcrumb navigation
+  const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -106,7 +106,7 @@ export default function Home() {
           : "places";
 
       setHistory([...history, { layer: nextLayer, selection: selectedCard.tags[0] }]);
-      setBreadcrumbs([...breadcrumbs, selectedCard.tags[0]]); // Update breadcrumb trail
+      setBreadcrumbs([...breadcrumbs, selectedCard.tags[0]]);
 
       if (nextLayer === "tier1") setUserWeight((prev) => prev + 100);
       if (nextLayer === "tier2") setUserWeight((prev) => prev + 60);
@@ -149,6 +149,13 @@ export default function Home() {
     }
   };
 
+  const toggleTags = (placeId) => {
+    setTagVisibility((prev) => ({
+      ...prev,
+      [placeId]: !prev[placeId],
+    }));
+  };
+
   return (
     <div className="app">
       <div className="breadcrumb">
@@ -178,6 +185,15 @@ export default function Home() {
           {cards.length > 0 ? (
             <div className="card">
               <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
+              <button onClick={() => toggleTags(cards[currentIndex].id)}>Show Tags</button>
+
+              {tagVisibility[cards[currentIndex].id] && (
+                <div className="tag-container">
+                  {cards[currentIndex].tags.map(tag => (
+                    <span key={tag} className="tag">{tag}</span>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <p>No cards available. Try reshuffling.</p>
