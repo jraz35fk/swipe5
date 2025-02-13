@@ -1,121 +1,179 @@
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/router';
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 
+// Supabase Configuration
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function Home() {
-  const [tags, setTags] = useState([]);
-  const [places, setPlaces] = useState([]);
-  const [currentCard, setCurrentCard] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-  const router = useRouter();
+  const [cards, setCards] = useState([]); // Holds the stack of cards
+  const [currentIndex, setCurrentIndex] = useState(0); // Tracks current card index
+  const [history, setHistory] = useState([]); // Tracks previous selections for "Go Back"
+  const [showMatch, setShowMatch] = useState(false); // Controls "Match Made" screen
 
+  // Load Initial Persona Cards
   useEffect(() => {
-    fetchTags();
+    fetchCards("persona");
   }, []);
 
-  async function fetchTags() {
-    let { data, error } = await supabase.from('places').select('tags');
-    if (error) console.error(error);
-    else {
-      const uniqueTags = [...new Set(data.flatMap(place => place.tags))];
-      setTags(uniqueTags.map(tag => ({ type: 'tag', value: tag })));
-      setCurrentCard(uniqueTags.length ? { type: 'tag', value: uniqueTags[0] } : null);
+  // Fetch Cards from Supabase based on Layer
+  const fetchCards = async (layer, previousSelection = null) => {
+    let query = supabase.from("places").select("*");
+
+    if (layer === "persona") {
+      query = query.eq("persona", true);
+    } else if (layer === "tags" && previousSelection) {
+      query = query.contains("tags", [previousSelection]); // Get Tier 2 tags
+    } else if (layer === "places" && previousSelection) {
+      query = query.contains("tags", [previousSelection]); // Get places matching tags
     }
-  }
 
-  async function fetchPlacesByTag(tag) {
-    let { data, error } = await supabase
-      .from('places')
-      .select('*')
-      .contains('tags', [tag]);
+    const { data, error } = await query;
 
-    if (error) console.error(error);
-    else {
-      setPlaces(data.map(place => ({ ...place, type: 'place' })));
-      if (data.length) {
-        setCurrentCard(data[0]); // Show first place matching tag
-      } else {
-        setCurrentCard(tags.find(t => t.value !== tag)); // Show another tag if no places found
+    if (error) {
+      console.error("Error fetching cards:", error);
+      return;
+    }
+
+    setCards(data);
+    setCurrentIndex(0);
+  };
+
+  // Handle Card Selection
+  const handleSelection = (accepted) => {
+    if (accepted) {
+      const selectedCard = cards[currentIndex];
+
+      // If a place card is selected, show "Match Made"
+      if (selectedCard.tags.includes("place")) {
+        setShowMatch(true);
+        return;
       }
-    }
-  }
 
-  function handleYes() {
-    if (currentCard.type === 'tag') {
-      fetchPlacesByTag(currentCard.value); // Load places matching this tag
+      // Save to history for "Go Back"
+      setHistory([...history, { layer: "tags", selection: selectedCard.tags[0] }]);
+
+      // Load the next layer (tags or places)
+      fetchCards(
+        selectedCard.tags.includes("tier2") ? "tags" : "places",
+        selectedCard.tags[0]
+      );
     } else {
-      setFavorites([...favorites, currentCard]); // Save place to favorites
-      moveToNext();
+      // Move to next card
+      setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
     }
-  }
+  };
 
-  function handleNo() {
-    moveToNext();
-  }
+  // Go Back to Previous Layer
+  const handleGoBack = () => {
+    if (history.length === 0) return;
 
-  function moveToNext() {
-    if (currentCard.type === 'tag') {
-      // Show another tag if places are not yet being shown
-      setCurrentCard(tags.find(t => !history.includes(t)));
-    } else {
-      // Move to next place or revert to showing a tag
-      setPlaces(places.slice(1));
-      setCurrentCard(places[1] || tags.find(t => !history.includes(t)));
-    }
-    setHistory([...history, currentCard]);
-  }
+    const previous = history.pop();
+    setHistory(history);
+    fetchCards(previous.layer, previous.selection);
+  };
+
+  // Reshuffle (Return to Persona Selection)
+  const handleReshuffle = () => {
+    setHistory([]);
+    fetchCards("persona");
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center">
-      <header className="w-full bg-blue-600 text-white text-center py-4 text-xl font-bold">
-        DialN - Discover Baltimore
-      </header>
+    <div className="app">
+      {showMatch ? (
+        <div className="match-screen">
+          <h1>Match Made!</h1>
+          <button onClick={() => setShowMatch(false)}>X</button>
+        </div>
+      ) : (
+        <div className="card-container">
+          {cards.length > 0 ? (
+            <>
+              <div className="card">
+                <div className="card-image" />
+                <h2>{cards[currentIndex]?.name || "Loading..."}</h2>
+              </div>
+              <div className="buttons">
+                <button onClick={() => handleSelection(false)}>No</button>
+                <button onClick={() => handleSelection(true)}>Yes</button>
+              </div>
+              <div className="nav-buttons">
+                <button onClick={handleGoBack}>Go Back</button>
+                <button onClick={handleReshuffle}>Reshuffle</button>
+              </div>
+            </>
+          ) : (
+            <p>Loading cards...</p>
+          )}
+        </div>
+      )}
 
-      <div className="w-full max-w-md mt-8">
-        {currentCard ? (
-          <div className="bg-white p-6 shadow-md rounded-lg text-center">
-            {currentCard.type === 'tag' ? (
-              <>
-                <h2 className="text-lg font-bold">Explore {currentCard.value}</h2>
-                <p>Click Yes to see places tagged with {currentCard.value}</p>
-              </>
-            ) : (
-              <>
-                <h2 className="text-lg font-bold">{currentCard.name}</h2>
-                <p>{currentCard.description}</p>
-                <p className="text-sm text-gray-600">{currentCard.address}</p>
-                <button
-                  onClick={() => router.push(`/place/${currentCard.id}`)}
-                  className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
-                >
-                  View Details
-                </button>
-              </>
-            )}
-
-            <div className="flex justify-center space-x-4 mt-4">
-              <button onClick={handleYes} className="bg-green-500 text-white p-2 rounded">
-                Yes
-              </button>
-              <button onClick={handleNo} className="bg-red-500 text-white p-2 rounded">
-                No
-              </button>
-            </div>
-          </div>
-        ) : (
-          <p className="text-center text-gray-600">No more places. Refresh to start over.</p>
-        )}
-      </div>
-
-      <footer className="w-full bg-blue-600 text-white text-center py-2 mt-auto">
-        © 2024 DialN
-      </footer>
+      <style jsx>{`
+        .app {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          background: #f4f4f4;
+        }
+        .card-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        .card {
+          width: 300px;
+          height: 400px;
+          background: #ccc;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          border-radius: 10px;
+        }
+        .card-image {
+          width: 100%;
+          height: 80%;
+          background: gray;
+        }
+        .buttons {
+          display: flex;
+          gap: 20px;
+          margin-top: 20px;
+        }
+        .buttons button {
+          padding: 10px 20px;
+          border: none;
+          cursor: pointer;
+        }
+        .nav-buttons {
+          display: flex;
+          gap: 20px;
+          margin-top: 20px;
+        }
+        .match-screen {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          background: white;
+        }
+        .match-screen h1 {
+          font-size: 24px;
+          margin-bottom: 20px;
+        }
+        .match-screen button {
+          padding: 10px;
+          font-size: 16px;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 }
