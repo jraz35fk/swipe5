@@ -8,18 +8,23 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [cards, setCards] = useState([]); // Holds the stack of cards
+  const [cards, setCards] = useState(null); // Holds the stack of cards
   const [currentIndex, setCurrentIndex] = useState(0); // Tracks current card index
   const [history, setHistory] = useState([]); // Tracks previous selections for "Go Back"
   const [showMatch, setShowMatch] = useState(false); // Controls "Match Made" screen
+  const [loading, setLoading] = useState(true); // Prevents hydration issues
 
-  // Load Initial Persona Cards
+  // Prevent Hydration Mismatch: Ensure this runs only on the client
   useEffect(() => {
-    fetchCards("persona");
+    if (typeof window !== "undefined") {
+      fetchCards("persona");
+    }
   }, []);
 
   // Fetch Cards from Supabase based on Layer
   const fetchCards = async (layer, previousSelection = null) => {
+    setLoading(true); // Show loading state while fetching
+
     let query = supabase.from("places").select("*");
 
     if (layer === "persona") {
@@ -34,15 +39,19 @@ export default function Home() {
 
     if (error) {
       console.error("Error fetching cards:", error);
+      setLoading(false);
       return;
     }
 
     setCards(data);
     setCurrentIndex(0);
+    setLoading(false); // Stop loading after data is set
   };
 
   // Handle Card Selection
   const handleSelection = (accepted) => {
+    if (!cards || cards.length === 0) return;
+
     if (accepted) {
       const selectedCard = cards[currentIndex];
 
@@ -83,14 +92,16 @@ export default function Home() {
 
   return (
     <div className="app">
-      {showMatch ? (
+      {loading ? (
+        <p>Loading cards...</p>
+      ) : showMatch ? (
         <div className="match-screen">
           <h1>Match Made!</h1>
           <button onClick={() => setShowMatch(false)}>X</button>
         </div>
       ) : (
         <div className="card-container">
-          {cards.length > 0 ? (
+          {cards && cards.length > 0 ? (
             <>
               <div className="card">
                 <div className="card-image" />
@@ -106,7 +117,7 @@ export default function Home() {
               </div>
             </>
           ) : (
-            <p>Loading cards...</p>
+            <p>No cards available.</p>
           )}
         </div>
       )}
