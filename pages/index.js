@@ -14,7 +14,6 @@ export default function Home() {
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [userWeight, setUserWeight] = useState(0);
   const [currentLayer, setCurrentLayer] = useState("persona");
-  const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -122,7 +121,7 @@ export default function Home() {
       nextLayer = "tier3";
       addedWeight = 60;
     } else if (currentLayer === "tier3") {
-      nextLayer = "places";
+      nextLayer = "places"; // ✅ Places MUST load after Tier 3
     } else {
       return;
     }
@@ -133,14 +132,7 @@ export default function Home() {
     setUserWeight(newWeight);
     await updateUserWeightInDB(newWeight);
 
-    if (nextLayer === "places") {
-      await fetchCards("places", selectedCard.name);
-      if (newWeight >= 220) {
-        setTimeout(() => setShowMatch(true), 2000); // Show "You Got a Match!" AFTER places are loaded
-      }
-    } else {
-      fetchCards(nextLayer, selectedCard.name);
-    }
+    fetchCards(nextLayer, selectedCard.name); // ✅ Always fetch next layer
   };
 
   /** Update user weight in DB */
@@ -155,18 +147,8 @@ export default function Home() {
         {breadcrumbs.length > 0 ? breadcrumbs.join(" → ") : "Select a Persona"}
       </div>
 
-      {/* Match Overlay (only shows AFTER places are displayed) */}
-      {showMatch && (
-        <div className="overlay">
-          <div className="match-screen">
-            <h1>🎉 You Got a Match!</h1>
-            <button className="close-btn" onClick={() => setShowMatch(false)}>✕</button>
-          </div>
-        </div>
-      )}
-
       {/* Error Message */}
-      {error && !showMatch && (
+      {error && (
         <div className="info-screen">
           <h2>{error}</h2>
           <button className="btn retry-btn" onClick={() => fetchCards("persona")}>
@@ -176,7 +158,7 @@ export default function Home() {
       )}
 
       {/* Loading */}
-      {loading && !error && !showMatch && (
+      {loading && !error && (
         <div className="info-screen">
           <p>Loading cards...</p>
         </div>
