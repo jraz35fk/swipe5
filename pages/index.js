@@ -8,138 +8,101 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [places, setPlaces] = useState([]);
-  const [selectedPlace, setSelectedPlace] = useState(null);
-  const [newTag, setNewTag] = useState("");
+  const [cards, setCards] = useState([]); // Holds the stack of cards
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [history, setHistory] = useState([]); // Tracks previous selections for "Go Back"
+  const [showMatch, setShowMatch] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTag, setSearchTag] = useState(""); // Holds search input for new tags
 
   useEffect(() => {
-    fetchPlaces();
+    if (typeof window !== "undefined") {
+      fetchCards("persona");
+    }
   }, []);
 
-  const fetchPlaces = async () => {
-    const { data, error } = await supabase.from("places").select("*");
-    if (error) {
-      console.error("Error fetching places:", error);
-    } else {
-      setPlaces(data);
+  // Fetch Cards Based on Layer (Persona → Tier 1 → Tier 2 → Places)
+  const fetchCards = async (layer, previousSelection = null) => {
+    setLoading(true);
+    setError(null);
+
+    let query = supabase.from("places").select("*");
+
+    if (layer === "persona") {
+      query = query.contains("tags", ["persona"]);
+    } else if (layer === "tier1" && previousSelection) {
+      query = query.contains("tags", [previousSelection]);
+    } else if (layer === "tier2" && previousSelection) {
+      query = query.contains("tags", [previousSelection]);
+    } else if (layer === "places" && previousSelection) {
+      query = query.contains("tags", [previousSelection]);
+    } else if (layer === "untagged") {
+      query = query.or(
+        "tags.cs.{persona}, tags.cs.{tier1}"
+      ); // Fetch places with only Persona or Tier 1 tags
+    }
+
+    try {
+      const { data, error } = await query;
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        throw new Error(`No cards found for ${layer}.`);
+      }
+
+      setCards(data);
+      setCurrentIndex(0);
+    } catch (err) {
+      setError(`Failed to load ${layer} cards. Try reshuffling.`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const removeTag = async (placeId, tagToRemove) => {
-    const place = places.find(p => p.id === placeId);
-    if (!place) return;
+  // Handle Card Selection
+  const handleSelection = (accepted) => {
+    if (!cards || cards.length === 0) return;
 
-    const updatedTags = place.tags.filter(tag => tag !== tagToRemove);
+    if (accepted) {
+      const selectedCard = cards[currentIndex];
 
-    const { error } = await supabase
-      .from("places")
-      .update({ tags: updatedTags })
-      .eq("id", placeId);
+      if (!selectedCard || !selectedCard.tags) {
+        setError("Invalid card data. Try reshuffling.");
+        return;
+      }
 
-    if (error) {
-      console.error("Error removing tag:", error);
+      if (selectedCard.tags.includes("place")) {
+        setShowMatch(true);
+        return;
+      }
+
+      let nextLayer =
+        selectedCard.tags.includes("tier1")
+          ? "tier1"
+          : selectedCard.tags.includes("tier2")
+          ? "tier2"
+          : "places";
+
+      setHistory([...history, { layer: nextLayer, selection: selectedCard.tags[0] }]);
+      fetchCards(nextLayer, selectedCard.tags[0]);
     } else {
-      fetchPlaces();
+      setCurrentIndex((prevIndex) => (prevIndex + 1 < cards.length ? prevIndex + 1 : 0));
+
+      if (currentIndex + 1 >= cards.length) {
+        fetchCards("untagged"); // Show untagged places after Tier 2 exhaustion
+      }
     }
   };
 
+  // Add a New Tag to a Place
   const addTag = async (placeId) => {
-    if (!newTag) return;
+    if (!searchTag.trim()) return;
 
-    const place = places.find(p => p.id === placeId);
+    const place = cards[currentIndex];
     if (!place) return;
 
-    const updatedTags = [...place.tags, newTag];
+    const updatedTags = [...place.tags, searchTag.trim()];
 
-    const { error } = await supabase
-      .from("places")
-      .update({ tags: updatedTags })
-      .eq("id", placeId);
-
-    if (error) {
-      console.error("Error adding tag:", error);
-    } else {
-      setNewTag("");
-      fetchPlaces();
-    }
-  };
-
-  return (
-    <div className="app">
-      <h1>Tag Editor</h1>
-      <div className="place-list">
-        {places.map(place => (
-          <div key={place.id} className="place-card" onClick={() => setSelectedPlace(place)}>
-            <h2>{place.name}</h2>
-            <p>{place.description}</p>
-          </div>
-        ))}
-      </div>
-
-      {selectedPlace && (
-        <div className="tag-editor">
-          <h2>Editing Tags for {selectedPlace.name}</h2>
-          <div className="tags">
-            {selectedPlace.tags.map(tag => (
-              <span key={tag} className="tag">
-                {tag} <button onClick={() => removeTag(selectedPlace.id, tag)}>X</button>
-              </span>
-            ))}
-          </div>
-          <input
-            type="text"
-            value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
-            placeholder="Add new tag"
-          />
-          <button onClick={() => addTag(selectedPlace.id)}>Add Tag</button>
-          <button onClick={() => setSelectedPlace(null)}>Close</button>
-        </div>
-      )}
-
-      <style jsx>{`
-        .app {
-          padding: 20px;
-          font-family: Arial, sans-serif;
-        }
-        .place-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-        .place-card {
-          border: 1px solid #ddd;
-          padding: 10px;
-          cursor: pointer;
-        }
-        .tag-editor {
-          position: fixed;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: white;
-          padding: 20px;
-          border: 1px solid #ddd;
-          z-index: 10;
-        }
-        .tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-        .tag {
-          background: #ddd;
-          padding: 5px 10px;
-          border-radius: 5px;
-        }
-        .tag button {
-          margin-left: 5px;
-          background: red;
-          color: white;
-          border: none;
-          cursor: pointer;
-        }
-      `}</style>
-    </div>
-  );
-}
+    try {
+      const { error } = await
