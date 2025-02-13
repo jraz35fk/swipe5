@@ -10,20 +10,20 @@ const supabase = createClient(
 export default function Home() {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState([]); 
   const [showMatch, setShowMatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTag, setSearchTag] = useState(""); 
-  const [tagVisibility, setTagVisibility] = useState({}); // Controls tag visibility per place
+  const [searchTag, setSearchTag] = useState("");
+  const [tagVisibility, setTagVisibility] = useState({});
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      fetchCards("persona");
+      fetchCards("persona"); // Start at Persona selection
     }
   }, []);
 
-  // Fetch Cards Based on Layer (Persona → Tier 1 → Tier 2 → Places)
+  // Fetch Cards Based on Layer
   const fetchCards = async (layer, previousSelection = null) => {
     setLoading(true);
     setError(null);
@@ -35,7 +35,7 @@ export default function Home() {
         "tags.cs.{Foodie}, tags.cs.{Socialite}, tags.cs.{Adventurer}, tags.cs.{Curator}, tags.cs.{Wonderer}"
       );
     } else if (layer === "tier1" && previousSelection) {
-      query = query.contains("tags", [previousSelection]);
+      query = query.contains("tags", [previousSelection]); 
     } else if (layer === "tier2" && previousSelection) {
       query = query.contains("tags", [previousSelection]);
     } else if (layer === "places" && previousSelection) {
