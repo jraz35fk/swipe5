@@ -1,72 +1,211 @@
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import express from "express";
-import cors from "cors";
 
-const SUPABASE_URL = "https://hfxowmabetqjevypvtqr.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmeG93bWFiZXRxamV2eXB2dHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkzMTI0ODksImV4cCI6MjA1NDg4ODQ4OX0.6CXgEt3SJHDshX8ggj7_cLOqU0FNFY_mC8xAPqVdIqQ";
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const app = express();
-const PORT = process.env.PORT || 3000;
+const DEFAULT_USER_ID = "static_user";
 
-app.use(cors());
-app.use(express.json());
+export default function Home() {
+  const [cards, setCards] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [breadcrumbs, setBreadcrumbs] = useState([]);
+  const [userWeight, setUserWeight] = useState(0);
+  const [currentLayer, setCurrentLayer] = useState("persona");
+  const [showMatch, setShowMatch] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-// Log successful connection
-console.log("✅ Supabase connected successfully!");
+  useEffect(() => {
+    initializeUser();
+  }, []);
 
-// Fetch Recommended Cards for User
-app.get("/recommendations/:userId", async (req, res) => {
-    const { userId } = req.params;
+  /** Initialize user weight & fetch first set of cards */
+  const initializeUser = async () => {
+    await fetchUserWeight();
+    await fetchCards("persona");
+  };
 
+  /** Fetch or create user weight */
+  const fetchUserWeight = async () => {
     try {
-        const { data, error } = await supabase.rpc("get_recommended_cards", {
-            user_id: userId,
-        });
-        if (error) throw error;
-        res.json(data);
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("weight")
+        .eq("user_id", DEFAULT_USER_ID)
+        .single();
+
+      if (error || !data) {
+        await supabase.from("user_progress").upsert([{ user_id: DEFAULT_USER_ID, weight: 0 }]);
+        setUserWeight(0);
+      } else {
+        setUserWeight(data.weight);
+      }
     } catch (err) {
-        console.error("Error fetching recommendations:", err.message);
-        res.status(500).json({ error: err.message });
+      console.error("Error fetching user weight:", err);
     }
-});
+  };
 
-// Store User Interactions (Likes/Dislikes)
-app.post("/interact", async (req, res) => {
-    const { user_id, place_id, action } = req.body;
+  /** Fetch cards for a specific layer */
+  const fetchCards = async (layer, previousSelection = null) => {
+    setLoading(true);
+    setError(null);
 
+    let query;
     try {
-        const { data, error } = await supabase
-            .from("user_interactions")
-            .insert([{ user_id, place_id, action }]);
+      if (layer === "persona") {
+        query = supabase.from("personas").select("*");
+      } else if (layer === "tier1") {
+        query = supabase.from("persona_category_mappings").select("tier_1_category").eq("persona", previousSelection);
+      } else if (layer === "tier2") {
+        query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 2);
+      } else if (layer === "tier3") {
+        query = supabase.from("tag_mappings").select("child_tag").eq("parent_tag", previousSelection).eq("tier", 3);
+      } else if (layer === "places") {
+        query = supabase.from("places").select("id", "name", "description", "tags", "match_score").contains("tags", [previousSelection]);
+      } else {
+        setLoading(false);
+        return;
+      }
 
-        if (error) throw error;
-        res.json({ message: "Interaction saved successfully", data });
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      setCards(data.map(item => ({ 
+        id: item.id, 
+        name: item.child_tag || item.name || item.tier_1_category,
+        description: item.description || "",
+        matchScore: item.match_score || 0
+      })));
+
+      setCurrentIndex(0);
+      setCurrentLayer(layer);
     } catch (err) {
-        console.error("Error saving interaction:", err.message);
-        res.status(500).json({ error: err.message });
+      setError(`Failed to load ${layer} cards.`);
+    } finally {
+      setLoading(false);
     }
-});
+  };
 
-// Get User Profile Data
-app.get("/user/:userId", async (req, res) => {
-    const { userId } = req.params;
+  /** Handle swiping interaction */
+  const handleSwipe = async (accepted) => {
+    if (!cards.length || currentIndex >= cards.length) return;
 
-    try {
-        const { data, error } = await supabase
-            .from("user_profiles")
-            .select("*")
-            .eq("user_id", userId);
+    const selectedCard = cards[currentIndex];
 
-        if (error) throw error;
-        res.json(data);
-    } catch (err) {
-        console.error("Error fetching user profile:", err.message);
-        res.status(500).json({ error: err.message });
+    if (!accepted) {
+      const nextIdx = currentIndex + 1;
+      if (nextIdx < cards.length) {
+        setCurrentIndex(nextIdx);
+      } else {
+        console.warn("No more cards. Try reshuffling.");
+      }
+      return;
     }
-});
 
-// Start Express Server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+    let nextLayer;
+    let addedWeight = 0;
+
+    if (currentLayer === "persona") {
+      nextLayer = "tier1";
+      addedWeight = 100;
+    } else if (currentLayer === "tier1") {
+      nextLayer = "tier2";
+      addedWeight = 60;
+    } else if (currentLayer === "tier2") {
+      nextLayer = "tier3";
+      addedWeight = 60;
+    } else if (currentLayer === "tier3") {
+      nextLayer = "places";
+    } else {
+      return;
+    }
+
+    setBreadcrumbs([...breadcrumbs, selectedCard.name]);
+
+    const newWeight = userWeight + addedWeight;
+    setUserWeight(newWeight);
+    await updateUserWeightInDB(newWeight);
+
+    if (nextLayer === "places") {
+      await fetchCards("places", selectedCard.name);
+      if (newWeight >= 220) {
+        setTimeout(() => setShowMatch(true), 2000); // Show "You Got a Match!" AFTER places are loaded
+      }
+    } else {
+      fetchCards(nextLayer, selectedCard.name);
+    }
+  };
+
+  /** Update user weight in DB */
+  const updateUserWeightInDB = async (newWeight) => {
+    await supabase.from("user_progress").update({ weight: newWeight }).eq("user_id", DEFAULT_USER_ID);
+  };
+
+  return (
+    <div className="app-container">
+      {/* Breadcrumbs */}
+      <div className="breadcrumb">
+        {breadcrumbs.length > 0 ? breadcrumbs.join(" → ") : "Select a Persona"}
+      </div>
+
+      {/* Match Overlay (only shows AFTER places are displayed) */}
+      {showMatch && (
+        <div className="overlay">
+          <div className="match-screen">
+            <h1>🎉 You Got a Match!</h1>
+            <button className="close-btn" onClick={() => setShowMatch(false)}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && !showMatch && (
+        <div className="info-screen">
+          <h2>{error}</h2>
+          <button className="btn retry-btn" onClick={() => fetchCards("persona")}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && !error && !showMatch && (
+        <div className="info-screen">
+          <p>Loading cards...</p>
+        </div>
+      )}
+
+      {/* Card Display */}
+      {!loading && !error && (
+        <div className="card-area">
+          {cards.length > 0 ? (
+            <>
+              <div className="swipe-card">
+                <h2>{cards[currentIndex]?.name || "Unnamed Card"}</h2>
+                {currentLayer === "places" && <p>{cards[currentIndex]?.description}</p>}
+              </div>
+              <div className="swipe-buttons">
+                <button className="btn no-btn" onClick={() => handleSwipe(false)}>❌ No</button>
+                <button className="btn yes-btn" onClick={() => handleSwipe(true)}>✅ Yes</button>
+              </div>
+            </>
+          ) : (
+            <div className="info-screen">
+              <p>No cards available. Try reshuffling.</p>
+              <button className="btn reshuffle-btn" onClick={() => fetchCards("persona")}>
+                🔄 Reshuffle
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
