@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link"; // ✅ Added for navigation
 
 // 🔥 Connect to Supabase
 const supabase = createClient(
@@ -68,6 +69,13 @@ export default function Home() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
+      {/* ✅ Navigation Bar */}
+      <nav className="flex justify-center space-x-4 mb-6">
+        <Link href="/about">About</Link>
+        <Link href="/favorites">Favorites</Link>
+        <Link href="/profile">Profile</Link>
+      </nav>
+
       <h1 className="text-4xl font-bold mb-6">🔥 Welcome to Swipe5</h1>
 
       {loading ? (
@@ -89,14 +97,14 @@ export default function Home() {
                 {places[currentIndex].tags?.join(", ") || "No tags"}
               </p>
 
-              <a
-                href={places[currentIndex].website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-yellow-400 mt-2 block"
-              >
-                {places[currentIndex].website ? "Visit Website" : ""}
-              </a>
+              {/* ✅ More Info Button */}
+              {places[currentIndex].website && (
+                <Link href={places[currentIndex].website} target="_blank">
+                  <span className="text-yellow-400 mt-2 block cursor-pointer">
+                    More Info
+                  </span>
+                </Link>
+              )}
 
               <div className="flex justify-between mt-6">
                 <button
